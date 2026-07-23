@@ -1,0 +1,188 @@
+# BUSINESS_RULES.md — Reglas de Negocio
+
+**Propósito:** Documentar las reglas de negocio del dominio: estados del cheque, validaciones, permisos por rol, cálculos y flujos operativos.  
+**Audiencia:** Desarrolladores, Product Owners, agentes de IA.  
+**Referencias:** [`DATABASE.md §1.5`](./DATABASE.md) para estados · [`API.md`](./API.md) para validaciones por endpoint.
+
+---
+
+## 1. Máquina de Estados de la Cobranza
+
+Cada cobranza tiene un estado único que evoluciona en una sola dirección. Los estados son **inmutables hacia atrás**.
+
+> **Descubrimiento clave (feedback del jefe de cobranza):** El registro del cheque y la gestión del envío son **dos eventos separados en el tiempo**. El vendedor primero tiene el cheque (y lo fotografía), pero **no tiene aún el comprobante de Chilexpress** porque recién enviará el sobre después. Este gap temporal requiere un estado intermedio para el vendedor.
+
+```
+ ┌─────────────────────┐
+ │  PENDIENTE_ENVIO    │  ← Cheque registrado, envío físico aún no gestionado
+ └──────────┬──────────┘
+            │ Vendedor: completa el envío (adjunta comprobante + N° OT)
+            │
+            ├─────────────────────────────────────────────────────┐
+            ▼                                                     ▼
+   ┌────────────────┐                                  ┌──────────────────────┐
+   │  EN_TRANSITO   │  ← Chilexpress (con comprobante) │  ENTREGADO_SANTIAGO  │ ← Presencial
+   └───────┬────────┘                                  └──────────┬───────────┘
+           │                                                      │
+           └──────────────────────┬───────────────────────────────┘
+                                  ▼
+                        RECIBIDO_TESORERIA  ← Tesorería confirma recepción física
+                                  │
+                    ┌─────────────┴─────────────┐
+                    ▼                           ▼
+                DEPOSITADO               RECHAZADO
+           (cheque cobrado)        (cheque protestado/inválido)
+```
+
+### 1.1 Estado inicial por acción del vendedor
+
+| Acción del Vendedor | Estado Resultante | Quién lo asigna |
+|---|---|---|
+| Registra cheque (sin envío aún) | `PENDIENTE_ENVIO` | Sistema automático al guardar |
+| Completa gestión Chilexpress (adjunta comprobante + N° OT) | `EN_TRANSITO` | Sistema al completar el envío |
+| Completa entrega presencial Santiago (adjunta firma) | `ENTREGADO_SANTIAGO` | Sistema al completar el envío |
+
+### 1.2 Transiciones permitidas
+
+| Estado actual | Estado siguiente | Quién puede ejecutar |
+|---|---|---|
+| `PENDIENTE_ENVIO` | `EN_TRANSITO` | Vendedor (App — al completar gestión Chilexpress) |
+| `PENDIENTE_ENVIO` | `ENTREGADO_SANTIAGO` | Vendedor (App — al completar entrega presencial) |
+| `EN_TRANSITO` | `RECIBIDO_TESORERIA` | Tesorería (Portal Fase 2) |
+| `ENTREGADO_SANTIAGO` | `RECIBIDO_TESORERIA` | Tesorería (Portal Fase 2) |
+| `RECIBIDO_TESORERIA` | `DEPOSITADO` | Tesorería (Portal Fase 2) |
+| `RECIBIDO_TESORERIA` | `RECHAZADO` | Tesorería (Portal Fase 2) |
+
+> **El vendedor no puede cambiar estados hacia atrás.** La app vendedor permite avanzar del estado `PENDIENTE_ENVIO` al de envío correspondiente. Todos los cambios se registran en `historial_estados` (bitácora inmutable).
+
+---
+
+## 2. Reglas de Validación por Entidad
+
+### 2.1 Cobranza
+
+| Campo | Regla |
+|-------|-------|
+| `empresa_id` | Requerido. Debe existir en `empresas`. |
+| `numero_factura` | Requerido. Solo dígitos. Mínimo 4 caracteres. |
+| `rut_cliente` | Requerido. Se obtiene del ERP al buscar la factura. |
+| `email_tesoreria` | Requerido. Se notifica al completar el envío. |
+| `email_cliente` | Opcional. Si tiene valor, también se notifica al completar el envío. |
+| Cheques | Se requiere **al menos 1 cheque** por cobranza. |
+
+**Paso 1 — Registro del Cheque (`PENDIENTE_ENVIO`):**
+- Solo requiere los datos de la factura y al menos un cheque con su foto.
+- El tipo de envío, N° de seguimiento y comprobante **no son requeridos** en este paso.
+
+**Paso 2 — Completar Gestión del Envío:**
+- Si es `CHILEXPRESS`: N° OT es opcional, foto del comprobante de Chilexpress es requerida para avanzar a `EN_TRANSITO`.
+- Si es `PRESENCIAL_SANTIAGO`: foto de la firma/comprobante de recepción requerida para avanzar a `ENTREGADO_SANTIAGO`.
+
+### 2.2 Cheque individual
+
+| Campo | Regla |
+|-------|-------|
+| `banco` | Requerido. Debe ser uno de los bancos listados en el select de la UI. |
+| `numero_cheque` | Requerido. Solo dígitos. |
+| `monto` | Requerido. Entero positivo mayor a 0. |
+| `fecha_vencimiento` | Requerido. Formato `YYYY-MM-DD`. No puede ser fecha pasada. |
+| `foto_cheque` | Requerido. Archivo de imagen (`image/*`). |
+| `comentario` | Opcional. Texto libre, máximo 1000 caracteres. |
+
+### 2.3 Archivos de imagen
+
+| Regla | Valor |
+|-------|-------|
+| Tipos permitidos | `image/jpeg`, `image/jpg`, `image/png`, `image/webp`, `image/heic` |
+| Tamaño máximo | 10 MB por archivo |
+| Nombre generado | `uniqid() . '_' . nombre_sanitizado.ext` |
+| Ruta de almacenamiento | `uploads/{empresa_id}/{YYYY-MM}/cheques/` o `/comprobantes/` |
+
+### 2.4 Formato de RUT y Relación ERP
+
+Existe una discrepancia histórica en cómo los ERPs almacenan los RUT de los clientes en sus tablas:
+- **Tabla Ventas** (`tbl_ventas_devoluciones`): Guarda el RUT completo sin guion (ej: `52752361`).
+- **Tabla Clientes** (`tbl_clientes`): Guarda el RUT con el guion antes del dígito verificador (ej: `5275236-1`).
+
+**Regla de Negocio:** Toda consulta (JOIN) entre estas dos tablas debe ignorar el formato utilizando la función `REPLACE(rut, '-', '')` para asegurar que el cruce de datos sea exitoso. Además, se debe usar siempre `LEFT JOIN` para que una factura sin cliente válido no interrumpa el proceso de cobranza.
+
+---
+
+## 3. Cálculo de Monto Total con IVA
+
+El monto de la factura **no se almacena directamente** en los ERPs. Se calcula sumando los ítems y aplicando IVA:
+
+```
+Monto Total = ROUND( SUM(neto_item) × 1.19 )
+```
+
+- El cálculo lo ejecuta el backend en el endpoint `get_factura.php`.
+- El resultado se almacena en `cobranzas.monto_total_factura` al guardar.
+- El monto de los cheques individuales los ingresa el vendedor manualmente.
+- **No se valida** que la suma de cheques iguale el monto de la factura (puede haber pagos parciales).
+
+---
+
+## 4. Reglas de Notificación por Correo
+
+Al ejecutar `guardar_cobranza.php` exitosamente:
+
+| Destinatario | Condición | Contenido |
+|---|---|---|
+| Tesorería | **Siempre** (campo `email_tesoreria` de la cobranza) | Resumen de cobranza + tabla de cheques con comentarios + fotos adjuntas |
+| Cliente | Solo si `email_cliente` no está vacío | Comprobante de recepción de documentos |
+
+- Si el envío de correo **falla**, la cobranza **no se revierte**. El error se registra en `error_log()`.
+- El correo de Tesorería (Fase 2+) incluirá un link directo al detalle de la cobranza en el portal `/admin/`.
+
+---
+
+## 5. Motor de Alertas por Días Transcurridos (Fase 4)
+
+Un proceso programado (Cron Job) evaluará periódicamente las cobranzas pendientes.
+
+**Condición de alerta:**
+
+```
+Días Transcurridos = Fecha actual − cobranzas.created_at
+Estado ∈ {INGRESADO, EN_TRANSITO}
+Días Transcurridos > dias_maximos_envio (de la empresa o del vendedor)
+```
+
+**Prioridad del parámetro de días:**
+
+```
+usuarios.dias_alerta_personalizado (si tiene valor)
+    ↓ sino
+empresas.dias_maximos_envio (valor por defecto de la empresa)
+```
+
+**Acción al detectar alerta:**
+- Envía correo urgente al vendedor (`usuarios.email`).
+- Envía correo urgente a la jefatura de cobranza.
+- La alerta no cambia el estado de la cobranza.
+
+---
+
+## 6. Reglas de Agrupación Logística (Chilexpress)
+
+- Múltiples cobranzas pueden tener el **mismo `numero_seguimiento`**.
+- Esto representa cheques de distintos clientes enviados en el mismo sobre/OT.
+- En el Portal de Tesorería (Fase 2), se agruparán por `numero_seguimiento` para gestión conjunta.
+- La app del vendedor no gestiona esta agrupación; simplemente ingresa el mismo N° de seguimiento.
+
+---
+
+## 7. Permisos por Rol
+
+| Acción | VENDEDOR | TESORERIA | ADMINISTRADOR |
+|--------|----------|-----------|---------------|
+| Registrar cobranza | ✅ | ❌ | ✅ |
+| Ver historial propio | ✅ | ❌ | ✅ |
+| Ver todas las cobranzas | ❌ | ✅ | ✅ |
+| Cambiar estado de cobranza | ❌ | ✅ | ✅ |
+| Registrar papeleta depósito | ❌ | ✅ | ✅ |
+| Gestionar usuarios | ❌ | ❌ | ✅ |
+| Configurar empresas | ❌ | ❌ | ✅ |
+
+> Los roles `TESORERIA` y `ADMINISTRADOR` solo acceden desde el portal `/admin/` (Fase 2). La app vendedor no expone estas acciones.

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1e3a8a">
+    <title>Gestión de Cheques</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="header-top">
+                <h2>Módulo de Cobranza</h2>
+                <span class="user-badge">EXAMPLE_USER</span>
+            </div>
+
+            <!-- NAVEGACIÓN POR PESTAÑAS -->
+            <nav class="nav-tabs">
+                <button type="button" id="tabRegistrar" class="tab-btn active">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Nuevo Envío
+                </button>
+                <button type="button" id="tabSeguimiento" class="tab-btn">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Ver Cheques Enviados
+                </button>
+            </nav>
+        </header>
+
+        <main class="container">
+            <!-- VISTA 1: FORMULARIO DE REGISTRO -->
+            <section id="viewNuevoEnvio" class="tab-content active">
+                <form id="formCobranza" enctype="multipart/form-data" novalidate>
+
+                    <!-- SECCIÓN 1: IDENTIFICACIÓN -->
+                    <section class="form-section">
+                        <h3 class="form-section-title">
+                            <span class="step-number">1</span>
+                            Identificación y Factura
+                        </h3>
+
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label for="empresaVendedor">Empresa</label>
+                                <select id="empresaVendedor" name="empresa_id" required>
+                                    <option value="">-- Seleccionar --</option>
+                                    <option value="1">Automarco LTDA</option>
+                                    <option value="3">Autotec S.A</option>
+                                    <option value="4">Gabtec S.A</option>
+                                    <option value="2">HD Automarco S.A</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="numFactura">N° Factura</label>
+                                <input type="text" id="numFactura" name="numero_factura" inputmode="numeric"
+                                    pattern="[0-9]*" placeholder="Ej: 440265" required>
+                            </div>
+                        </div>
+
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label for="emailCliente">Correo Cliente (Opcional)</label>
+                                <input type="email" id="emailCliente" name="email_cliente"
+                                    placeholder="cliente@correo.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="emailTesoreria">Correo Tesorería / Cobranza</label>
+                                <input type="email" id="emailTesoreria" name="email_tesoreria"
+                                    placeholder="tesoreria@automarco.cl" required>
+                            </div>
+                        </div>
+
+                        <!-- TARJETA DE DATOS DEL CLIENTE -->
+                        <div id="infoClienteBox" class="info-cliente-card" style="display: none;">
+                            <p><strong>Cliente:</strong> <span id="lblNombreCliente">-</span></p>
+                            <p><strong>RUT:</strong> <span id="lblRutCliente">-</span></p>
+                            <p><strong>Monto Factura:</strong> $<span id="lblMontoFactura">0</span></p>
+                            <input type="hidden" id="rutCliente" name="rut_cliente">
+                            <input type="hidden" id="razonSocialCliente" name="razon_social_cliente">
+                            <input type="hidden" id="montoTotalFactura" name="monto_total_factura">
+                        </div>
+
+                        <!-- TARJETA DE ERROR (Factura no encontrada) -->
+                        <div id="errorClienteBox" class="info-cliente-card error-card" style="display: none;">
+                            <p style="text-align: center; font-weight: bold; margin: 0;">Factura no encontrada en esta empresa.</p>
+                        </div>
+                    </section>
+
+                    <!-- SECCIÓN 2: REGISTRO DINÁMICO DE CHEQUES -->
+                    <section class="form-section">
+                        <div class="header-seccion">
+                            <h3 class="form-section-title" style="margin: 0; border: none; padding: 0;">
+                                <span class="step-number">2</span>
+                                Detalle de Cheques
+                            </h3>
+                            <button type="button" id="btnAgregarCheque" class="btn-secundario">+ Agregar Cheque</button>
+                        </div>
+
+                        <div id="contenedorCheques"></div>
+
+                        <div class="resumen-totales">
+                            <h3>Total Cheques: <strong id="lblTotalCheques">$0</strong></h3>
+                            <h3>Monto Factura: <strong id="lblMontoFacturaResumen">$0</strong></h3>
+                        </div>
+                    </section>
+
+                    <!-- SECCIÓN 3: MODALIDAD DE ENVÍO -->
+                    <section class="form-section">
+                        <h3 class="form-section-title">
+                            <span class="step-number">3</span>
+                            Modalidad de Envío
+                        </h3>
+
+                        <div class="form-group">
+                            <label for="tipoEntrega">Tipo de entrega de documentación</label>
+                            <select id="tipoEntrega" name="tipo_entrega" required>
+                                <option value="">-- Seleccione Tipo --</option>
+                                <option value="CHILEXPRESS">Envío por Chilexpress</option>
+                                <option value="PRESENCIAL_SANTIAGO">Entrega Presencial (Santiago)</option>
+                            </select>
+                        </div>
+
+                        <!-- CHILEXPRESS -->
+                        <div id="seccionChilexpress" class="seccion-dinamica">
+                            <div class="form-group">
+                                <label for="numSeguimiento">N° Seguimiento / OT Chilexpress</label>
+                                <input type="text" id="numSeguimiento" name="numero_seguimiento" inputmode="numeric"
+                                    pattern="[0-9]*" placeholder="Ej: 1029384756 (Opcional)">
+                            </div>
+                            <div class="form-group">
+                                <label>Comprobante Chilexpress</label>
+                                <label for="fotoComprobante" class="custom-file-upload">
+                                    <span>Tomar Foto Comprobante</span>
+                                </label>
+                                <input type="file" id="fotoComprobante" name="foto_comprobante" accept="image/*"
+                                    capture="environment" class="input-file-hidden">
+
+                                <div id="boxPreviewComprobante" class="preview-wrapper" style="display: none;">
+                                    <img id="imgComprobante" class="preview-img" alt="Vista previa comprobante">
+                                    <button type="button" class="btn-quitar-foto"
+                                        onclick="quitarImagen('fotoComprobante', 'imgComprobante', 'boxPreviewComprobante')">Quitar
+                                        Foto</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SANTIAGO -->
+                        <div id="seccionSantiago" class="seccion-dinamica">
+                            <div class="form-group">
+                                <label>Comprobante de Recepción / Firma</label>
+                                <label for="fotoFirma" class="custom-file-upload">
+                                    <span>Tomar Foto Recepción</span>
+                                </label>
+                                <input type="file" id="fotoFirma" name="foto_firma" accept="image/*"
+                                    capture="environment" class="input-file-hidden">
+
+                                <div id="boxPreviewFirma" class="preview-wrapper" style="display: none;">
+                                    <img id="imgFirma" class="preview-img" alt="Vista previa firma">
+                                    <button type="button" class="btn-quitar-foto"
+                                        onclick="quitarImagen('fotoFirma', 'imgFirma', 'boxPreviewFirma')">Quitar
+                                        Foto</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <button type="submit" class="btn-submit">Registrar Cobranza</button>
+                </form>
+            </section>
+
+            <!-- VISTA 2: SEGUIMIENTO DE CHEQUES ENVIADOS -->
+            <section id="viewSeguimiento" class="tab-content">
+                <div class="seguimiento-header">
+                    <input type="text" id="inputBuscarSeguimiento" placeholder="Buscar por Factura, RUT o Empresa..."
+                        class="input-search">
+                    <select id="filtroEstado" class="select-filter">
+                        <option value="TODOS">Todos los Estados</option>
+                        <option value="INGRESADO">Ingresado / En preparación</option>
+                        <option value="EN_TRANSITO">En Tránsito (Chilexpress)</option>
+                        <option value="RECIBIDO_TESORERIA">Recibido por Tesorería</option>
+                        <option value="DEPOSITADO">Depositado</option>
+                        <option value="RECHAZADO">Rechazado / Devuelto</option>
+                    </select>
+                </div>
+
+                <!-- Lista Dinámica de Envíos -->
+                <div id="listaEnvios" class="lista-envios-container">
+                    <!-- Se renderiza desde JS -->
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- CONSOLA DE DIAGNÓSTICO EN PANTALLA PARA MÓVILES -->
+    <div id="debugConsoleWrapper" style="margin: 20px; padding: 15px; background: #2d2d2d; color: #f8f8f2; font-family: monospace; font-size: 12px; border-radius: 8px; border: 1px dashed #666; max-height: 250px; overflow-y: auto;">
+        <h4 style="margin: 0 0 10px 0; color: #f1fa8c; border-bottom: 1px solid #444; padding-bottom: 5px;">🐞 Depurador Web (Consola Móvil)</h4>
+        <div id="debugLogs" style="white-space: pre-wrap; line-height: 1.4;">[Esperando eventos...]</div>
+    </div>
+
+    <script src="script.js?v=11"></script>
+</body>
+
+</html>
