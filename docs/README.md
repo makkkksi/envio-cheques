@@ -59,6 +59,7 @@ Ver detalle en [`ROADMAP.md`](./ROADMAP.md).
 ├── api/
 │   ├── get_factura.php         GET  — Busca factura en ERP
 │   ├── guardar_cobranza.php    POST — Guarda cobranza + cheques + imágenes
+│   ├── completar_envio.php     POST — Completa el despacho de una cobranza pendiente
 │   ├── get_mis_cobranzas.php   GET  — Historial del vendedor autenticado
 │   └── auth/
 │       └── login.php           POST — Autenticación, retorna token
@@ -96,6 +97,12 @@ C:\laragon\www\form\
 # 4. Acceder al módulo
 http://localhost/form/
 ```
+
+## Política de datos del entorno actual
+
+Este entorno de desarrollo es cerrado y no contiene cheques ni cobranzas reales. Por ello, mientras se mantenga esta condición, los datos de `bd_modulo_cobranzas` pueden eliminarse y la base puede recrearse desde cero al ajustar el esquema.
+
+No se requiere una migración conservadora para los cambios del flujo dividido. El trabajo pendiente es actualizar el DDL de `config/setup.sql` y luego recrear/importar la base local. Antes de usar datos reales o un entorno compartido, esta política debe revisarse y los cambios de esquema deberán ejecutarse mediante una migración que preserve los datos.
 
 ---
 

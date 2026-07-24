@@ -30,7 +30,7 @@ ENUM('VENDEDOR', 'TESORERIA', 'ADMINISTRADOR')
 ENUM('CHILEXPRESS', 'PRESENCIAL_SANTIAGO')
 
 -- Estado del ciclo de vida del cheque
-ENUM('INGRESADO', 'EN_TRANSITO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO')
+ENUM('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO')
 ```
 
 ---
@@ -118,11 +118,11 @@ CREATE TABLE cobranzas (
   monto_total_factura  DECIMAL(12,0),
   email_cliente        VARCHAR(150),
   email_tesoreria      VARCHAR(150),
-  tipo_entrega         ENUM('CHILEXPRESS','PRESENCIAL_SANTIAGO') NOT NULL,
+  tipo_entrega         ENUM('CHILEXPRESS','PRESENCIAL_SANTIAGO') NULL,
   numero_seguimiento   VARCHAR(100),                    -- OT Chilexpress (si aplica)
   comprobante_url      VARCHAR(255),                    -- ruta relativa a uploads/
-  estado               ENUM('INGRESADO','EN_TRANSITO','RECIBIDO_TESORERIA',
-                            'DEPOSITADO','RECHAZADO') DEFAULT 'INGRESADO',
+  estado               ENUM('PENDIENTE_ENVIO','EN_TRANSITO','ENTREGADO_SANTIAGO',
+                            'RECIBIDO_TESORERIA','DEPOSITADO','RECHAZADO') DEFAULT 'PENDIENTE_ENVIO',
   created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (empresa_id)  REFERENCES empresas(id),
   FOREIGN KEY (vendedor_id) REFERENCES usuarios(id)
@@ -133,14 +133,9 @@ CREATE TABLE cobranzas (
 |-------|-------------|
 | `comprobante_url` | Ruta relativa: `uploads/{empresa_id}/{YYYY-MM}/comprobantes/archivo.jpg` |
 | `numero_seguimiento` | Aplica solo cuando `tipo_entrega = 'CHILEXPRESS'` |
-| `estado` | Controlado exclusivamente por Tesorería (Portal Fase 2). El vendedor no puede cambiarlo. |
+| `estado` | Inicia en `PENDIENTE_ENVIO`. El vendedor solo puede avanzar al estado de envío mediante `completar_envio.php`; Tesorería gestiona los estados posteriores. |
 
-**Estado inicial por tipo de entrega:**
-
-| `tipo_entrega` | `estado` inicial |
-|---|---|
-| `CHILEXPRESS` | `EN_TRANSITO` |
-| `PRESENCIAL_SANTIAGO` | `INGRESADO` |
+**Flujo de entrega:** al registrar la cobranza, `tipo_entrega` permanece `NULL` y el estado es `PENDIENTE_ENVIO`. Al completar el envío, `CHILEXPRESS` cambia a `EN_TRANSITO` y `PRESENCIAL_SANTIAGO` a `ENTREGADO_SANTIAGO`.
 
 ---
 
@@ -182,10 +177,10 @@ CREATE TABLE historial_estados (
   id             INT AUTO_INCREMENT PRIMARY KEY,
   cobranza_id    INT NOT NULL,
   usuario_id     INT NOT NULL,
-  estado_anterior ENUM('INGRESADO','EN_TRANSITO','RECIBIDO_TESORERIA',
-                       'DEPOSITADO','RECHAZADO') NULL,  -- NULL en el primer registro
-  estado_nuevo   ENUM('INGRESADO','EN_TRANSITO','RECIBIDO_TESORERIA',
-                      'DEPOSITADO','RECHAZADO') NOT NULL,
+  estado_anterior ENUM('PENDIENTE_ENVIO','EN_TRANSITO','ENTREGADO_SANTIAGO',
+                       'RECIBIDO_TESORERIA','DEPOSITADO','RECHAZADO') NULL,  -- NULL en el primer registro
+  estado_nuevo   ENUM('PENDIENTE_ENVIO','EN_TRANSITO','ENTREGADO_SANTIAGO',
+                      'RECIBIDO_TESORERIA','DEPOSITADO','RECHAZADO') NOT NULL,
   comentario     TEXT NULL,
   created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (cobranza_id) REFERENCES cobranzas(id),
@@ -194,6 +189,8 @@ CREATE TABLE historial_estados (
 ```
 
 > `estado_anterior = NULL` indica el registro inicial (creación de la cobranza).
+
+> **Entorno actual:** como no hay datos reales, al alinear el esquema con el flujo dividido se recreará la base local desde `config/setup.sql`; no se requiere migración de preservación de datos.
 
 ---
 

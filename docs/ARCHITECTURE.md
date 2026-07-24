@@ -106,13 +106,19 @@ Vendedor (tablet)
   │
   ├─[2]─► Agrega cheques (banco, N°, monto, fecha, foto, comentario)
   │
-  ├─[3]─► Selecciona modalidad (Chilexpress / Santiago) + adjunta foto comprobante
-  │
-  └─[4]─► Submit formulario
+  └─[3]─► Submit del registro
            ↓ POST api/guardar_cobranza.php (multipart/form-data)
            ↓ [Backend: sube fotos → transacción SQL → INSERT cobranza + cheques + historial]
-           ↓ [Backend: llama MailService → envía correo a Tesorería + cliente]
+           ↓ Estado inicial: PENDIENTE_ENVIO
            ↓ Frontend: toast de éxito → redirige a historial
+
+Vendedor (en otro momento)
+  │
+  └─► En historial, selecciona "Completar envío"
+      ↓ Adjunta comprobante y define modalidad
+      ↓ POST api/completar_envio.php (multipart/form-data)
+      ↓ CHILEXPRESS → EN_TRANSITO | PRESENCIAL_SANTIAGO → ENTREGADO_SANTIAGO
+      ↓ [Backend: actualiza cobranza + inserta historial + envía notificaciones]
 ```
 
 ### Flujo 2: Consulta de Historial (Vendedor)
@@ -123,7 +129,7 @@ Vendedor (pestaña "Ver Cheques Enviados")
   └─► GET api/get_mis_cobranzas.php (con filtros opcionales)
       ↓ [Backend: consulta cobranzas WHERE vendedor_id = usuario_actual]
       ↓ Devuelve array con cobranzas + cheques anidados
-      ↓ Frontend: renderiza tarjetas (read-only, sin acciones de estado)
+      ↓ Frontend: renderiza tarjetas; solo PENDIENTE_ENVIO permite completar el envío
 ```
 
 ### Flujo 3: Gestión de Estado (Tesorería) — FASE 2

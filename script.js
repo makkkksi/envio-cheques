@@ -46,9 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewSeguimiento = document.getElementById('viewSeguimiento');
 
     const formCobranza = document.getElementById('formCobranza');
-    const selectTipoEntrega = document.getElementById('tipoEntrega');
-    const seccionChilexpress = document.getElementById('seccionChilexpress');
-    const seccionSantiago = document.getElementById('seccionSantiago');
     const btnAgregarCheque = document.getElementById('btnAgregarCheque');
     const contenedorCheques = document.getElementById('contenedorCheques');
     const lblTotalCheques = document.getElementById('lblTotalCheques');
@@ -63,17 +60,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const razonSocialClienteInput = document.getElementById('razonSocialCliente');
     const numFacturaInput = document.getElementById('numFactura');
     const emailClienteInput = document.getElementById('emailCliente');
+    const chkEmailCliente = document.getElementById('chkEmailCliente');
+    const wrapperEmailCliente = document.getElementById('wrapperEmailCliente');
     const empresaSelect = document.getElementById('empresaVendedor');
     const montoTotalFacturaInput = document.getElementById('montoTotalFactura');
     const errorClienteBox = document.getElementById('errorClienteBox');
 
-    const listaEnvios = document.getElementById('listaEnvios');
     const inputBuscar = document.getElementById('inputBuscarSeguimiento');
     const filtroEstado = document.getElementById('filtroEstado');
 
     let contadorCheques = 0;
     let montoFacturaActual = 0;
     let debounceTimer = null;
+
+    // Variables globales para la edición de cheques
+    let cobranzasPendientesGlobal = [];
+    let eliminadosIdsEdicion = [];
+    let contadorChequesEdicion = 0;
+    let montoFacturaEdicionActual = 0;
+    let formularioConfirmando = null;
+    let emailClienteERP = '';
+
+    // ==========================================
+    // BADGE DE PENDIENTES EN PESTAÑA
+    // ==========================================
+    function actualizarBadgePendientes(cantidad) {
+        const badge = document.getElementById('badgeCantidadPendientes');
+        if (!badge) return;
+        if (cantidad > 0) {
+            badge.textContent = cantidad;
+            badge.style.display = 'inline-flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (chkEmailCliente && wrapperEmailCliente) {
+        chkEmailCliente.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                wrapperEmailCliente.style.display = 'block';
+                emailClienteInput.disabled = false;
+                emailClienteInput.value = emailClienteERP;
+            } else {
+                wrapperEmailCliente.style.display = 'none';
+                emailClienteInput.disabled = true;
+                emailClienteInput.value = '';
+            }
+        });
+    }
 
     // ==========================================
     // SISTEMA DE PESTAÑAS (TABS)
@@ -92,6 +126,18 @@ document.addEventListener('DOMContentLoaded', () => {
         viewNuevoEnvio.classList.remove('active');
         cargarSeguimiento();
     });
+
+    // Actualizar badge al cargar la página (sin mostrar el listado)
+    async function actualizarBadgeInicial() {
+        try {
+            const response = await fetch('api/get_mis_cobranzas.php');
+            const data = await response.json();
+            if (data.success && data.data && data.data.por_enviar) {
+                actualizarBadgePendientes(data.data.por_enviar.length);
+            }
+        } catch (_) { /* silencioso */ }
+    }
+    actualizarBadgeInicial();
 
     // ==========================================
     // NOTIFICACIONES TOAST
@@ -112,26 +158,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // RENDERIZADO DEL FLUJO DE ESTADOS Y TARJETAS
     // ==========================================
     const ESTADOS_CONFIG = {
-        'INGRESADO':           { label: 'Ingresado',             class: 'badge-ingresado' },
-        'EN_TRANSITO':         { label: 'En Tránsito',           class: 'badge-transito' },
-        'RECIBIDO_TESORERIA':  { label: 'Recibido Tesorería',    class: 'badge-recibido' },
-        'DEPOSITADO':          { label: 'Depositado',            class: 'badge-depositado' },
-        'RECHAZADO':           { label: 'Rechazado',             class: 'badge-rechazado' }
+        'PENDIENTE_ENVIO':     { label: 'Pendiente Envío',       class: 'pendiente_envio' },
+        'EN_TRANSITO':         { label: 'En Tránsito',           class: 'en_transito' },
+        'ENTREGADO_SANTIAGO':  { label: 'Entregado (Sntg)',      class: 'entregado_santiago' },
+        'RECIBIDO_TESORERIA':  { label: 'Recibido Tesorería',    class: 'recibido_tesoreria' },
+        'DEPOSITADO':          { label: 'Depositado',            class: 'depositado' },
+        'RECHAZADO':           { label: 'Rechazado',             class: 'rechazado' }
     };
 
-    function renderTarjetas(cobranzas) {
-        if (!listaEnvios) return;
+    function renderTarjetas(cobranzas, containerEl) {
+        if (!containerEl) return;
 
         if (!cobranzas || cobranzas.length === 0) {
-            listaEnvios.innerHTML = `<div class="empty-state"><p>No se encontraron registros de cobranza.</p></div>`;
+            containerEl.innerHTML = `<div class="empty-state"><p>No se encontraron registros.</p></div>`;
             return;
         }
 
-        listaEnvios.innerHTML = cobranzas.map(item => {
+        containerEl.innerHTML = cobranzas.map(item => {
             const totalMonto = item.cheques.reduce((sum, chk) => sum + parseFloat(chk.monto || 0), 0);
             const configEstado = ESTADOS_CONFIG[item.estado] || { label: item.estado, class: '' };
             const fechaFormateada = item.created_at ? item.created_at.split(' ')[0] : '-';
             const tracking = item.numero_seguimiento || null;
+            const tipoEntregaTexto = item.tipo_entrega ? (item.tipo_entrega === 'CHILEXPRESS' ? 'Chilexpress' : 'Santiago') : 'Pendiente';
+
+            // Botón para completar envío o editar cheques sólo si está pendiente
+            const btnCompletar = item.estado === 'PENDIENTE_ENVIO' ? `
+                <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="btn-completar-envio" style="background-color: var(--color-accent-light); color: var(--color-accent); border: 1px solid var(--color-border);" onclick="abrirModalEditar(${item.id})">
+                        Editar Cheques
+                    </button>
+                    <button type="button" class="btn-completar-envio" onclick="abrirModalCompletar(${item.id})">
+                        Completar Envío
+                    </button>
+                </div>
+            ` : '';
 
             return `
                 <div class="envio-card">
@@ -145,9 +205,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <div class="envio-card-body">
                         <p><strong>Cliente:</strong> ${item.razon_social_cliente || '-'}</p>
+                        <p><strong>Monto Factura:</strong> $${parseFloat(item.monto_total_factura || 0).toLocaleString('es-CL')}</p>
                         <p><strong>Total Cheques (${item.cheques.length}):</strong> $${totalMonto.toLocaleString('es-CL')}</p>
                         <p><strong>Fecha Registro:</strong> ${fechaFormateada}</p>
-                        <p><strong>Entrega:</strong> ${item.tipo_entrega} ${tracking ? `(OT: ${tracking})` : ''}</p>
+                        <p><strong>Entrega:</strong> ${tipoEntregaTexto} ${tracking ? `(OT: ${tracking})` : ''}</p>
+                        ${btnCompletar}
                     </div>
 
                     <div class="envio-card-cheques">
@@ -171,19 +233,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
+    // Helper para ordenar colecciones
+    function ordenarColeccion(coleccion, criterio) {
+        if (!coleccion) return [];
+        return [...coleccion].sort((a, b) => {
+            if (criterio === 'fecha_desc') {
+                return new Date(b.created_at) - new Date(a.created_at);
+            } else if (criterio === 'fecha_asc') {
+                return new Date(a.created_at) - new Date(b.created_at);
+            } else if (criterio === 'estado') {
+                return a.estado.localeCompare(b.estado);
+            }
+            return 0;
+        });
+    }
+
     // ==========================================
-    // CARGA DEL HISTORIAL DESDE LA API REAL
+    // CARGA DEL SEGUIMIENTO (PENDIENTES) DESDE LA API REAL
     // ==========================================
     async function cargarSeguimiento() {
-        if (!listaEnvios) return;
+        const listaPorEnviar = document.getElementById('listaPorEnviar');
+        if (listaPorEnviar) listaPorEnviar.innerHTML = `<div class="empty-state"><p>Cargando cobranzas...</p></div>`;
 
-        listaEnvios.innerHTML = `<div class="empty-state"><p>Cargando cobranzas...</p></div>`;
-
-        const estado = filtroEstado ? filtroEstado.value : 'TODOS';
         const busqueda = inputBuscar ? inputBuscar.value.trim() : '';
 
         const params = new URLSearchParams();
-        if (estado && estado !== 'TODOS') params.append('estado', estado);
         if (busqueda) params.append('busqueda', busqueda);
 
         try {
@@ -191,15 +265,63 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (!data.success) {
-                listaEnvios.innerHTML = `<div class="empty-state"><p>Error al cargar las cobranzas.</p></div>`;
+                if (listaPorEnviar) listaPorEnviar.innerHTML = `<div class="empty-state"><p>Error al cargar.</p></div>`;
                 showToast(data.message || 'Error al cargar las cobranzas', 'error');
                 return;
             }
 
-            renderTarjetas(data.data);
+            cobranzasPendientesGlobal = data.data.por_enviar || [];
+            const ordenarSelect = document.getElementById('ordenarPendientes');
+            const criterio = ordenarSelect ? ordenarSelect.value : 'fecha_desc';
+            const sortedData = ordenarColeccion(cobranzasPendientesGlobal, criterio);
+
+            renderTarjetas(sortedData, listaPorEnviar);
+
+            // Actualizar badge naranja en la pestaña
+            actualizarBadgePendientes(data.data.por_enviar ? data.data.por_enviar.length : 0);
 
         } catch (err) {
-            listaEnvios.innerHTML = `<div class="empty-state"><p>Error de conexión al cargar historial.</p></div>`;
+            if (listaPorEnviar) listaPorEnviar.innerHTML = `<div class="empty-state"><p>Error de conexión.</p></div>`;
+            showToast('Error de conexión. Verifique su red.', 'error');
+        }
+    }
+
+
+    // ==========================================
+    // CARGA DEL HISTORIAL DESDE LA API REAL (MODAL)
+    // ==========================================
+    async function cargarHistorial() {
+        const listaEnviadosModal = document.getElementById('listaEnviadosModal');
+        if (listaEnviadosModal) listaEnviadosModal.innerHTML = `<div class="empty-state"><p>Cargando historial...</p></div>`;
+
+        const inputBuscarHistorial = document.getElementById('inputBuscarHistorial');
+        const filtroEstadoHistorial = document.getElementById('filtroEstadoHistorial');
+        const ordenarHistorial = document.getElementById('ordenarHistorial');
+
+        const busqueda = inputBuscarHistorial ? inputBuscarHistorial.value.trim() : '';
+        const estado = filtroEstadoHistorial ? filtroEstadoHistorial.value : 'TODOS';
+
+        const params = new URLSearchParams();
+        if (busqueda) params.append('busqueda', busqueda);
+        if (estado && estado !== 'TODOS') params.append('estado', estado);
+
+        try {
+            const response = await fetch(`api/get_mis_cobranzas.php?${params.toString()}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                if (listaEnviadosModal) listaEnviadosModal.innerHTML = `<div class="empty-state"><p>Error al cargar.</p></div>`;
+                showToast(data.message || 'Error al cargar las cobranzas', 'error');
+                return;
+            }
+
+            const criterio = ordenarHistorial ? ordenarHistorial.value : 'fecha_desc';
+            const sortedData = ordenarColeccion(data.data.enviados, criterio);
+
+            renderTarjetas(sortedData, listaEnviadosModal);
+
+        } catch (err) {
+            if (listaEnviadosModal) listaEnviadosModal.innerHTML = `<div class="empty-state"><p>Error de conexión.</p></div>`;
             showToast('Error de conexión. Verifique su red.', 'error');
         }
     }
@@ -208,7 +330,39 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(cargarSeguimiento, 400);
     });
-    if (filtroEstado) filtroEstado.addEventListener('change', cargarSeguimiento);
+
+    const ordenarPendientes = document.getElementById('ordenarPendientes');
+    if (ordenarPendientes) ordenarPendientes.addEventListener('change', cargarSeguimiento);
+
+    const inputBuscarHistorial = document.getElementById('inputBuscarHistorial');
+    const filtroEstadoHistorial = document.getElementById('filtroEstadoHistorial');
+    const ordenarHistorial = document.getElementById('ordenarHistorial');
+
+    if (inputBuscarHistorial) {
+        inputBuscarHistorial.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(cargarHistorial, 400);
+        });
+    }
+    if (filtroEstadoHistorial) filtroEstadoHistorial.addEventListener('change', cargarHistorial);
+    if (ordenarHistorial) ordenarHistorial.addEventListener('change', cargarHistorial);
+
+    // Modal Historial
+    const modalHistorial = document.getElementById('modalHistorial');
+    const btnAbrirHistorial = document.getElementById('btnAbrirHistorial');
+    const btnCerrarModalHistorial = document.getElementById('btnCerrarModalHistorial');
+
+    if (btnAbrirHistorial) {
+        btnAbrirHistorial.addEventListener('click', () => {
+            modalHistorial.style.display = 'flex';
+            cargarHistorial();
+        });
+    }
+    if (btnCerrarModalHistorial) {
+        btnCerrarModalHistorial.addEventListener('click', () => {
+            modalHistorial.style.display = 'none';
+        });
+    }
 
     // ==========================================
     // BÚSQUEDA REAL DE FACTURA EN API
@@ -221,7 +375,13 @@ document.addEventListener('DOMContentLoaded', () => {
         rutClienteInput.value = '';
         if (razonSocialClienteInput) razonSocialClienteInput.value = '';
         if (montoTotalFacturaInput) montoTotalFacturaInput.value = '';
+        
+        emailClienteERP = '';
+        if (chkEmailCliente) chkEmailCliente.checked = false;
+        if (wrapperEmailCliente) wrapperEmailCliente.style.display = 'none';
         emailClienteInput.value = '';
+        emailClienteInput.disabled = true;
+
         lblNombreCliente.textContent = '-';
         lblRutCliente.textContent = '-';
         lblMontoFactura.textContent = '0';
@@ -281,7 +441,12 @@ document.addEventListener('DOMContentLoaded', () => {
             rutClienteInput.value = factura.rut_cliente || '';
             if (razonSocialClienteInput) razonSocialClienteInput.value = factura.razon_social || '';
             if (montoTotalFacturaInput) montoTotalFacturaInput.value = montoFacturaActual;
-            emailClienteInput.value = factura.email_cliente || '';
+            emailClienteERP = factura.email_cliente || '';
+            if (chkEmailCliente && chkEmailCliente.checked) {
+                emailClienteInput.value = emailClienteERP;
+            } else {
+                emailClienteInput.value = '';
+            }
 
             infoClienteBox.style.display = 'flex';
             calcularTotalCheques();
@@ -356,6 +521,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="form-group">
                 <label>Foto del Cheque</label>
                 <label for="fotoCheque_${chequeId}" class="custom-file-upload">
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle; display: inline-block;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                    </svg>
                     <span>Tomar Foto Cheque</span>
                 </label>
                 <input type="file" id="fotoCheque_${chequeId}" name="foto_cheque[]" accept="image/*" capture="environment" class="input-file-hidden" required>
@@ -432,6 +601,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.eliminarCheque = function (id) {
+        if (!confirm('¿Está seguro de eliminar este cheque de la cobranza?')) {
+            return;
+        }
         const tarjeta = document.getElementById(`cheque_item_${id}`);
         if (tarjeta) {
             tarjeta.remove();
@@ -439,26 +611,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    function calcularTotalCheques() {
+    function obtenerTotalCheques() {
         const hiddenInputs = document.querySelectorAll('.hidden-monto-cheque');
         let total = 0;
         hiddenInputs.forEach(input => {
             total += parseFloat(input.value) || 0;
         });
+        return total;
+    }
+
+    function calcularTotalCheques() {
+        const total = obtenerTotalCheques();
         lblTotalCheques.textContent = '$' + total.toLocaleString('es-CL');
     }
 
     agregarCheque();
     btnAgregarCheque.addEventListener('click', agregarCheque);
-
-    selectTipoEntrega.addEventListener('change', (e) => {
-        const valor = e.target.value;
-        seccionChilexpress.style.display = valor === 'CHILEXPRESS' ? 'block' : 'none';
-        seccionSantiago.style.display = valor === 'PRESENCIAL_SANTIAGO' ? 'block' : 'none';
-    });
-
-    configurarPreviewConBorrado('fotoComprobante', 'imgComprobante', 'boxPreviewComprobante');
-    configurarPreviewConBorrado('fotoFirma', 'imgFirma', 'boxPreviewFirma');
 
     // ==========================================
     // ENVÍO DEL FORMULARIO — FETCH REAL A LA API
@@ -474,6 +642,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!rutClienteInput || !rutClienteInput.value) {
             showToast('Debe ingresar un N° de Factura válido y esperar a que carguen los datos del cliente.', 'error');
+            return;
+        }
+
+        // --- VALIDACIÓN DE COINCIDENCIA DE MONTOS Y CONFIRMACIÓN ---
+        const totalChequesVal = obtenerTotalCheques();
+        const totalFacturaVal = parseFloat(montoTotalFacturaInput.value) || 0;
+
+        if (!formCobranza.dataset.bypassDiscrepancia) {
+            formularioConfirmando = formCobranza;
+            const titleEl = document.getElementById('modalAdvertenciaTitle');
+            const text1El = document.getElementById('modalAdvertenciaText1');
+            const text2El = document.getElementById('modalAdvertenciaText2');
+            const btnCancelEl = document.getElementById('btnCancelarAdvertencia');
+            const btnConfirmEl = document.getElementById('btnEnviarIgualmente');
+
+            if (totalChequesVal !== totalFacturaVal) {
+                titleEl.textContent = 'Diferencia en Montos';
+                text1El.innerHTML = `El monto total de los cheques (<strong>$${totalChequesVal.toLocaleString('es-CL')}</strong>) no coincide con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
+                text2El.textContent = 'Le sugerimos justificar esta diferencia en el campo de comentarios de los cheques antes de proceder. ¿Desea enviar de todas formas?';
+                btnCancelEl.textContent = 'Cerrar y Revisar';
+                btnConfirmEl.textContent = 'Enviar Igualmente';
+            } else {
+                titleEl.textContent = 'Confirmar Registro';
+                text1El.innerHTML = `El monto total de los cheques coincide perfectamente con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
+                text2El.textContent = '¿Está seguro de registrar esta cobranza?';
+                btnCancelEl.textContent = 'Cancelar';
+                btnConfirmEl.textContent = 'Confirmar Registro';
+            }
+
+            document.getElementById('modalAdvertenciaMontos').style.display = 'flex';
             return;
         }
 
@@ -496,8 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.set('monto_total_factura',   montoTotalFacturaInput ? montoTotalFacturaInput.value : '');
             formData.set('email_cliente',         emailClienteInput.value);
             formData.set('email_tesoreria',       document.getElementById('emailTesoreria').value);
-            formData.set('tipo_entrega',          selectTipoEntrega.value);
-            formData.set('numero_seguimiento',    document.getElementById('numSeguimiento')?.value || '');
 
             // ── Cheques: campos de texto ──
             const bancos        = formCobranza.querySelectorAll('select[name="banco[]"]');
@@ -520,22 +716,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const compressed = await compressImage(input.files[0]);
                     formData.append('foto_cheque[]', compressed, compressed.name);
                 }
-            }
-
-            // ── Foto comprobante Chilexpress (comprimida) ──
-            const inputComprobante = document.getElementById('fotoComprobante');
-            if (inputComprobante && inputComprobante.files && inputComprobante.files[0]) {
-                btnSubmit.textContent = 'Comprimiendo comprobante...';
-                const compressed = await compressImage(inputComprobante.files[0]);
-                formData.set('foto_comprobante', compressed, compressed.name);
-            }
-
-            // ── Foto firma presencial (comprimida) ──
-            const inputFirma = document.getElementById('fotoFirma');
-            if (inputFirma && inputFirma.files && inputFirma.files[0]) {
-                btnSubmit.textContent = 'Comprimiendo comprobante...';
-                const compressed = await compressImage(inputFirma.files[0]);
-                formData.set('foto_firma', compressed, compressed.name);
             }
 
             btnSubmit.textContent = 'Subiendo...';
@@ -596,15 +776,488 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Error de conexión. Intente nuevamente.', 'error');
             }
         } finally {
+            formCobranza.removeAttribute('data-bypass-discrepancia');
             btnSubmit.disabled = false;
             btnSubmit.textContent = 'Registrar Cobranza';
         }
     });
-});
 
-// ==========================================
-// UTILIDADES GLOBALES (PREVIEW DE IMÁGENES)
-// ==========================================
+    // ==========================================
+    // MODAL COMPLETAR ENVÍO — EVENTOS
+    // ==========================================
+    {
+        const modalCompletarEnvio = document.getElementById('modalCompletarEnvio');
+        const formCompletarEnvio = document.getElementById('formCompletarEnvio');
+        const modalTipoEntrega = document.getElementById('modalTipoEntrega');
+        const modalSeccionChilexpress = document.getElementById('modalSeccionChilexpress');
+        const modalSeccionSantiago = document.getElementById('modalSeccionSantiago');
+        const btnCerrarModal = document.getElementById('btnCerrarModal');
+
+        modalTipoEntrega.addEventListener('change', (e) => {
+            const valor = e.target.value;
+            modalSeccionChilexpress.style.display = valor === 'CHILEXPRESS' ? 'block' : 'none';
+            modalSeccionSantiago.style.display = valor === 'PRESENCIAL_SANTIAGO' ? 'block' : 'none';
+
+            const fotoComp = document.getElementById('modalFotoComprobante');
+            const fotoFirm = document.getElementById('modalFotoFirma');
+            if (valor === 'CHILEXPRESS') {
+                if (fotoComp) fotoComp.required = true;
+                if (fotoFirm) fotoFirm.required = false;
+            } else if (valor === 'PRESENCIAL_SANTIAGO') {
+                if (fotoComp) fotoComp.required = false;
+                if (fotoFirm) fotoFirm.required = true;
+            } else {
+                if (fotoComp) fotoComp.required = false;
+                if (fotoFirm) fotoFirm.required = false;
+            }
+        });
+
+        configurarPreviewConBorrado('modalFotoComprobante', 'modalImgComprobante', 'modalBoxPreviewComprobante');
+        configurarPreviewConBorrado('modalFotoFirma', 'modalImgFirma', 'modalBoxPreviewFirma');
+
+        btnCerrarModal.addEventListener('click', () => {
+            modalCompletarEnvio.style.display = 'none';
+            formCompletarEnvio.reset();
+            quitarImagen('modalFotoComprobante', 'modalImgComprobante', 'modalBoxPreviewComprobante');
+            quitarImagen('modalFotoFirma', 'modalImgFirma', 'modalBoxPreviewFirma');
+            modalSeccionChilexpress.style.display = 'none';
+            modalSeccionSantiago.style.display = 'none';
+        });
+
+        window.abrirModalCompletar = function(cobranzaId) {
+            document.getElementById('modalCobranzaId').value = cobranzaId;
+            modalCompletarEnvio.style.display = 'flex';
+        };
+
+        formCompletarEnvio.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!formCompletarEnvio.checkValidity()) {
+                showToast('Complete todos los campos requeridos.', 'error');
+                formCompletarEnvio.reportValidity();
+                return;
+            }
+
+            const btnSubmitModal = document.getElementById('btnConfirmarEnvioSubmit');
+            btnSubmitModal.disabled = true;
+            btnSubmitModal.textContent = 'Enviando...';
+
+            try {
+                const formData = new FormData();
+                formData.set('cobranza_id', document.getElementById('modalCobranzaId').value);
+                formData.set('tipo_entrega', modalTipoEntrega.value);
+
+                if (modalTipoEntrega.value === 'CHILEXPRESS') {
+                    formData.set('numero_seguimiento', document.getElementById('modalNumSeguimiento').value);
+                    const inputComprobante = document.getElementById('modalFotoComprobante');
+                    if (inputComprobante.files && inputComprobante.files[0]) {
+                        btnSubmitModal.textContent = 'Comprimiendo...';
+                        const compressed = await compressImage(inputComprobante.files[0]);
+                        formData.set('foto_comprobante', compressed, compressed.name);
+                    }
+                } else {
+                    const inputFirma = document.getElementById('modalFotoFirma');
+                    if (inputFirma.files && inputFirma.files[0]) {
+                        btnSubmitModal.textContent = 'Comprimiendo...';
+                        const compressed = await compressImage(inputFirma.files[0]);
+                        formData.set('foto_firma', compressed, compressed.name);
+                    }
+                }
+
+                btnSubmitModal.textContent = 'Subiendo...';
+
+                const response = await fetch('api/completar_envio.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    showToast(data.message || 'Error al completar el envío.', 'error');
+                    return;
+                }
+
+                showToast('Envío completado con éxito.', 'success');
+                modalCompletarEnvio.style.display = 'none';
+                formCompletarEnvio.reset();
+                quitarImagen('modalFotoComprobante', 'modalImgComprobante', 'modalBoxPreviewComprobante');
+                quitarImagen('modalFotoFirma', 'modalImgFirma', 'modalBoxPreviewFirma');
+                modalSeccionChilexpress.style.display = 'none';
+                modalSeccionSantiago.style.display = 'none';
+                cargarSeguimiento();
+
+            } catch (err) {
+                console.error(err);
+                showToast('Error de conexión al completar el envío.', 'error');
+            } finally {
+                btnSubmitModal.disabled = false;
+                btnSubmitModal.textContent = 'Confirmar Envío';
+            }
+        });
+    }
+
+    // ==========================================
+    // MODAL ADVERTENCIA DISCREPANCIA MONTOS — EVENTOS
+    // ==========================================
+    {
+        const modalAdvertenciaMontos = document.getElementById('modalAdvertenciaMontos');
+        const btnCancelarAdvertencia = document.getElementById('btnCancelarAdvertencia');
+        const btnEnviarIgualmente = document.getElementById('btnEnviarIgualmente');
+
+        if (btnCancelarAdvertencia) {
+            btnCancelarAdvertencia.addEventListener('click', () => {
+                modalAdvertenciaMontos.style.display = 'none';
+            });
+        }
+
+        if (btnEnviarIgualmente) {
+            btnEnviarIgualmente.addEventListener('click', () => {
+                modalAdvertenciaMontos.style.display = 'none';
+                if (formularioConfirmando) {
+                    formularioConfirmando.dataset.bypassDiscrepancia = 'true';
+                    formularioConfirmando.dispatchEvent(new Event('submit', { cancelable: true }));
+                } else {
+                    formCobranza.dataset.bypassDiscrepancia = 'true';
+                    formCobranza.dispatchEvent(new Event('submit', { cancelable: true }));
+                }
+            });
+        }
+    }
+
+    // ==========================================
+    // MODAL EDITAR CHEQUES — LOGICA Y EVENTOS
+    // ==========================================
+    const modalEditarCheques = document.getElementById('modalEditarCheques');
+    const formEditarCheques = document.getElementById('formEditarCheques');
+    const contenedorEditarCheques = document.getElementById('contenedorEditarCheques');
+    const btnAgregarChequeEdicion = document.getElementById('btnAgregarChequeEdicion');
+    const lblTotalChequesEdicion = document.getElementById('lblTotalChequesEdicion');
+    const btnCancelarEditarCheques = document.getElementById('btnCancelarEditarCheques');
+    const btnCerrarModalEditarCheques = document.getElementById('btnCerrarModalEditarCheques');
+
+    // Función para crear fila de cheque en edición
+    function crearChequeRowEdicion(idx, data = null) {
+        const div = document.createElement('div');
+        div.className = 'cheque-card';
+        div.id = `cheque_edicion_item_${idx}`;
+
+        const chqIdVal = data ? data.id : `nuevo_${idx}`;
+        const fotoRequerida = data ? '' : 'required';
+
+        // Previsualización de la foto (si existe)
+        const displayPreview = data ? 'flex' : 'none';
+        const displayUpload = data ? 'none' : 'inline-flex';
+        const imgUrl = data ? data.foto_cheque_url : '';
+
+        div.innerHTML = `
+            <div class="cheque-header">
+                <span class="cheque-title">Cheque #${idx} ${data ? '(Existente)' : '(Nuevo)'}</span>
+                <button type="button" class="btn-eliminar-cheque" onclick="eliminarChequeEdicion(${idx}, ${data ? data.id : 'null'})">Quitar</button>
+            </div>
+
+            <input type="hidden" name="cheque_id[]" value="${chqIdVal}">
+
+            <div class="form-group">
+                <label>Foto del Cheque</label>
+                <label for="fotoChequeEdicion_${idx}" class="custom-file-upload" style="display: ${displayUpload};">
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle; display: inline-block;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                    </svg>
+                    <span>Tomar Foto Cheque</span>
+                </label>
+                <input type="file" id="fotoChequeEdicion_${idx}" name="foto_cheque[]" accept="image/*" capture="environment" class="input-file-hidden" ${fotoRequerida}>
+                
+                <div id="boxPreviewChequeEdicion_${idx}" class="preview-wrapper" style="display: ${displayPreview};">
+                    <img id="imgChequeEdicion_${idx}" src="${imgUrl}" class="preview-img" alt="Vista previa cheque">
+                    <button type="button" class="btn-quitar-foto" onclick="quitarImagen('fotoChequeEdicion_${idx}', 'imgChequeEdicion_${idx}', 'boxPreviewChequeEdicion_${idx}')">Quitar Foto</button>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Banco Emisor</label>
+                    <select name="banco[]" required>
+                        <option value="">-- Seleccionar --</option>
+                        <option value="Banco de Chile" ${data && data.banco === 'Banco de Chile' ? 'selected' : ''}>Banco de Chile</option>
+                        <option value="Santander" ${data && data.banco === 'Santander' ? 'selected' : ''}>Santander</option>
+                        <option value="BCI" ${data && data.banco === 'BCI' ? 'selected' : ''}>BCI</option>
+                        <option value="Estado" ${data && data.banco === 'Estado' ? 'selected' : ''}>Banco Estado</option>
+                        <option value="Scotiabank" ${data && data.banco === 'Scotiabank' ? 'selected' : ''}>Scotiabank</option>
+                        <option value="Itaú" ${data && data.banco === 'Itaú' ? 'selected' : ''}>Itaú</option>
+                        <option value="Otro" ${data && data.banco === 'Otro' ? 'selected' : ''}>Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>N° Cheque</label>
+                    <input type="text" name="numero_cheque[]" value="${data ? data.numero_cheque : ''}" inputmode="numeric" pattern="[0-9]*" placeholder="N° de serie" required>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Monto ($)</label>
+                    <input type="text" inputmode="numeric" class="input-monto-cheque-edicion" value="${data ? parseInt(data.monto || 0, 10).toLocaleString('es-CL') : ''}" placeholder="0" required>
+                    <input type="hidden" name="monto_cheque[]" class="hidden-monto-cheque-edicion" value="${data ? data.monto : ''}">
+                </div>
+                <div class="form-group">
+                    <label>Fecha Vencimiento</label>
+                    <input type="date" name="fecha_vencimiento[]" value="${data ? data.fecha_vencimiento : ''}" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="label-opcional">Comentario <span class="tag-opcional">(Opcional)</span></label>
+                <textarea name="comentario_cheque[]" class="textarea-comentario" placeholder="Ej: Pago parcial de factura, acuerdo con cliente...">${data && data.comentario ? data.comentario : ''}</textarea>
+            </div>
+        `;
+
+        // Formateador de monto y recálculo
+        const visibleMonto = div.querySelector('.input-monto-cheque-edicion');
+        const hiddenMonto = div.querySelector('.hidden-monto-cheque-edicion');
+
+        visibleMonto.addEventListener('input', (e) => {
+            let cleanVal = e.target.value.replace(/\D/g, '');
+            if (cleanVal) {
+                visibleMonto.value = parseInt(cleanVal, 10).toLocaleString('es-CL');
+                hiddenMonto.value = cleanVal;
+            } else {
+                visibleMonto.value = '';
+                hiddenMonto.value = '';
+            }
+            calcularTotalChequesEdicion();
+        });
+
+        return div;
+    }
+
+    function calcularTotalChequesEdicion() {
+        const hiddenInputs = contenedorEditarCheques.querySelectorAll('.hidden-monto-cheque-edicion');
+        let total = 0;
+        hiddenInputs.forEach(input => {
+            total += parseFloat(input.value) || 0;
+        });
+        lblTotalChequesEdicion.textContent = '$' + total.toLocaleString('es-CL');
+    }
+
+    window.eliminarChequeEdicion = function(idx, databaseId = null) {
+        // Al menos debe quedar un cheque en el formulario (los activos en el cont)
+        const tarjetasActivas = contenedorEditarCheques.querySelectorAll('.cheque-card');
+        if (tarjetasActivas.length <= 1) {
+            showToast('Debe dejar al menos un cheque en la cobranza.', 'error');
+            return;
+        }
+
+        const el = document.getElementById(`cheque_edicion_item_${idx}`);
+        if (el) {
+            el.remove();
+            if (databaseId) {
+                eliminadosIdsEdicion.push(databaseId);
+            }
+            calcularTotalChequesEdicion();
+        }
+    };
+
+    window.abrirModalEditar = function(cobranzaId) {
+        const cobranza = cobranzasPendientesGlobal.find(c => c.id === cobranzaId);
+        if (!cobranza) {
+            showToast('No se encontró la cobranza localmente.', 'error');
+            return;
+        }
+
+        document.getElementById('modalEditarCobranzaId').value = cobranzaId;
+        montoFacturaEdicionActual = parseFloat(cobranza.monto_total_factura) || 0;
+        contenedorEditarCheques.innerHTML = '';
+        eliminadosIdsEdicion = [];
+        contadorChequesEdicion = 0;
+
+        cobranza.cheques.forEach(chk => {
+            contadorChequesEdicion++;
+            const row = crearChequeRowEdicion(contadorChequesEdicion, chk);
+            contenedorEditarCheques.appendChild(row);
+            
+            // Configurar preview dinámico después de que el elemento existe en el DOM
+            configurarPreviewConBorrado(`fotoChequeEdicion_${contadorChequesEdicion}`, `imgChequeEdicion_${contadorChequesEdicion}`, `boxPreviewChequeEdicion_${contadorChequesEdicion}`);
+        });
+
+        calcularTotalChequesEdicion();
+        modalEditarCheques.style.display = 'flex';
+    };
+
+    if (btnAgregarChequeEdicion) {
+        btnAgregarChequeEdicion.addEventListener('click', () => {
+            let ultimoBanco = '';
+            const ultimoCard = contenedorEditarCheques.lastElementChild;
+            if (ultimoCard) {
+                const selectBanco = ultimoCard.querySelector('select[name="banco[]"]');
+                if (selectBanco) ultimoBanco = selectBanco.value;
+            }
+
+            contadorChequesEdicion++;
+            const row = crearChequeRowEdicion(contadorChequesEdicion);
+            contenedorEditarCheques.appendChild(row);
+
+            // Configurar preview dinámico después de que el elemento existe en el DOM
+            configurarPreviewConBorrado(`fotoChequeEdicion_${contadorChequesEdicion}`, `imgChequeEdicion_${contadorChequesEdicion}`, `boxPreviewChequeEdicion_${contadorChequesEdicion}`);
+
+            if (ultimoBanco) {
+                const selectBancoNuevo = row.querySelector('select[name="banco[]"]');
+                if (selectBancoNuevo) selectBancoNuevo.value = ultimoBanco;
+            }
+        });
+    }
+
+    const cerrarEdicion = () => {
+        modalEditarCheques.style.display = 'none';
+        formEditarCheques.reset();
+        contenedorEditarCheques.innerHTML = '';
+        eliminadosIdsEdicion = [];
+    };
+
+    if (btnCancelarEditarCheques) btnCancelarEditarCheques.addEventListener('click', cerrarEdicion);
+    if (btnCerrarModalEditarCheques) btnCerrarModalEditarCheques.addEventListener('click', cerrarEdicion);
+
+    if (formEditarCheques) {
+        formEditarCheques.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!formEditarCheques.checkValidity()) {
+                const invalidFields = [];
+                formEditarCheques.querySelectorAll(':invalid').forEach(field => {
+                    const labelText = field.closest('.form-group')?.querySelector('label')?.textContent || field.name || field.id || 'Campo';
+                    invalidFields.push(labelText.trim().replace(/\s+/g, ' '));
+                });
+                showToast(`Complete los campos requeridos: ${invalidFields.join(', ')}`, 'error');
+                formEditarCheques.reportValidity();
+                return;
+            }
+
+            // --- VALIDACIÓN DE COINCIDENCIA DE MONTOS Y CONFIRMACIÓN EN EDICIÓN ---
+            let totalChequesVal = 0;
+            const hiddenInputs = contenedorEditarCheques.querySelectorAll('.hidden-monto-cheque-edicion');
+            hiddenInputs.forEach(input => {
+                totalChequesVal += parseFloat(input.value) || 0;
+            });
+            const totalFacturaVal = montoFacturaEdicionActual;
+
+            if (!formEditarCheques.dataset.bypassDiscrepancia) {
+                formularioConfirmando = formEditarCheques;
+                const titleEl = document.getElementById('modalAdvertenciaTitle');
+                const text1El = document.getElementById('modalAdvertenciaText1');
+                const text2El = document.getElementById('modalAdvertenciaText2');
+                const btnCancelEl = document.getElementById('btnCancelarAdvertencia');
+                const btnConfirmEl = document.getElementById('btnEnviarIgualmente');
+
+                if (totalChequesVal !== totalFacturaVal) {
+                    titleEl.textContent = 'Diferencia en Montos';
+                    text1El.innerHTML = `El monto total de los cheques (<strong>$${totalChequesVal.toLocaleString('es-CL')}</strong>) no coincide con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
+                    text2El.textContent = 'Le sugerimos justificar esta diferencia en el campo de comentarios de los cheques antes de proceder. ¿Desea guardar los cambios de todas formas?';
+                    btnCancelEl.textContent = 'Cerrar y Revisar';
+                    btnConfirmEl.textContent = 'Guardar Igualmente';
+                } else {
+                    titleEl.textContent = 'Confirmar Cambios';
+                    text1El.innerHTML = `El monto total de los cheques coincide perfectamente con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
+                    text2El.textContent = '¿Está seguro de guardar estos cambios?';
+                    btnCancelEl.textContent = 'Cancelar';
+                    btnConfirmEl.textContent = 'Confirmar Cambios';
+                }
+
+                document.getElementById('modalAdvertenciaMontos').style.display = 'flex';
+                return;
+            }
+
+            const btnSubmitEdicion = document.getElementById('btnGuardarChequesSubmit');
+            btnSubmitEdicion.disabled = true;
+            btnSubmitEdicion.textContent = 'Enviando...';
+
+            try {
+                const formData = new FormData();
+                formData.set('cobranza_id', document.getElementById('modalEditarCobranzaId').value);
+
+                // Agregar los IDs de cheques a eliminar
+                eliminadosIdsEdicion.forEach(id => {
+                    formData.append('eliminados_ids[]', id);
+                });
+
+                // Campos de los cheques usando consultas relativas al contenedor de cada tarjeta
+                const cards = formEditarCheques.querySelectorAll('.cheque-card');
+
+                for (let i = 0; i < cards.length; i++) {
+                    const card = cards[i];
+                    const idVal = card.querySelector('input[name="cheque_id[]"]').value;
+                    const bancoVal = card.querySelector('select[name="banco[]"]').value;
+                    const numVal = card.querySelector('input[name="numero_cheque[]"]').value;
+                    const montoVal = card.querySelector('.hidden-monto-cheque-edicion').value;
+                    const fechaVal = card.querySelector('input[name="fecha_vencimiento[]"]').value;
+                    const comentarioVal = card.querySelector('textarea[name="comentario_cheque[]"]').value;
+                    const fileInput = card.querySelector('input[type="file"]');
+
+                    formData.append('cheque_id[]', idVal);
+                    formData.append('banco[]', bancoVal);
+                    formData.append('numero_cheque[]', numVal);
+                    formData.append('monto_cheque[]', montoVal);
+                    formData.append('fecha_vencimiento[]', fechaVal);
+                    formData.append('comentario_cheque[]', comentarioVal);
+
+                    // Archivos de imagen (foto del cheque)
+                    if (fileInput && fileInput.files && fileInput.files[0]) {
+                        btnSubmitEdicion.textContent = `Comprimiendo Cheque ${i + 1}...`;
+                        const compressed = await compressImage(fileInput.files[0]);
+                        formData.append('foto_cheque[]', compressed, compressed.name);
+                    } else {
+                        // Enviar placeholder vacío si no hay archivo nuevo para mantener alineación del array de fotos en PHP
+                        formData.append('foto_cheque[]', new Blob(), '');
+                    }
+                }
+
+                btnSubmitEdicion.textContent = 'Guardando cambios...';
+
+                const response = await fetch('api/editar_cheques.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    showToast(data.message || 'Error al guardar los cheques.', 'error');
+                    return;
+                }
+
+                showToast('Cheques actualizados con éxito.', 'success');
+                cerrarEdicion();
+                cargarSeguimiento();
+
+            } catch (err) {
+                console.error(err);
+                showToast('Error de conexión al actualizar cheques.', 'error');
+            } finally {
+                formEditarCheques.removeAttribute('data-bypass-discrepancia');
+                btnSubmitEdicion.disabled = false;
+                btnSubmitEdicion.textContent = 'Guardar Cambios';
+            }
+        });
+    }
+
+    // --- BLOQUEO DE SCROLL DE FONDO CON OBSERVER ---
+    const modalObserver = new MutationObserver(() => {
+        const modals = document.querySelectorAll('.modal-overlay');
+        let anyOpen = false;
+        modals.forEach(m => {
+            if (m.style.display === 'flex' || m.style.display === 'block') {
+                anyOpen = true;
+            }
+        });
+        document.body.classList.toggle('modal-open', anyOpen);
+    });
+
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modalObserver.observe(modal, { attributes: true, attributeFilter: ['style'] });
+    });
+
+}); // fin DOMContentLoaded
+
 window.quitarImagen = function (idInput, idImg, idContainer) {
     const input = document.getElementById(idInput);
     const img = document.getElementById(idImg);
@@ -612,6 +1265,10 @@ window.quitarImagen = function (idInput, idImg, idContainer) {
     if (input) input.value = '';
     if (img) img.src = '';
     if (container) container.style.display = 'none';
+    
+    // Si hay un label asociado al input, volver a mostrarlo
+    const label = document.querySelector(`label[for="${idInput}"]`);
+    if (label) label.style.display = 'inline-flex';
 };
 
 window.configurarPreviewConBorrado = function (idInput, idImg, idContainer) {
@@ -627,12 +1284,17 @@ window.configurarPreviewConBorrado = function (idInput, idImg, idContainer) {
                 reader.onload = (event) => {
                     img.src = event.target.result;
                     container.style.display = 'flex';
+                    
+                    // Ocultar el botón label para no duplicar UI
+                    const label = document.querySelector(`label[for="${idInput}"]`);
+                    if (label) label.style.display = 'none';
                 };
                 reader.readAsDataURL(file);
             }
         });
     }
 };
+
 
 // ==========================================
 // COMPRESIÓN DE IMAGEN ANTES DE SUBIR

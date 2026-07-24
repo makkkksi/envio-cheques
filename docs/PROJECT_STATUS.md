@@ -1,7 +1,7 @@
 # PROJECT_STATUS.md — Estado Actual del Proyecto
 
-**Última actualización:** 2026-07-23  
-**Versión:** 1.2  
+**Última actualización:** 2026-07-24  
+**Versión:** 1.3  
 **Fase activa:** Fase 1 — Backend Base y Conexión con Frontend
 
 ---
@@ -16,7 +16,7 @@ El proyecto se encuentra en **Fase 1 (Backend Base)**. Se ha iniciado la creaci�
 
 | Fase | Descripción | Estado | Avance |
 |------|-------------|--------|--------|
-| **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | 🔄 En desarrollo | 90% |
+| **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | 🔄 En desarrollo | 95% |
 | **Fase 2** | Portal de Tesorería (`/admin/`) | ⏳ Pendiente | 0% |
 | **Fase 3** | Notificaciones por correo SMTP host | ⏳ Pendiente | 0% |
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
@@ -26,7 +26,7 @@ El proyecto se encuentra en **Fase 1 (Backend Base)**. Se ha iniciado la creaci�
 
 ## Componentes Entregados (Fase 1)
 
-- [x] `config/setup.sql` — Script DDL completo de `bd_modulo_cobranzas`, tablas relacionales y seeders (empresas y usuario Sistema).
+- [x] `config/setup.sql` — Script DDL completo y alineado de `bd_modulo_cobranzas`, tablas relacionales y seeders (empresas y usuario Sistema).
 - [x] `config/app.php` — Constantes de entorno y configuración.
 - [x] `config/db.php` — Clase Database PDO.
 - [x] `config/auth.php` — Middleware de autenticación.
@@ -36,3 +36,10 @@ El proyecto se encuentra en **Fase 1 (Backend Base)**. Se ha iniciado la creaci�
 - [x] `api/auth/login.php` — Endpoint de autenticación Bearer.
 - [x] `services/MailService.php` — Servicio de notificaciones por correo.
 - [x] `script.js` — Refactorización del frontend para consumir la API real.
+- [x] `api/completar_envio.php` — Segundo paso: completa despacho y registra la transición correspondiente.
+- [x] Frontend — Separación visual entre cobranzas por enviar y enviadas, con modal para completar el envío.
+- [x] `config/update_schema_flujo_dividido.sql` — Script puntual para alinear una BD local ya creada sin tocar las bases ERP.
+
+## Próximo trabajo inmediato
+
+Ejecutar la actualización del esquema en la BD central local (`bd_modulo_cobranzas`) o recrearla desde `config/setup.sql`. Como este es un entorno cerrado sin datos reales, no se requiere migración de preservación de datos.

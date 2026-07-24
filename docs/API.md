@@ -122,8 +122,6 @@ Guarda una cobranza completa con sus cheques e imágenes. Usa transacción SQL a
 | `monto_total_factura` | decimal | — | Monto con IVA obtenido del ERP |
 | `email_cliente` | string | — | Email del cliente (opcional) |
 | `email_tesoreria` | string | ✅ | Email de tesorería de la empresa |
-| `tipo_entrega` | string | ✅ | `CHILEXPRESS` o `PRESENCIAL_SANTIAGO` |
-| `numero_seguimiento` | string | — | OT Chilexpress (requerido si `tipo_entrega=CHILEXPRESS`) |
 
 **Arrays de cheques (indexados):**
 
@@ -140,8 +138,6 @@ Guarda una cobranza completa con sus cheques e imágenes. Usa transacción SQL a
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
 | `foto_cheque[]` | file | ✅ | Foto del cheque (una por cada cheque en el array) |
-| `foto_comprobante` | file | — | Foto OT Chilexpress (si `tipo_entrega=CHILEXPRESS`) |
-| `foto_firma` | file | — | Foto recepción firmada (si `tipo_entrega=PRESENCIAL_SANTIAGO`) |
 
 #### Response — Éxito (200)
 
@@ -174,6 +170,37 @@ Guarda una cobranza completa con sus cheques e imágenes. Usa transacción SQL a
 
 ---
 
+### POST `/api/completar_envio.php`
+
+Completa el segundo paso de una cobranza en estado `PENDIENTE_ENVIO`. Actualiza sus datos logísticos, registra la transición en la bitácora y envía las notificaciones.
+
+**Disparado por:** Botón “Completar envío” en el historial del vendedor.
+
+#### Request — `multipart/form-data`
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `cobranza_id` | int | ✅ | ID de la cobranza pendiente |
+| `tipo_entrega` | string | ✅ | `CHILEXPRESS` o `PRESENCIAL_SANTIAGO` |
+| `numero_seguimiento` | string | — | OT de Chilexpress, si corresponde |
+| `foto_comprobante` | file | Condicional | Requerida para `CHILEXPRESS` |
+| `foto_firma` | file | Condicional | Requerida para `PRESENCIAL_SANTIAGO` |
+
+#### Response — Éxito (200)
+
+```json
+{
+  "success": true,
+  "message": "Envío completado correctamente",
+  "data": {
+    "cobranza_id": 123,
+    "estado": "EN_TRANSITO"
+  }
+}
+```
+
+---
+
 ### GET `/api/get_mis_cobranzas.php`
 
 Retorna las cobranzas del vendedor autenticado con sus cheques anidados. Solo lectura.
@@ -184,7 +211,7 @@ Retorna las cobranzas del vendedor autenticado con sus cheques anidados. Solo le
 
 | Parámetro | Tipo | Requerido | Descripción |
 |-----------|------|-----------|-------------|
-| `estado` | string | — | Filtrar por estado (`TODOS`, `INGRESADO`, `EN_TRANSITO`, etc.) |
+| `estado` | string | — | Filtrar por estado (`TODOS`, `PENDIENTE_ENVIO`, `EN_TRANSITO`, etc.) |
 | `empresa_id` | int | — | Filtrar por empresa |
 | `busqueda` | string | — | Búsqueda libre (factura, RUT, razón social) |
 

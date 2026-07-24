@@ -92,6 +92,22 @@ body {
     letter-spacing: 0.03em;
 }
 
+.count-badge {
+    background-color: #f97316; /* Orange */
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 50%;
+    margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    line-height: 1;
+}
+
 /* Navegación por Pestañas (Tabs) */
 .nav-tabs {
     display: flex;
@@ -201,7 +217,7 @@ label {
 }
 
 /* Inputs y Selects */
-input,
+input:not([type="checkbox"]),
 select {
     width: 100%;
     min-height: 48px;
@@ -815,4 +831,140 @@ button {
     .select-filter {
         width: 100%;
     }
+}
+
+/* ==========================================
+   MODALES Y NUEVOS BADGES DE ESTADO (Fase 1.5)
+   ========================================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.6); /* Slate 900 semi-transparente */
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    width: 100%;
+    max-width: 500px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--color-border);
+    padding: 24px;
+    position: relative;
+    animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: 20px;
+}
+
+/* Badges de estado específicos */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.status-badge.pendiente_envio {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.status-badge.en_transito {
+    background-color: #e0f2fe;
+    color: #0284c7;
+}
+
+.status-badge.entregado_santiago {
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+
+.status-badge.recibido_tesoreria {
+    background-color: #d1fae5;
+    color: #059669;
+}
+
+.status-badge.depositado {
+    background-color: #e0e7ff;
+    color: #4f46e5;
+}
+
+.status-badge.rechazado {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.btn-completar-envio {
+    background-color: var(--color-accent-light);
+    color: var(--color-accent);
+    border: 1px solid var(--color-border);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition);
+    margin-top: 10px;
+    font-size: 0.85rem;
+}
+
+.btn-completar-envio:hover {
+    background-color: var(--color-border-hover);
+    color: var(--color-primary-hover);
+}
+
+.btn-eliminar-cheque {
+    background-color: var(--color-error-light);
+    color: var(--color-error);
+    border: 1px solid var(--color-error);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-eliminar-cheque:hover {
+    background-color: var(--color-error);
+    color: white;
+}
+
+body.modal-open {
+    overflow: hidden;
+    height: 100vh;
+}
+
+#modalAdvertenciaMontos {
+    z-index: 2000;
 }

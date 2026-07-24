@@ -80,17 +80,12 @@ $razon_social_cliente = trim($_POST['razon_social_cliente'] ?? '');
 $monto_total_factura = filter_input(INPUT_POST, 'monto_total_factura', FILTER_VALIDATE_FLOAT);
 $email_cliente = trim($_POST['email_cliente'] ?? '');
 $email_tesoreria = trim($_POST['email_tesoreria'] ?? '');
-$tipo_entrega = trim($_POST['tipo_entrega'] ?? '');
-$numero_seguimiento = trim($_POST['numero_seguimiento'] ?? '');
 
 if (!$empresa_id) $errors[] = 'empresa_id es requerido y debe ser entero';
 if (empty($numero_factura)) $errors[] = 'numero_factura es requerido';
 if (empty($rut_cliente)) $errors[] = 'rut_cliente es requerido';
 if (empty($razon_social_cliente)) $errors[] = 'razon_social_cliente es requerida';
 if (empty($email_tesoreria)) $errors[] = 'email_tesoreria es requerido';
-if (!in_array($tipo_entrega, ['CHILEXPRESS', 'PRESENCIAL_SANTIAGO'], true)) {
-    $errors[] = 'tipo_entrega debe ser CHILEXPRESS o PRESENCIAL_SANTIAGO';
-}
 
 // Validar arreglos de cheques
 $bancos = $_POST['banco'] ?? [];
@@ -128,27 +123,26 @@ try {
     }
     $empresa_nombre = $empresaRow['nombre'];
 
-    // Subida de foto de comprobante/firma según el tipo de entrega
-    $comprobante_url = null;
-    if ($tipo_entrega === 'CHILEXPRESS' && isset($_FILES['foto_comprobante'])) {
-        $comprobante_url = procesarSubidaArchivo($_FILES['foto_comprobante'], $empresa_id, 'comprobantes');
-        $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $comprobante_url);
-    } elseif ($tipo_entrega === 'PRESENCIAL_SANTIAGO' && isset($_FILES['foto_firma'])) {
-        $comprobante_url = procesarSubidaArchivo($_FILES['foto_firma'], $empresa_id, 'comprobantes');
-        $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $comprobante_url);
-    }
-
     // Procesar fotos de cheques individuales
     $chequesParaInsertar = [];
     for ($i = 0; $i < $numCheques; $i++) {
         $banco = trim($bancos[$i] ?? '');
         $numChq = trim($numeros_cheque[$i] ?? '');
         $monto = (float) ($montos_cheque[$i] ?? 0);
-        $fechaVenc = trim($fechas_vencimiento[$i] ?? '');
+        $fechaVec = trim($fechas_vencimiento[$i] ?? '');
         $comentario = trim($comentarios_cheque[$i] ?? '');
 
-        if (empty($banco) || empty($numChq) || $monto <= 0 || empty($fechaVenc)) {
+        if (empty($banco) || empty($numChq) || $monto <= 0 || empty($fechaVec)) {
             throw new InvalidArgumentException("Datos incompletos en el cheque N° " . ($i + 1));
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaVec)) {
+            throw new InvalidArgumentException("El formato de fecha de vencimiento es inválido para el cheque N° " . ($i + 1));
+        }
+        $parts = explode('-', $fechaVec);
+        $year = (int)$parts[0];
+        if ($year < 1000 || $year > 9999) {
+            throw new InvalidArgumentException("El año de vencimiento debe estar entre 1000 y 9999 para el cheque N° " . ($i + 1));
         }
 
         // Estructura $_FILES para arreglos múltiples
@@ -171,14 +165,14 @@ try {
             'banco' => $banco,
             'numero_cheque' => $numChq,
             'monto' => $monto,
-            'fecha_vencimiento' => $fechaVenc,
+            'fecha_vencimiento' => $fechaVec,
             'foto_cheque_url' => $fotoChequeUrl,
             'comentario' => $comentario !== '' ? $comentario : null
         ];
     }
 
-    // Estado inicial por tipo de entrega
-    $estadoInicial = ($tipo_entrega === 'CHILEXPRESS') ? 'EN_TRANSITO' : 'INGRESADO';
+    // Estado inicial para el Paso 1
+    $estadoInicial = 'PENDIENTE_ENVIO';
 
     // Iniciar transacción SQL
     $pdo->beginTransaction();
@@ -191,7 +185,7 @@ try {
     ) VALUES (
         :empresa_id, :vendedor_id, :vendedor_nombre, :numero_factura, :rut_cliente,
         :razon_social_cliente, :monto_total_factura, :email_cliente, :email_tesoreria,
-        :tipo_entrega, :numero_seguimiento, :comprobante_url, :estado
+        NULL, NULL, NULL, :estado
     )');
 
     $stmtCobranza->execute([
@@ -204,9 +198,6 @@ try {
         ':monto_total_factura' => $monto_total_factura ?: null,
         ':email_cliente' => $email_cliente !== '' ? $email_cliente : null,
         ':email_tesoreria' => $email_tesoreria,
-        ':tipo_entrega' => $tipo_entrega,
-        ':numero_seguimiento' => $numero_seguimiento !== '' ? $numero_seguimiento : null,
-        ':comprobante_url' => $comprobante_url,
         ':estado' => $estadoInicial
     ]);
 
@@ -246,19 +237,6 @@ try {
     ]);
 
     $pdo->commit();
-
-    // Notificación por correo electrónica post-commit
-    $cobranzaDataMail = [
-        'empresa_nombre' => $empresa_nombre,
-        'numero_factura' => $numero_factura,
-        'rut_cliente' => $rut_cliente,
-        'razon_social_cliente' => $razon_social_cliente,
-        'tipo_entrega' => $tipo_entrega,
-        'numero_seguimiento' => $numero_seguimiento,
-        'email_tesoreria' => $email_tesoreria,
-        'email_cliente' => $email_cliente
-    ];
-    MailService::enviarNotificacion($cobranzaDataMail, $chequesParaInsertar, $archivosFisicosSubidos);
 
     echo json_encode([
         'success' => true,

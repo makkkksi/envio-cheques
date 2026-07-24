@@ -81,13 +81,9 @@ Todos los endpoints DEBEN retornar exactamente el formato definido en `API.md §
 - `{ "success": true/false, ... }` — siempre presente
 - Nunca exponer stack traces ni paths al cliente
 
-### R7 — La app vendedor es read-only para estados de cheques
+### R7 — Cambio de estado limitado para el vendedor
 
-El vendedor **no puede cambiar estados**. Nunca agregar lógica de cambio de estado en:
-- `api/get_factura.php`
-- `api/guardar_cobranza.php`
-- `api/get_mis_cobranzas.php`
-- El frontend `index.html` / `script.js`
+El vendedor no puede gestionar estados de Tesorería ni retroceder estados. La única transición autorizada en la app vendedor es `PENDIENTE_ENVIO` a `EN_TRANSITO` o `ENTREGADO_SANTIAGO`, exclusivamente mediante `api/completar_envio.php` y con su comprobante requerido.
 
 ### R8 — El directorio `/admin/` no existe aún (Fase 2)
 

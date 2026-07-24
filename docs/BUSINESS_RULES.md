@@ -66,8 +66,8 @@ Cada cobranza tiene un estado único que evoluciona en una sola dirección. Los 
 | `empresa_id` | Requerido. Debe existir en `empresas`. |
 | `numero_factura` | Requerido. Solo dígitos. Mínimo 4 caracteres. |
 | `rut_cliente` | Requerido. Se obtiene del ERP al buscar la factura. |
-| `email_tesoreria` | Requerido. Se notifica al completar el envío. |
-| `email_cliente` | Opcional. Si tiene valor, también se notifica al completar el envío. |
+| `email_tesoreria` | Requerido. Campo oculto en la UI auto-populado con valor predeterminado (`tesoreria@automarco.cl`). Se notifica al completar el envío. |
+| `email_cliente` | Opcional. Habilitado mediante una casilla de verificación. Si está activa, muestra el input y permite el autocompletado desde el ERP. |
 | Cheques | Se requiere **al menos 1 cheque** por cobranza. |
 
 **Paso 1 — Registro del Cheque (`PENDIENTE_ENVIO`):**
@@ -106,6 +106,17 @@ Existe una discrepancia histórica en cómo los ERPs almacenan los RUT de los cl
 
 **Regla de Negocio:** Toda consulta (JOIN) entre estas dos tablas debe ignorar el formato utilizando la función `REPLACE(rut, '-', '')` para asegurar que el cruce de datos sea exitoso. Además, se debe usar siempre `LEFT JOIN` para que una factura sin cliente válido no interrumpa el proceso de cobranza.
 
+### 2.5 Validación de Coincidencia de Montos y Doble Confirmación
+
+Al intentar registrar la cobranza (o al guardar cambios desde el modal de edición de cheques), el sistema realiza una comparación entre el monto total acumulado de los cheques y el monto total de la factura:
+
+- **Monto Mismatch (Diferencia):** Si los montos no coinciden, se despliega una ventana modal de **Diferencia en Montos** sugiriendo al usuario justificar la diferencia agregando un comentario detallado en el cheque. Cuenta con las opciones **"Cerrar y Revisar"** y **"Enviar Igualmente"** (o **"Guardar Igualmente"** al editar).
+- **Monto Match (Coincidencia):** Si los montos coinciden perfectamente, se despliega una ventana modal de **Confirmación de Registro** (o **Confirmar Cambios** al editar) indicando la coincidencia y preguntando al usuario si está seguro de registrar/guardar para evitar envíos accidentales rápidos. Cuenta con las opciones **"Cancelar"** y **"Confirmar"**.
+
+### 2.6 Confirmación al Descartar/Quitar Cheques
+
+Cualquier acción del usuario destinada a remover o quitar un cheque (tanto en el formulario de creación como en el modal de edición) requiere una confirmación de seguridad interactiva (`confirm()`) por parte del vendedor para evitar pérdidas accidentales de datos e imágenes ya capturadas.
+
 ---
 
 ## 3. Cálculo de Monto Total con IVA
@@ -125,7 +136,7 @@ Monto Total = ROUND( SUM(neto_item) × 1.19 )
 
 ## 4. Reglas de Notificación por Correo
 
-Al ejecutar `guardar_cobranza.php` exitosamente:
+Al ejecutar `completar_envio.php` exitosamente:
 
 | Destinatario | Condición | Contenido |
 |---|---|---|
@@ -145,7 +156,7 @@ Un proceso programado (Cron Job) evaluará periódicamente las cobranzas pendien
 
 ```
 Días Transcurridos = Fecha actual − cobranzas.created_at
-Estado ∈ {INGRESADO, EN_TRANSITO}
+Estado ∈ {PENDIENTE_ENVIO, EN_TRANSITO, ENTREGADO_SANTIAGO}
 Días Transcurridos > dias_maximos_envio (de la empresa o del vendedor)
 ```
 
@@ -180,9 +191,41 @@ empresas.dias_maximos_envio (valor por defecto de la empresa)
 | Registrar cobranza | ✅ | ❌ | ✅ |
 | Ver historial propio | ✅ | ❌ | ✅ |
 | Ver todas las cobranzas | ❌ | ✅ | ✅ |
-| Cambiar estado de cobranza | ❌ | ✅ | ✅ |
+| Completar envío pendiente | ✅ | ❌ | ✅ |
+| Cambiar estados posteriores a la entrega | ❌ | ✅ | ✅ |
 | Registrar papeleta depósito | ❌ | ✅ | ✅ |
 | Gestionar usuarios | ❌ | ❌ | ✅ |
 | Configurar empresas | ❌ | ❌ | ✅ |
 
 > Los roles `TESORERIA` y `ADMINISTRADOR` solo acceden desde el portal `/admin/` (Fase 2). La app vendedor no expone estas acciones.
+
+---
+
+## 8. Diseño de la Interfaz de Seguimiento (Vendedor)
+
+Para priorizar la operatividad del vendedor, la vista de seguimiento está dividida en dos componentes con las siguientes características:
+
+### 8.1 Bandeja Principal (Por Enviar)
+- **Propósito:** Mostrar únicamente los cheques registrados que aún no han sido despachados físicamente (estado `PENDIENTE_ENVIO`).
+- **Ubicación:** Visible directamente en la pestaña de seguimiento.
+- **Acciones:**
+  - Buscar por Factura, RUT o Razón Social.
+  - Ordenar por Fecha (ascendente/descendente) y Estado de proceso.
+  - Botón directo para "Completar Envío".
+
+### 8.2 Ventana Modal (Historial de Enviados)
+- **Propósito:** Mostrar los registros de cobranzas que ya iniciaron su tránsito o fueron recibidos/procesados (cualquier estado distinto a `PENDIENTE_ENVIO`).
+- **Acceso:** Mediante el botón "Ver Cobranzas Enviadas / Historial" en la bandeja principal.
+- **Acciones:**
+  - Buscar registros de historial.
+  - Filtrar por estado de proceso (En Tránsito, Entregado, Recibido, Depositado, Rechazado).
+  - Ordenar por Fecha (ascendente/descendente) y Estado.
+  - Visualizar el detalle de cheques y ruta logística de cada cobranza.
+
+### 8.3 Visualización de Montos en Tarjetas
+- **Monto de la Factura:** Cada tarjeta (tanto en la bandeja principal como en el historial) muestra el monto total de la factura original (`monto_total_factura`) recuperado del ERP.
+- **Total en Cheques:** Se expone la sumatoria total del dinero de los cheques adjuntos a la cobranza junto con la cantidad de cheques que contiene, facilitando la comparación rápida de saldos a simple vista.
+
+### 8.4 Comportamiento en Dispositivos Táctiles / Tablets
+- **Bloqueo de Desplazamiento del Fondo:** Al abrir cualquier modal overlay, el scroll del fondo de la aplicación (`<body>`) se congela automáticamente para evitar desplazamientos accidentales de la página trasera y mejorar la usabilidad táctil del modal activo.
+

@@ -85,7 +85,10 @@ try {
     if (empty($cobranzas)) {
         echo json_encode([
             'success' => true,
-            'data' => []
+            'data' => [
+                'por_enviar' => [],
+                'enviados' => []
+            ]
         ]);
         exit;
     }
@@ -125,9 +128,23 @@ try {
     }
     unset($cobranza);
 
+    // Separar en Por Enviar (PENDIENTE_ENVIO) y Enviados
+    $porEnviar = [];
+    $enviados = [];
+    foreach ($cobranzas as $cobranza) {
+        if ($cobranza['estado'] === 'PENDIENTE_ENVIO') {
+            $porEnviar[] = $cobranza;
+        } else {
+            $enviados[] = $cobranza;
+        }
+    }
+
     echo json_encode([
         'success' => true,
-        'data' => $cobranzas
+        'data' => [
+            'por_enviar' => $porEnviar,
+            'enviados' => $enviados
+        ]
     ]);
 
 } catch (Exception $e) {

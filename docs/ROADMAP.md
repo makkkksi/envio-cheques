@@ -9,7 +9,7 @@
 ## Estado Actual del Proyecto
 
 ```
-Fase 1 ████████░░  80% — Backend base + integración frontend
+Fase 1 █████████░  95% — Backend base + flujo dividido + DDL alineado
 Fase 2 ░░░░░░░░░░   0% — Portal Tesorería
 Fase 3 ░░░░░░░░░░   0% — Correo SMTP host
 Fase 4 ░░░░░░░░░░   0% — Cron alertas
@@ -26,22 +26,26 @@ Fase 5 ░░░░░░░░░░   0% — Auth Android integrada
 
 | Archivo | Estado | Descripción |
 |---------|--------|-------------|
-| `config/setup.sql` | ✅ | DDL completo + seeders de empresas + usuario Sistema |
+| `config/setup.sql` | ✅ | DDL alineado al flujo dividido + seeders de empresas + usuario Sistema |
+| `config/update_schema_flujo_dividido.sql` | ✅ | Script puntual para actualizar una BD local ya creada |
 | `config/app.php` | ✅ | Constantes globales de entorno |
 | `config/db.php` | ✅ | Clase Database — conexiones PDO central y ERP |
 | `config/auth.php` | ✅ | Middleware auth (bypass en local) |
 | `api/get_factura.php` | ✅ | Búsqueda de factura en BD ERP |
 | `api/guardar_cobranza.php` | ✅ | Guardado transaccional + fotos |
+| `api/completar_envio.php` | ✅ | Completa el despacho y cambia al estado de envío |
 | `api/get_mis_cobranzas.php` | ✅ | Historial del vendedor (read-only) |
 | `api/auth/login.php` | ✅ | Autenticación con token Bearer |
 | `services/MailService.php` | ✅ | Servicio de correo SMTP |
-| `script.js` (modificación) | ⏳ | Fetch() reales en lugar de mock data |
+| `script.js` (modificación) | ✅ | Fetch() reales, listado separado y modal de completar envío |
 
 **Criterio de completitud:**
 - El formulario guarda una cobranza real en la BD con fotos en `uploads/`
 - La pestaña de historial muestra datos reales de la BD
 - El correo llega a Tesorería y al cliente
 - El endpoint de login retorna un token válido
+
+**Nota de entorno:** No hay información real que preservar. El DDL ya está alineado con el flujo dividido; la BD local puede recrearse desde `config/setup.sql` o actualizarse con `config/update_schema_flujo_dividido.sql`.
 
 ---
 
@@ -105,7 +109,7 @@ Fase 5 ░░░░░░░░░░   0% — Auth Android integrada
 **Lógica del script:**
 
 ```
-1. Consultar cobranzas WHERE estado IN ('INGRESADO', 'EN_TRANSITO')
+1. Consultar cobranzas WHERE estado IN ('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO')
 2. Para cada cobranza:
    a. Obtener dias_maximos_envio (del vendedor si tiene override, sino de la empresa)
    b. Calcular dias_transcurridos = DATEDIFF(NOW(), created_at)

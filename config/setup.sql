@@ -36,11 +36,13 @@ CREATE TABLE IF NOT EXISTS cobranzas (
   monto_total_factura DECIMAL(12,0) NULL,
   email_cliente VARCHAR(150) NULL,
   email_tesoreria VARCHAR(150) NULL,
-  tipo_entrega ENUM('CHILEXPRESS', 'PRESENCIAL_SANTIAGO') NOT NULL,
+  tipo_entrega ENUM('CHILEXPRESS', 'PRESENCIAL_SANTIAGO') NULL,
   numero_seguimiento VARCHAR(100) NULL,
   comprobante_url VARCHAR(255) NULL,
-  estado ENUM('INGRESADO', 'EN_TRANSITO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') DEFAULT 'INGRESADO',
+  estado ENUM('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') NOT NULL DEFAULT 'PENDIENTE_ENVIO',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_cobranzas_estado (estado),
+  KEY idx_cobranzas_created (created_at, estado),
   FOREIGN KEY (empresa_id) REFERENCES empresas(id),
   FOREIGN KEY (vendedor_id) REFERENCES usuarios(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -58,6 +60,7 @@ CREATE TABLE IF NOT EXISTS cheques (
   numero_papeleta_deposito VARCHAR(50) NULL,
   fecha_deposito_real TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_cheques_cobranza (cobranza_id),
   FOREIGN KEY (cobranza_id) REFERENCES cobranzas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -66,10 +69,11 @@ CREATE TABLE IF NOT EXISTS historial_estados (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cobranza_id INT NOT NULL,
   usuario_id INT NOT NULL,
-  estado_anterior ENUM('INGRESADO', 'EN_TRANSITO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') NULL,
-  estado_nuevo ENUM('INGRESADO', 'EN_TRANSITO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') NOT NULL,
+  estado_anterior ENUM('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') NULL,
+  estado_nuevo ENUM('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') NOT NULL,
   comentario TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_historial_cobranza (cobranza_id),
   FOREIGN KEY (cobranza_id) REFERENCES cobranzas(id),
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

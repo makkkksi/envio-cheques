@@ -1,0 +1,100 @@
+# Rediseño del Flujo: Separación en Dos Pasos (Registro vs. Envío)
+
+El flujo actual mezcla en un solo formulario dos acciones que ocurren en momentos distintos del tiempo. Este plan las separa correctamente.
+
+## Contexto del Cambio
+
+**Flujo actual (incorrecto):**
+> Vendedor registra cheque + comprobante de Chilexpress en el mismo formulario → Estado: `EN_TRANSITO`
+
+**Flujo nuevo (correcto):**
+> **Paso 1** (tiene el cheque): Registra factura + fotos del cheque → Estado: `PENDIENTE_ENVIO`  
+> **Paso 2** (ya fue a Chilexpress/Santiago): Completa el envío adjuntando comprobante → Estado: `EN_TRANSITO` o `ENTREGADO_SANTIAGO`
+
+---
+
+## Proposed Changes
+
+### Base de Datos
+
+#### [MODIFY] `config/setup.sql`
+- Cambiar el ENUM de `estado` para agregar `PENDIENTE_ENVIO` y `ENTREGADO_SANTIAGO`.
+- Agregar script de migración para `ALTER TABLE cobranzas MODIFY COLUMN estado ENUM(...)`.
+
+#### Migration SQL (ejecutar una vez)
+```sql
+ALTER TABLE cobranzas 
+  MODIFY COLUMN estado 
+  ENUM('PENDIENTE_ENVIO','EN_TRANSITO','ENTREGADO_SANTIAGO','RECIBIDO_TESORERIA','DEPOSITADO','RECHAZADO') 
+  NOT NULL DEFAULT 'PENDIENTE_ENVIO';
+```
+
+---
+
+### Backend
+
+#### [MODIFY] `api/guardar_cobranza.php`
+- Eliminar validación de `tipo_entrega` (ya no es requerido en Paso 1).
+- Eliminar procesamiento de `foto_comprobante` y `foto_firma` (se moverán al Paso 2).
+- Cambiar el estado inicial siempre a `PENDIENTE_ENVIO`.
+
+#### [NEW] `api/completar_envio.php`
+Nuevo endpoint POST para el Paso 2. Recibe:
+- `cobranza_id` (requerido)
+- `tipo_entrega`: `CHILEXPRESS` o `PRESENCIAL_SANTIAGO` (requerido)
+- `numero_seguimiento` (opcional, solo Chilexpress)
+- `foto_comprobante` o `foto_firma` (requerido según tipo_entrega)
+
+Acciones:
+1. Valida que la cobranza exista, pertenezca al vendedor y esté en estado `PENDIENTE_ENVIO`.
+2. Sube la foto del comprobante/firma.
+3. Actualiza `cobranzas.tipo_entrega`, `cobranzas.numero_seguimiento`, `cobranzas.comprobante_url`.
+4. Cambia el estado a `EN_TRANSITO` o `ENTREGADO_SANTIAGO` según corresponda.
+5. Registra el cambio en `historial_estados`.
+6. Dispara `MailService::enviarNotificacion()` (el correo se envía aquí, no en el Paso 1).
+
+---
+
+### Frontend
+
+#### [MODIFY] `index.html`
+- **Paso 1 — Formulario de Registro:** Eliminar la Sección 3 "Modalidad de Envío" completa (tipo_entrega, N° seguimiento, foto comprobante/firma). El formulario queda más simple: solo Identificación + Detalle de Cheques.
+- **Paso 2 — En la vista "Ver Cheques Enviados":** Agregar botón **"Completar Envío"** en las tarjetas que estén en estado `PENDIENTE_ENVIO`.
+
+#### [MODIFY] `script.js`
+- Simplificar el `FormData` del submit (ya no incluye tipo_entrega ni comprobante).
+- Agregar modal/panel de "Completar Envío" que se despliega al presionar ese botón:
+  - Select: tipo de entrega (Chilexpress / Presencial Santiago)
+  - Input: N° OT (opcional, solo Chilexpress)
+  - Input file: foto del comprobante o firma
+  - Botón "Confirmar Envío" → POST a `api/completar_envio.php`
+- Actualizar `ESTADOS_CONFIG` para incluir `PENDIENTE_ENVIO` y `ENTREGADO_SANTIAGO` con sus badges de color.
+
+#### [MODIFY] `styles.css`
+- Agregar badge `badge-pendiente` (color amarillo/naranja) para estado `PENDIENTE_ENVIO`.
+- Agregar badge `badge-entregado` (color azul claro) para `ENTREGADO_SANTIAGO`.
+- Estilos para el modal/panel de "Completar Envío".
+
+---
+
+## Decisiones Confirmadas
+
+- ✅ El correo se envía **solo al completar el Paso 2** (cuando el envío está completamente finalizado).
+- ✅ Cada vendedor **solo ve sus propias cobranzas** (filtrado por `vendedor_id`).
+- ✅ La vista "Ver Cheques Enviados" se divide en **dos secciones**:
+  - **Por Enviar** — cobranzas en estado `PENDIENTE_ENVIO` (con botón "Completar Envío")
+  - **Enviados** — cobranzas en cualquier otro estado (`EN_TRANSITO`, `ENTREGADO_SANTIAGO`, `RECIBIDO_TESORERIA`, etc.)
+
+---
+
+## Verification Plan
+
+### Automated
+- Ejecutar el SQL de migración y verificar que no rompe registros existentes.
+- Probar `completar_envio.php` con Postman o desde el debug panel.
+
+### Manual
+1. Crear una cobranza nueva → verificar que queda en `PENDIENTE_ENVIO` (badge amarillo en la vista).
+2. Presionar "Completar Envío" → subir foto de comprobante → verificar que cambia a `EN_TRANSITO`.
+3. Verificar que el correo se dispara solo en el Paso 2.
+4. Verificar que las cobranzas antiguas (`EN_TRANSITO`) siguen mostrándose correctamente.
