@@ -158,12 +158,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // RENDERIZADO DEL FLUJO DE ESTADOS Y TARJETAS
     // ==========================================
     const ESTADOS_CONFIG = {
-        'PENDIENTE_ENVIO':     { label: 'Pendiente Envío',       class: 'pendiente_envio' },
-        'EN_TRANSITO':         { label: 'En Tránsito',           class: 'en_transito' },
-        'ENTREGADO_SANTIAGO':  { label: 'Entregado (Sntg)',      class: 'entregado_santiago' },
-        'RECIBIDO_TESORERIA':  { label: 'Recibido Tesorería',    class: 'recibido_tesoreria' },
-        'DEPOSITADO':          { label: 'Depositado',            class: 'depositado' },
-        'RECHAZADO':           { label: 'Rechazado',             class: 'rechazado' }
+        'PENDIENTE_ENVIO':     { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pendiente Envío',       class: 'pendiente_envio' },
+        'EN_TRANSITO':         { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito',           class: 'en_transito' },
+        'ENTREGADO_SANTIAGO':  { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado (Sntg)',      class: 'entregado_santiago' },
+        'RECIBIDO_TESORERIA':  { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Tesorería',    class: 'recibido_tesoreria' },
+        'DEPOSITADO':          { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado',            class: 'depositado' },
+        'RECHAZADO':           { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado',             class: 'rechazado' }
     };
 
     function renderTarjetas(cobranzas, containerEl) {

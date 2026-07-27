@@ -885,6 +885,7 @@ button {
 .status-badge {
     display: inline-flex;
     align-items: center;
+    gap: 4px;
     padding: 4px 8px;
     border-radius: var(--radius-sm);
     font-size: 0.75rem;

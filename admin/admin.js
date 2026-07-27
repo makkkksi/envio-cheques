@@ -9,6 +9,23 @@ let estadoActualFilter = 'BANDEJA_TRABAJO';
 let cobranzaSeleccionadaId = null;
 let cobranzasCache = [];
 
+function reajustarFiltros() {
+    const inputBuscar = document.getElementById('inputBuscarAdmin');
+    if (inputBuscar) inputBuscar.value = '';
+    const selectEmpresa = document.getElementById('selectEmpresaAdmin');
+    if (selectEmpresa) selectEmpresa.value = '';
+    const selectOrden = document.getElementById('selectOrdenAdmin');
+    if (selectOrden) selectOrden.value = 'fecha_desc';
+    
+    const tabs = document.querySelectorAll('.segmented-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    const firstTab = document.querySelector('.segmented-tab[data-estado="BANDEJA_TRABAJO"]');
+    if (firstTab) firstTab.classList.add('active');
+    
+    estadoActualFilter = 'BANDEJA_TRABAJO';
+    cargarCobranzas('BANDEJA_TRABAJO');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initSplitView();
 });
@@ -67,6 +84,7 @@ function abrirImagenLightbox(url) {
                 <button type="button" class="image-tool-btn" onclick="zoomOutLightbox()">➖ Zoom</button>
                 <button type="button" class="image-tool-btn" onclick="toggleAltoContrasteLightbox()">☀️ Alto Contraste</button>
                 <button type="button" class="image-tool-btn" onclick="resetImagenLightbox()">Restablecer</button>
+                <button type="button" class="image-tool-btn" onclick="descargarImagenLightbox()">📥 Descargar</button>
                 <button type="button" onclick="cerrarImagenLightbox()" style="background:#dc2626; color:white; border:none; font-size:1rem; width:28px; height:28px; border-radius:50%; cursor:pointer; font-weight:bold;">&times;</button>
             </div>
             <div id="lightboxImageWrapper" style="position:relative; overflow:hidden; width:90vw; height:80vh; border-radius:8px; background:rgba(0,0,0,0.15); cursor:grab;">
@@ -230,14 +248,27 @@ function cerrarImagenLightbox() {
     document.body.classList.remove('modal-open');
 }
 
+function descargarImagenLightbox() {
+    const img = document.getElementById('imgLightboxTarget');
+    if (!img || !img.src) return;
+    
+    const a = document.createElement('a');
+    a.href = img.src;
+    const filename = img.src.substring(img.src.lastIndexOf('/') + 1);
+    a.download = filename || 'imagen_cobranza.jpg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 // Mapeo Nombres de Estado B2B
 const ESTADOS_MAP = {
-    'PENDIENTE_ENVIO': { label: 'Por Enviar', class: 'badge-PENDIENTE_ENVIO' },
-    'EN_TRANSITO': { label: 'En Tránsito', class: 'badge-EN_TRANSITO' },
-    'ENTREGADO_SANTIAGO': { label: 'Entregado Stgo', class: 'badge-ENTREGADO_SANTIAGO' },
-    'RECIBIDO_TESORERIA': { label: 'Recibido Tesorería', class: 'badge-RECIBIDO_TESORERIA' },
-    'DEPOSITADO': { label: 'Depositado', class: 'badge-DEPOSITADO' },
-    'RECHAZADO': { label: 'Rechazado', class: 'badge-RECHAZADO' }
+    'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Por Enviar', class: 'badge-PENDIENTE_ENVIO' },
+    'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'badge-EN_TRANSITO' },
+    'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado Stgo', class: 'badge-ENTREGADO_SANTIAGO' },
+    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Tesorería', class: 'badge-RECIBIDO_TESORERIA' },
+    'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado', class: 'badge-DEPOSITADO' },
+    'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'badge-RECHAZADO' }
 };
 
 // ==========================================
@@ -365,7 +396,7 @@ function renderMasterTable(cobranzas) {
         const vendedorRaw = item.vendedor_nombre ? item.vendedor_nombre.trim() : '';
         const esVendedorUnassigned = !vendedorRaw || vendedorRaw === 'Pendiente' || vendedorRaw === 'Sistema' || vendedorRaw.includes('Vendedor no especificado');
         const vendedorDisplay = esVendedorUnassigned 
-            ? `<span style="color: #64748b; font-size: 0.78rem; font-weight: 600;">Sin Asignar</span>` 
+            ? `<span class="seller-badge-muted">Sin Asignar (Registro Auto)</span>` 
             : `<span style="font-weight: 600; color: var(--color-text);">${vendedorRaw}</span>`;
 
         return `
@@ -378,18 +409,19 @@ function renderMasterTable(cobranzas) {
                 </td>
                 <td>${vendedorDisplay}</td>
                 <td>
-                    <strong style="color: ${tieneDiscrepancia ? '#92400e' : '#166534'};">$${montoChequesFmt}</strong>
-                    ${tieneDiscrepancia ? `<div style="margin-top: 2px;"><span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.72rem; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 4px; padding: 1px 6px;">⚠️ Dif: ${difText}</span></div>` : ''}
-                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">${item.cantidad_cheques} cheque(s)</div>
+                    <div style="font-weight: 700; color: #0F172A;">$${montoChequesFmt} <span style="color: #64748B; font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${item.cantidad_cheques} cheque(s))</span></div>
+                    ${tieneDiscrepancia ? `<span class="badge-mismatch">⚠️ Dif: ${difText}</span>` : ''}
                 </td>
                 <td><span class="badge ${estConfig.class}">${estConfig.label}</span></td>
             </tr>
         `;
     }).join('');
 
-    if (cobranzaSeleccionadaId) {
-        const existe = cobranzas.some(c => c.id == cobranzaSeleccionadaId);
-        if (!existe) deseleccionarCobranza();
+    // Auto-seleccionar primer elemento si no hay selección activa
+    if (cobranzas && cobranzas.length > 0) {
+        if (!cobranzaSeleccionadaId || !cobranzas.some(c => c.id == cobranzaSeleccionadaId)) {
+            seleccionarCobranza(cobranzas[0].id);
+        }
     }
 }
 
@@ -441,7 +473,7 @@ function renderSidePanelDetail(data) {
     document.getElementById('lblPanelFacturaTitle').textContent = `Factura N° ${cob.numero_factura}`;
     const estConfig = ESTADOS_MAP[cob.estado] || { label: cob.estado, class: '' };
     const badgeEl = document.getElementById('lblPanelEstadoBadge');
-    badgeEl.textContent = estConfig.label;
+    badgeEl.innerHTML = estConfig.label;
     badgeEl.className = `badge ${estConfig.class}`;
 
     // Sección 1: Resumen Factura / Cliente & ALERTA POR DISCREPANCIA (VON RESTORFF)
@@ -512,12 +544,12 @@ function renderSidePanelDetail(data) {
     const boxComprobante = document.getElementById('boxPanelComprobante');
     if (cob.comprobante_url) {
         boxComprobante.innerHTML = `
-            <div class="cheque-16by9-box" onclick="abrirImagenLightbox('../${cob.comprobante_url}')">
-                <div class="cheque-card-badge-zoom">
-                    <button type="button" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}')">🔍 Ampliar</button>
+            <div class="cheque-card-img-wrapper" onclick="abrirImagenLightbox('../${cob.comprobante_url}')">
+                <div class="cheque-controls-overlay">
+                    <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}')">🔍 Lightbox</button>
+                    <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}'); setTimeout(() => rotarImagenLightbox(), 100)">🔄 Rotar</button>
                 </div>
-                <img src="../${cob.comprobante_url}" alt="Comprobante">
-                <div class="cheque-16by9-hover">Clic para ampliar comprobante</div>
+                <img class="cheque-card-img" src="../${cob.comprobante_url}" alt="Comprobante">
             </div>
         `;
     } else {
@@ -532,12 +564,12 @@ function renderSidePanelDetail(data) {
     } else {
         boxCheques.innerHTML = cheques.map(chq => `
             <div class="cheque-inspection-card">
-                <div class="cheque-16by9-box" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
-                    <div class="cheque-card-badge-zoom">
-                        <button type="button" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">🔍 Ampliar</button>
+                <div class="cheque-card-img-wrapper" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
+                    <div class="cheque-controls-overlay">
+                        <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">🔍 Lightbox</button>
+                        <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}'); setTimeout(() => rotarImagenLightbox(), 100)">🔄 Rotar</button>
                     </div>
-                    <img src="../${chq.foto_cheque_url}" alt="Foto Cheque ${chq.numero_cheque}">
-                    <div class="cheque-16by9-hover">Clic para ampliar foto del cheque</div>
+                    <img class="cheque-card-img" src="../${chq.foto_cheque_url}" alt="Foto Cheque ${chq.numero_cheque}">
                 </div>
                 <div class="cheque-card-meta">
                     <div class="cheque-card-meta-row">

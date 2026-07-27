@@ -32,27 +32,34 @@
         <!-- 2. BARRA DE CONTROL SEGMENTADO Y FILTROS -->
         <div class="control-toolbar">
             
-            <!-- CONTROL SEGMENTADO (PESTAÑAS CON MÉTRICAS INTEGRADAS - SIN EMOJIS) -->
+            <!-- CONTROL SEGMENTADO (PESTAÑAS CON MÉTRICAS INTEGRADAS - CON ICONOS VECTORIALES) -->
             <div class="segmented-tabs" id="segmentedTabs">
                 <button type="button" class="segmented-tab active" data-estado="BANDEJA_TRABAJO">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
                     Bandeja de Trabajo <span class="tab-count" id="cntBandeja">0</span>
                 </button>
                 <button type="button" class="segmented-tab" data-estado="EN_TRANSITO">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
                     En Tránsito <span class="tab-count" id="cntTransito">0</span>
                 </button>
                 <button type="button" class="segmented-tab" data-estado="RECIBIDO_TESORERIA">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                     Recibidos <span class="tab-count" id="cntRecibidos">0</span>
                 </button>
                 <button type="button" class="segmented-tab" data-estado="DEPOSITADO">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
                     Depositados <span class="tab-count" id="cntDepositados">0</span>
                 </button>
                 <button type="button" class="segmented-tab" data-estado="RECHAZADO">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
                     Rechazados <span class="tab-count" id="cntRechazados">0</span>
                 </button>
                 <button type="button" class="segmented-tab" data-estado="PENDIENTE_ENVIO">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                     Por Enviar <span class="tab-count" id="cntPendientes">0</span>
                 </button>
                 <button type="button" class="segmented-tab" data-estado="TODOS">
+                    <svg xmlns="http://www/w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
                     Todos <span class="tab-count" id="cntTotal">0</span>
                 </button>
             </div>
@@ -112,8 +119,10 @@
             <aside class="detail-panel" id="detailPanel">
                 <!-- EMPTY STATE -->
                 <div class="empty-detail-state" id="emptyDetailState">
-                    <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 4px;">Selecciona una cobranza</h3>
-                    <p style="font-size: 0.8rem;">Haz clic en cualquier fila de la izquierda para inspeccionar sus cheques, comprobante y trazabilidad.</p>
+                    <div class="empty-detail-icon">📁</div>
+                    <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 4px;">Selecciona una cobranza de la lista para auditar</h3>
+                    <p style="font-size: 0.8rem; margin-bottom: 12px;">Haz clic en cualquier fila de la izquierda para inspeccionar sus cheques, comprobante y trazabilidad.</p>
+                    <button type="button" class="btn-b2b btn-b2b-secondary" style="height: 36px; font-size: 0.8rem; padding: 0 12px; border-radius: var(--radius-sm);" onclick="reajustarFiltros()">Reajustar Filtros</button>
                 </div>
 
                 <!-- CONTENIDO DINÁMICO DEL DRAWER -->
