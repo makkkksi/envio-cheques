@@ -47,7 +47,8 @@ try {
                 c.numero_seguimiento,
                 c.comprobante_url,
                 c.estado,
-                c.created_at
+                c.created_at,
+                c.updated_at
             FROM cobranzas c
             INNER JOIN empresas e ON c.empresa_id = e.id
             WHERE 1=1";
@@ -75,7 +76,7 @@ try {
         $params[':busqueda'] = '%' . $busqueda . '%';
     }
 
-    $sql .= " ORDER BY c.created_at DESC";
+    $sql .= " ORDER BY COALESCE(c.updated_at, c.created_at) DESC";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);

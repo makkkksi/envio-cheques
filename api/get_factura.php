@@ -63,6 +63,8 @@ try {
     }
 
     $nombre_bd = $empresa['nombre_bd'];
+    // F-04: Escapar con backticks para blindaje sintáctico en MySQL (además de la whitelist)
+    $nombre_bd_escaped = '`' . str_replace('`', '', $nombre_bd) . '`';
 
     // Conectar a la BD del ERP previa validación contra whitelist en Database::getErpConnection
     $pdoErp = Database::getErpConnection($nombre_bd);
@@ -73,8 +75,8 @@ try {
                 c.cli_razon_social AS razon_social,
                 c.cli_mail AS email_cliente,
                 ROUND(SUM(v.neto_item * 1.19)) AS monto_total_factura
-            FROM {$nombre_bd}.tbl_ventas_devoluciones v
-            LEFT JOIN {$nombre_bd}.tbl_clientes c 
+            FROM {$nombre_bd_escaped}.tbl_ventas_devoluciones v
+            LEFT JOIN {$nombre_bd_escaped}.tbl_clientes c 
                 ON REPLACE(v.cliente_rut, '-', '') = REPLACE(c.cli_rut, '-', '')
             WHERE v.factura = :numero_factura
             GROUP BY 

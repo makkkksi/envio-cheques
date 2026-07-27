@@ -61,58 +61,128 @@ define('ALLOWED_DATABASES', [
 
 ---
 
-## 3. Autenticación y Autorización
+### 3.1 Middleware `config/auth.php` y Funciones de Seguridad
 
-### 3.1 Middleware `config/auth.php`
+El middleware implementa funciones de validación de tokens, control de acceso basado en roles (RBAC) y mitigación de fuerza bruta (Rate Limiting).
 
 ```php
-function getUsuarioActual(): int
-{
-    if (APP_ENV === 'local') {
-        // Modo bypass — desarrollo sin autenticación
-        return AUTH_BYPASS_USER_ID; // = 1 (usuario Sistema)
+// config/auth.php
+
+// Requerir autenticación válida, hasheada por SHA-256, expiración y rol asignado
+function requireAuth(PDO $pdo, array $allowedRoles = []): array {
+    if (defined('APP_ENV') && APP_ENV === 'local') {
+        return [
+            'id' => 1,
+            'nombre' => 'Sistema',
+            'email' => 'sistema@app.local',
+            'rol' => 'ADMINISTRADOR',
+            'activo' => 1
+        ];
     }
 
-    // Modo producción — valida token Bearer
-    $headers = getallheaders();
-    $authHeader = $headers['Authorization'] ?? '';
-
-    if (!str_starts_with($authHeader, 'Bearer ')) {
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    
+    if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
         http_response_code(401);
-        echo json_encode(['success' => false, 'message' => 'Autenticación requerida']);
+        echo json_encode(['success' => false, 'message' => 'Acceso denegado. Token no provisto.']);
         exit;
     }
-
-    $token = substr($authHeader, 7);
-    $pdo   = Database::getCobranzasConnection();
-    $stmt  = $pdo->prepare('SELECT id FROM usuarios WHERE api_token = :token AND activo = 1');
-    $stmt->execute([':token' => $token]);
-    $usuario = $stmt->fetch();
-
-    if (!$usuario) {
+    
+    $rawToken = $matches[1];
+    $hashedToken = hash('sha256', $rawToken);
+    
+    $stmt = $pdo->prepare("
+        SELECT id, nombre, email, rol, activo 
+        FROM usuarios 
+        WHERE api_token = :token 
+          AND (token_expires_at > NOW() OR token_expires_at IS NULL)
+        LIMIT 1
+    ");
+    $stmt->execute([':token' => $hashedToken]);
+    $user = $stmt->fetch();
+    
+    if (!$user || !$user['activo']) {
         http_response_code(401);
-        echo json_encode(['success' => false, 'message' => 'Token inválido o expirado']);
+        echo json_encode(['success' => false, 'message' => 'Sesión expirada o token inválido.']);
         exit;
     }
+    
+    if (!empty($allowedRoles) && !in_array($user['rol'], $allowedRoles)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Acceso denegado. Privilegios insuficientes.']);
+        exit;
+    }
+    
+    return $user;
+}
 
-    return (int) $usuario['id'];
+// Obtener IP del cliente sanitizando proxies
+function getClientIp(): string {
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        return trim($ips[0]);
+    }
+    return $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+}
+
+// Control de intentos de inicio de sesión fallidos (Fuerza Bruta)
+function checkRateLimit(PDO $pdo, string $email): void {
+    $ip = getClientIp();
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM login_attempts 
+        WHERE (ip_address = :ip OR email = :email) 
+          AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+    ");
+    $stmt->execute([':ip' => $ip, ':email' => $email]);
+    $attempts = (int)$stmt->fetchColumn();
+    
+    if ($attempts >= 5) {
+        http_response_code(429);
+        echo json_encode(['success' => false, 'message' => 'Demasiados intentos fallidos. Por favor, espere 15 minutos.']);
+        exit;
+    }
 }
 ```
 
-### 3.2 Generación de Token
+### 3.2 Generación de Token Segura y Expiración
 
 ```php
-// api/auth/login.php — generación segura
-$token = bin2hex(random_bytes(32)); // 64 caracteres hex, criptográficamente seguro
-$stmt = $pdo->prepare('UPDATE usuarios SET api_token = :token WHERE id = :id');
-$stmt->execute([':token' => $token, ':id' => $usuario['id']]);
+// api/auth/login.php
+// 1. Generar token criptográficamente seguro
+$token = bin2hex(random_bytes(32)); 
+
+// 2. Hashear token con SHA-256 para guardar en BD
+$hashedToken = hash('sha256', $token);
+
+// 3. Persistir con expiración de 24 horas
+$stmtUpdate = $pdo->prepare('
+    UPDATE usuarios 
+    SET api_token = :token, 
+        token_expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR) 
+    WHERE id = :id
+');
+$stmtUpdate->execute([':token' => $hashedToken, ':id' => $usuario['id']]);
 ```
 
-### 3.3 Activar autenticación en producción
+### 3.3 Auditoría de Acciones Críticas (`services/AuditService.php`)
+
+Todas las acciones administrativas u operativas sensibles en Tesorería son auditadas a nivel de base de datos bajo transacciones SQL.
 
 ```php
-// config/app.php — único cambio para activar auth completa
-define('APP_ENV', 'production'); // cambiar de 'local' a 'production'
+// services/AuditService.php
+class AuditService {
+    public static function log(PDO $pdo, int $userId, string $email, string $accion, string $detalles): void {
+        $ip = getClientIp();
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? null;
+        $stmt = $pdo->prepare("
+            INSERT INTO audit_logs (usuario_id, email, accion, detalles, ip_address, user_agent) 
+            VALUES (:uid, :email, :accion, :detalles, :ip, :ua)
+        ");
+        $stmt->execute([':uid' => $userId, ':email' => $email, ':accion' => $accion, ':detalles' => $detalles, ':ip' => $ip, ':ua' => $ua]);
+    }
+}
 ```
 
 ---

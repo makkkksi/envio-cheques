@@ -39,9 +39,19 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 4000);
 }
 
-// Global Image Lightbox con SCROLL LOCK e INSPECCIÓN AVANZADA (AI_RULES_UX.md)
-let lightboxRotacion = 0;
-let lightboxAltoContraste = false;
+// ==========================================
+// VISOR DE IMÁGENES (Lightbox) — Zoom, Rotar, Arrastrar
+// ==========================================
+let lbRotation = 0;
+let lbZoom = 1;
+let lbContrast = false;
+let lbPanX = 0;
+let lbPanY = 0;
+let lbDragging = false;
+let lbDragStartX = 0;
+let lbDragStartY = 0;
+let lbPanStartX = 0;
+let lbPanStartY = 0;
 
 function abrirImagenLightbox(url) {
     let lightbox = document.getElementById('modalLightbox');
@@ -49,60 +59,169 @@ function abrirImagenLightbox(url) {
         lightbox = document.createElement('div');
         lightbox.id = 'modalLightbox';
         lightbox.className = 'modal-overlay';
-        lightbox.style.display = 'none';
+        lightbox.style.cssText = 'display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); backdrop-filter:blur(4px); z-index:9999; flex-direction:column; align-items:center; justify-content:center;';
         lightbox.innerHTML = `
-            <div style="position: relative; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                <div style="display: flex; gap: 8px; background: rgba(15, 23, 42, 0.85); padding: 8px 14px; border-radius: 8px; z-index: 10;">
-                    <button type="button" class="image-tool-btn" onclick="rotarImagenLightbox()">🔄 Rotar 90°</button>
-                    <button type="button" class="image-tool-btn" onclick="toggleAltoContrasteLightbox()">☀️ Alto Contraste</button>
-                    <button type="button" class="image-tool-btn" onclick="resetImagenLightbox()">Restablecer</button>
-                    <button type="button" onclick="cerrarImagenLightbox()" style="background: #dc2626; color: white; border: none; font-size: 1rem; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-weight: bold;">&times;</button>
-                </div>
-                <div style="overflow: hidden; max-width: 90vw; max-height: 80vh; display: flex; align-items: center; justify-content: center;">
-                    <img id="imgLightboxTarget" src="" style="max-width: 100%; max-height: 80vh; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: contain; transition: transform 0.2s ease, filter 0.2s ease;">
-                </div>
+            <div style="display:flex; gap:8px; background:rgba(15,23,42,0.9); padding:8px 14px; border-radius:8px; flex-wrap:wrap; justify-content:center; margin-bottom:10px; z-index:10;">
+                <button type="button" class="image-tool-btn" onclick="rotarImagenLightbox()">🔄 Rotar 90°</button>
+                <button type="button" class="image-tool-btn" onclick="zoomInLightbox()">➕ Zoom</button>
+                <button type="button" class="image-tool-btn" onclick="zoomOutLightbox()">➖ Zoom</button>
+                <button type="button" class="image-tool-btn" onclick="toggleAltoContrasteLightbox()">☀️ Alto Contraste</button>
+                <button type="button" class="image-tool-btn" onclick="resetImagenLightbox()">Restablecer</button>
+                <button type="button" onclick="cerrarImagenLightbox()" style="background:#dc2626; color:white; border:none; font-size:1rem; width:28px; height:28px; border-radius:50%; cursor:pointer; font-weight:bold;">&times;</button>
             </div>
+            <div id="lightboxImageWrapper" style="position:relative; overflow:hidden; width:90vw; height:80vh; border-radius:8px; background:rgba(0,0,0,0.15); cursor:grab;">
+                <img id="imgLightboxTarget" src="" style="position:absolute; top:50%; left:50%; transform-origin:center center; border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.5); user-select:none; -webkit-user-drag:none; pointer-events:none;">
+            </div>
+            <div id="lightboxZoomLabel" style="position:fixed; bottom:16px; right:16px; background:rgba(15,23,42,0.85); color:#94a3b8; padding:4px 12px; border-radius:6px; font-size:0.8rem; font-weight:600; z-index:10;">100%</div>
         `;
         document.body.appendChild(lightbox);
+
+        // Cerrar al hacer click en el fondo
         lightbox.addEventListener('click', (e) => {
             if (e.target === lightbox) cerrarImagenLightbox();
         });
-    }
-    
-    lightboxRotacion = 0;
-    lightboxAltoContraste = false;
-    actualizarTransformacionesImagen();
 
-    document.getElementById('imgLightboxTarget').src = url;
+        const wrapper = document.getElementById('lightboxImageWrapper');
+
+        // --- DRAG (Mouse) ---
+        wrapper.addEventListener('mousedown', (e) => {
+            lbDragging = true;
+            wrapper.style.cursor = 'grabbing';
+            lbDragStartX = e.clientX;
+            lbDragStartY = e.clientY;
+            lbPanStartX = lbPanX;
+            lbPanStartY = lbPanY;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!lbDragging) return;
+            lbPanX = lbPanStartX + (e.clientX - lbDragStartX);
+            lbPanY = lbPanStartY + (e.clientY - lbDragStartY);
+            aplicarTransformLightbox();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (lbDragging) {
+                lbDragging = false;
+                const wrapper = document.getElementById('lightboxImageWrapper');
+                if (wrapper) wrapper.style.cursor = 'grab';
+            }
+        });
+
+        // --- DRAG (Touch para móviles) ---
+        wrapper.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                lbDragging = true;
+                lbDragStartX = e.touches[0].clientX;
+                lbDragStartY = e.touches[0].clientY;
+                lbPanStartX = lbPanX;
+                lbPanStartY = lbPanY;
+            }
+        }, { passive: true });
+
+        wrapper.addEventListener('touchmove', (e) => {
+            if (!lbDragging || e.touches.length !== 1) return;
+            lbPanX = lbPanStartX + (e.touches[0].clientX - lbDragStartX);
+            lbPanY = lbPanStartY + (e.touches[0].clientY - lbDragStartY);
+            aplicarTransformLightbox();
+            e.preventDefault();
+        }, { passive: false });
+
+        wrapper.addEventListener('touchend', () => { lbDragging = false; });
+
+        // --- ZOOM con rueda del mouse ---
+        wrapper.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                lbZoom = Math.min(lbZoom + 0.15, 5);
+            } else {
+                lbZoom = Math.max(lbZoom - 0.15, 0.3);
+            }
+            aplicarTransformLightbox();
+        }, { passive: false });
+    }
+
+    // Reset state
+    lbRotation = 0;
+    lbZoom = 1;
+    lbContrast = false;
+    lbPanX = 0;
+    lbPanY = 0;
+
+    const img = document.getElementById('imgLightboxTarget');
+    img.onload = () => aplicarTransformLightbox();
+    img.src = url;
+    if (img.complete && img.naturalWidth) aplicarTransformLightbox();
+
     lightbox.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
 
-function rotarImagenLightbox() {
-    lightboxRotacion = (lightboxRotacion + 90) % 360;
-    actualizarTransformacionesImagen();
-}
-
-function toggleAltoContrasteLightbox() {
-    lightboxAltoContraste = !lightboxAltoContraste;
-    actualizarTransformacionesImagen();
-}
-
-function resetImagenLightbox() {
-    lightboxRotacion = 0;
-    lightboxAltoContraste = false;
-    actualizarTransformacionesImagen();
-}
-
-function actualizarTransformacionesImagen() {
+function aplicarTransformLightbox() {
     const img = document.getElementById('imgLightboxTarget');
+    const label = document.getElementById('lightboxZoomLabel');
     if (!img) return;
-    img.style.transform = `rotate(${lightboxRotacion}deg)`;
-    if (lightboxAltoContraste) {
+
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    if (!nw || !nh) return;
+
+    const wrapper = document.getElementById('lightboxImageWrapper');
+    const wW = wrapper.clientWidth;
+    const wH = wrapper.clientHeight;
+
+    // Calcular tamaño base que quepa en el contenedor respetando aspect ratio
+    const fitScale = Math.min(wW / nw, wH / nh);
+    const baseW = nw * fitScale;
+    const baseH = nh * fitScale;
+
+    img.style.width = baseW + 'px';
+    img.style.height = baseH + 'px';
+
+    // Aplicar transform: translate para centrar + pan, luego scale y rotate
+    const tx = -baseW / 2 + lbPanX;
+    const ty = -baseH / 2 + lbPanY;
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${lbZoom}) rotate(${lbRotation}deg)`;
+
+    // Alto contraste
+    if (lbContrast) {
         img.classList.add('high-contrast-image');
     } else {
         img.classList.remove('high-contrast-image');
     }
+
+    // Indicador de zoom
+    if (label) label.textContent = Math.round(lbZoom * 100) + '%';
+}
+
+function rotarImagenLightbox() {
+    lbRotation = (lbRotation + 90) % 360;
+    aplicarTransformLightbox();
+}
+
+function zoomInLightbox() {
+    lbZoom = Math.min(lbZoom + 0.25, 5);
+    aplicarTransformLightbox();
+}
+
+function zoomOutLightbox() {
+    lbZoom = Math.max(lbZoom - 0.25, 0.3);
+    aplicarTransformLightbox();
+}
+
+function toggleAltoContrasteLightbox() {
+    lbContrast = !lbContrast;
+    aplicarTransformLightbox();
+}
+
+function resetImagenLightbox() {
+    lbRotation = 0;
+    lbZoom = 1;
+    lbContrast = false;
+    lbPanX = 0;
+    lbPanY = 0;
+    aplicarTransformLightbox();
 }
 
 function cerrarImagenLightbox() {
@@ -393,7 +512,10 @@ function renderSidePanelDetail(data) {
     const boxComprobante = document.getElementById('boxPanelComprobante');
     if (cob.comprobante_url) {
         boxComprobante.innerHTML = `
-            <div class="cheque-16by9-box" style="max-height: 120px;" onclick="abrirImagenLightbox('../${cob.comprobante_url}')">
+            <div class="cheque-16by9-box" onclick="abrirImagenLightbox('../${cob.comprobante_url}')">
+                <div class="cheque-card-badge-zoom">
+                    <button type="button" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}')">🔍 Ampliar</button>
+                </div>
                 <img src="../${cob.comprobante_url}" alt="Comprobante">
                 <div class="cheque-16by9-hover">Clic para ampliar comprobante</div>
             </div>
@@ -411,6 +533,9 @@ function renderSidePanelDetail(data) {
         boxCheques.innerHTML = cheques.map(chq => `
             <div class="cheque-inspection-card">
                 <div class="cheque-16by9-box" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
+                    <div class="cheque-card-badge-zoom">
+                        <button type="button" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">🔍 Ampliar</button>
+                    </div>
                     <img src="../${chq.foto_cheque_url}" alt="Foto Cheque ${chq.numero_cheque}">
                     <div class="cheque-16by9-hover">Clic para ampliar foto del cheque</div>
                 </div>
@@ -499,12 +624,15 @@ function renderStickyActionButtons(cob) {
     const container = document.getElementById('boxPanelAcciones');
     if (!container) return;
 
-    let html = '';
+    // Stepper Horizontal Compacto (Ley de Zeigarnik — sobre CTA)
+    const stepperHtml = renderHorizontalStepper(cob);
+
+    let ctaHtml = '';
 
     // REGLA ESTRICTA TESLER:
     // Si está en EN_TRANSITO o ENTREGADO_SANTIAGO: ÚNICAMENTE CTA Primario "✓ Marcar Recibido". Ocultar Depósito y Rechazo.
     if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO') {
-        html = `
+        ctaHtml = `
             <button type="button" class="btn-b2b btn-b2b-success" style="width: 100%;" onclick="pedirConfirmacionRecepcion(${cob.id}, '${cob.numero_factura}')">
                 Confirmar Recepción Física en Tesorería
             </button>
@@ -512,7 +640,7 @@ function renderStickyActionButtons(cob) {
     } 
     // Si ya está RECIBIDO_TESORERIA: Mostrar "Registrar Depósito" y "Rechazar"
     else if (cob.estado === 'RECIBIDO_TESORERIA') {
-        html = `
+        ctaHtml = `
             <button type="button" class="btn-b2b btn-b2b-primary" onclick="abrirModalDeposito(${cob.id})">
                 Registrar Depósito
             </button>
@@ -523,14 +651,59 @@ function renderStickyActionButtons(cob) {
     } 
     // Si ya fue DEPOSITADO o RECHAZADO: Deshabilitar acciones (Estado Final Inmutable)
     else if (cob.estado === 'DEPOSITADO') {
-        html = `<span style="font-size: 0.85rem; color: #166534; font-weight: 700;">Cobranza Depositada Exitosamente</span>`;
+        ctaHtml = `<span style="font-size: 0.85rem; color: #166534; font-weight: 700;">Cobranza Depositada Exitosamente</span>`;
     } else if (cob.estado === 'RECHAZADO') {
-        html = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">Documento Rechazado / Protestado</span>`;
+        ctaHtml = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">Documento Rechazado / Protestado</span>`;
     } else {
-        html = `<span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 600;">Esperando despacho del vendedor (${cob.estado})</span>`;
+        ctaHtml = `<span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 600;">Esperando despacho del vendedor (${cob.estado})</span>`;
     }
 
-    container.innerHTML = html;
+    container.innerHTML = `
+        ${stepperHtml}
+        <div style="display: flex; gap: 10px; align-items: center;">
+            ${ctaHtml}
+        </div>
+    `;
+}
+
+// STEPPER HORIZONTAL COMPACTO (LEY DE ZEIGARNIK)
+function renderHorizontalStepper(cob) {
+    const pasos = [
+        { key: 'PENDIENTE_ENVIO', label: 'Registrado' },
+        { key: 'EN_TRANSITO', label: 'En Tránsito' },
+        { key: 'RECIBIDO_TESORERIA', label: 'Recepción' },
+        { key: 'DEPOSITADO', label: 'Depositado' }
+    ];
+
+    let currentIdx = 0;
+    if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO') currentIdx = 1;
+    if (cob.estado === 'RECIBIDO_TESORERIA') currentIdx = 2;
+    if (cob.estado === 'DEPOSITADO') currentIdx = 3;
+    if (cob.estado === 'RECHAZADO') currentIdx = 3;
+
+    let html = '<div class="stepper-horizontal">';
+    pasos.forEach((paso, idx) => {
+        const isCompleted = idx < currentIdx;
+        const isActive = idx === currentIdx;
+        const isRejected = cob.estado === 'RECHAZADO' && idx === 3;
+        let stepClass = isCompleted ? 'completed' : (isActive ? 'active' : '');
+        if (isRejected) stepClass = 'rejected';
+
+        let symbol = isCompleted ? '✓' : (isRejected ? '✖' : (isActive ? '●' : (idx + 1)));
+        let label = isRejected ? 'Rechazado' : paso.label;
+
+        html += `
+            <div class="stepper-h-step ${stepClass}">
+                <div class="stepper-h-circle">${symbol}</div>
+                <span class="stepper-h-label">${label}</span>
+            </div>
+        `;
+        if (idx < pasos.length - 1) {
+            html += `<div class="stepper-h-connector ${isCompleted ? 'completed' : ''}"></div>`;
+        }
+    });
+    html += '</div>';
+    return html;
 }
 
 // Modal Confirmación Recepción Física

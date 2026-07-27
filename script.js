@@ -214,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>Monto Factura:</strong> $${parseFloat(item.monto_total_factura || 0).toLocaleString('es-CL')}</p>
                         <p><strong>Total Cheques (${item.cheques.length}):</strong> $${totalMonto.toLocaleString('es-CL')}</p>
                         <p><strong>Fecha Registro:</strong> ${fechaFormateada}</p>
+                        ${item.updated_at ? `<p style="font-size: 0.78rem; color: #0284c7; font-weight: 600; margin-top: 2px;"><strong>Última Modificación:</strong> ${item.updated_at.replace('T', ' ')}</p>` : ''}
                         <p><strong>Entrega:</strong> ${tipoEntregaTexto} ${tracking ? `(OT: ${tracking})` : ''}</p>
                         ${btnCompletar}
                     </div>
@@ -239,14 +240,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    // Helper para ordenar colecciones
+    // Helper para ordenar colecciones por última modificación
     function ordenarColeccion(coleccion, criterio) {
         if (!coleccion) return [];
         return [...coleccion].sort((a, b) => {
+            const fechaA = new Date(a.updated_at || a.created_at);
+            const fechaB = new Date(b.updated_at || b.created_at);
             if (criterio === 'fecha_desc') {
-                return new Date(b.created_at) - new Date(a.created_at);
+                return fechaB - fechaA;
             } else if (criterio === 'fecha_asc') {
-                return new Date(a.created_at) - new Date(b.created_at);
+                return fechaA - fechaB;
             } else if (criterio === 'estado') {
                 return a.estado.localeCompare(b.estado);
             }

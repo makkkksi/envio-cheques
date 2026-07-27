@@ -9,9 +9,9 @@
 ## Estado Actual del Proyecto
 
 ```
-Fase 1 █████████░  95% — Backend base + flujo dividido + DDL alineado
-Fase 2 ░░░░░░░░░░   0% — Portal Tesorería
-Fase 3 ░░░░░░░░░░   0% — Correo SMTP host
+Fase 1 ██████████ 100% — Backend base + flujo dividido + DDL alineado
+Fase 2 ██████████ 100% — Portal Tesorería con Hardening
+Fase 3 ██████████ 100% — Correo SMTP host / Mailtrap
 Fase 4 ░░░░░░░░░░   0% — Cron alertas
 Fase 5 ░░░░░░░░░░   0% — Auth Android integrada
 ```

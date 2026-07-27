@@ -8,6 +8,7 @@ header('Access-Control-Allow-Headers: Authorization, Content-Type');
 // 2. Imports
 require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../config/auth.php';
 
 // 3. Solo aceptar el método POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -36,15 +37,19 @@ if (empty($email) || empty($password)) {
     exit;
 }
 
-// 5. Lógica de autenticación
+// 5. Lógica de autenticación con Rate Limiting y Hasheo de Tokens
 try {
     $pdo = Database::getCobranzasConnection();
+
+    // Validar Rate Limiting por fuerza bruta
+    checkRateLimit($pdo, $email);
 
     $stmt = $pdo->prepare('SELECT id, nombre, email, password_hash, rol, activo FROM usuarios WHERE email = :email');
     $stmt->execute([':email' => $email]);
     $usuario = $stmt->fetch();
 
     if (!$usuario || !(bool)$usuario['activo']) {
+        registerFailedAttempt($pdo, $email);
         http_response_code(401);
         echo json_encode([
             'success' => false,
@@ -53,24 +58,41 @@ try {
         exit;
     }
 
-    // Verificar password si password_hash está establecido
-    if (!empty($usuario['password_hash'])) {
-        if (!password_verify($password, $usuario['password_hash'])) {
-            http_response_code(401);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Credenciales incorrectas'
-            ]);
-            exit;
-        }
+    // F-11: password_hash es OBLIGATORIO. Si es NULL/vacío, la cuenta no es accesible.
+    if (empty($usuario['password_hash'])) {
+        registerFailedAttempt($pdo, $email);
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Credenciales incorrectas'
+        ]);
+        exit;
+    }
+
+    if (!password_verify($password, $usuario['password_hash'])) {
+        registerFailedAttempt($pdo, $email);
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Credenciales incorrectas'
+        ]);
+        exit;
     }
 
     // Generar token Bearer de 64 caracteres hexadecimales de forma criptográficamente segura
     $token = bin2hex(random_bytes(32));
+    
+    // Hasheamos el token para almacenarlo de forma segura
+    $hashedToken = hash('sha256', $token);
 
-    // Persistir el token en la base de datos
-    $stmtUpdate = $pdo->prepare('UPDATE usuarios SET api_token = :token WHERE id = :id');
-    $stmtUpdate->execute([':token' => $token, ':id' => $usuario['id']]);
+    // Persistir el token hasheado con expiración de 24 horas en la base de datos
+    $stmtUpdate = $pdo->prepare('
+        UPDATE usuarios 
+        SET api_token = :token, 
+            token_expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR) 
+        WHERE id = :id
+    ');
+    $stmtUpdate->execute([':token' => $hashedToken, ':id' => $usuario['id']]);
 
     echo json_encode([
         'success' => true,

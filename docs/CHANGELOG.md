@@ -2,6 +2,22 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [Unreleased] - 2026-07-27
+
+### Agregado
+- `services/AuditService.php`: Nueva clase de auditoría transaccional para registrar acciones críticas de Tesorería.
+- Tabla `login_attempts`: Implementada para guardar intentos de inicio de sesión fallidos y prevenir ataques de fuerza bruta.
+- Tabla `audit_logs`: Creada para mantener la trazabilidad de operaciones críticas asociadas a un ID de usuario, IP sanitizada y fecha.
+- Rate Limiting en PHP: Funciones `checkRateLimit()` y `registerFailedAttempt()` integradas en `config/auth.php` y en el endpoint de login.
+
+### Cambiado / Corregido
+- `config/auth.php`: Se implementó la validación segura de tokens hasheados con `SHA-256` y verificación de tiempo de expiración (`token_expires_at`). Agregado middleware de roles `requireAuth()`.
+- `api/auth/login.php`: Modificado para hashear tokens Bearer antes de persistirlos y establecer fecha de expiración a 24 horas. Agregado control de intentos fallidos. Validación obligatoria del password_hash (F-11).
+- `admin/api/cambiar_estado.php`: Asegurado con RBAC estricto a nivel de servidor (`requireAuth`) y logueo atómico en transacciones SQL vinculando `AuditService`.
+- `api/completar_envio.php`: Corrección de IDOR en la query SQL validando la pertenencia de la cobranza con `vendedor_id`.
+- `api/get_factura.php`: Envolver con backticks la interpolación de nombre de BD ERP para blindaje sintáctico (F-04).
+- `config/setup.sql`: Se agregó la columna `token_expires_at` en el DDL de la tabla `usuarios`.
+
 ## [Unreleased] - 2026-07-24
 
 ### Cambiado / Corregido

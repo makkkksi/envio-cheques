@@ -898,23 +898,23 @@ button {
 }
 
 .status-badge.en_transito {
-    background-color: #e0f2fe;
+    background-color: #e0f2fe; /* Azul cielo */
     color: #0284c7;
 }
 
 .status-badge.entregado_santiago {
-    background-color: #dbeafe;
+    background-color: #dbeafe; /* Azul real */
     color: #2563eb;
 }
 
 .status-badge.recibido_tesoreria {
-    background-color: #d1fae5;
-    color: #059669;
+    background-color: #f3e8ff; /* Morado/Púrpura */
+    color: #7c3aed;
 }
 
 .status-badge.depositado {
-    background-color: #e0e7ff;
-    color: #4f46e5;
+    background-color: #d1fae5; /* Verde */
+    color: #059669;
 }
 
 .status-badge.rechazado {

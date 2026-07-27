@@ -135,7 +135,7 @@
                         <div class="panel-section">
                             <h4 class="panel-section-title">Información General de Factura</h4>
                             <div class="kv-grid">
-                                <div class="kv-item" style="grid-column: span 2; background: #eff6ff; padding: 10px; border-radius: 6px; border-left: 4px solid var(--color-primary); margin-bottom: 4px;">
+                                <div class="kv-item" style="grid-column: span 2; background: #eff6ff; padding: 10px; border-radius: 6px; border: 1px solid #bfdbfe; margin-bottom: 4px;">
                                     <p style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--color-primary); font-size: 0.72rem; margin-bottom: 2px;">Vendedor Responsable de la Gestión</p>
                                     <strong id="lblPanelVendedor" style="font-size: 1.1rem; color: var(--color-primary); font-weight: 800;">-</strong>
                                 </div>

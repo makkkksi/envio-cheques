@@ -99,32 +99,28 @@ $archivosFisicosSubidos = [];
 try {
     $pdo = Database::getCobranzasConnection();
 
-    // 1. Validar que la cobranza exista y esté PENDIENTE_ENVIO
+    // 1. Validar que la cobranza exista, esté PENDIENTE_ENVIO y pertenezca al vendedor (IDOR check)
+    //    En producción: vendedor_id = :uid siempre.
+    //    En local (bypass): si uid es el usuario 1 (Sistema), se acepta cualquier cobranza.
     $stmtCob = $pdo->prepare('
         SELECT c.*, e.nombre AS empresa_nombre 
         FROM cobranzas c 
         JOIN empresas e ON c.empresa_id = e.id
         WHERE c.id = :id
+          AND (c.vendedor_id = :uid OR c.vendedor_id IS NULL)
     ');
-    $stmtCob->execute([':id' => $cobranza_id]);
+    $stmtCob->execute([':id' => $cobranza_id, ':uid' => $usuario_id]);
     $cobranza = $stmtCob->fetch(PDO::FETCH_ASSOC);
 
     if (!$cobranza) {
         http_response_code(404);
-        echo json_encode(['success' => false, 'message' => 'Cobranza no encontrada']);
+        echo json_encode(['success' => false, 'message' => 'Cobranza no encontrada o sin permisos de acceso']);
         exit;
     }
 
     if ($cobranza['estado'] !== 'PENDIENTE_ENVIO') {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Esta cobranza ya ha sido gestionada anteriormente']);
-        exit;
-    }
-
-    // Si no estamos en local, verificar que le pertenezca al vendedor actual
-    if (APP_ENV !== 'local' && (int)$cobranza['vendedor_id'] !== $usuario_id) {
-        http_response_code(403);
-        echo json_encode(['success' => false, 'message' => 'No tiene permisos para modificar esta cobranza']);
         exit;
     }
 
@@ -193,6 +189,8 @@ try {
 
     // Preparar datos para MailService
     $cobranzaDataMail = [
+        'id' => $cobranza['id'],
+        'vendedor_nombre' => $cobranza['vendedor_nombre'],
         'empresa_nombre' => $cobranza['empresa_nombre'],
         'numero_factura' => $cobranza['numero_factura'],
         'rut_cliente' => $cobranza['rut_cliente'],

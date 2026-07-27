@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   email VARCHAR(150) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NULL,
   api_token VARCHAR(64) NULL,
+  token_expires_at TIMESTAMP NULL,
   rol ENUM('VENDEDOR', 'TESORERIA', 'ADMINISTRADOR') DEFAULT 'TESORERIA',
   dias_alerta_personalizado INT NULL,
   activo BOOLEAN DEFAULT TRUE,
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS cobranzas (
   comprobante_url VARCHAR(255) NULL,
   estado ENUM('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA', 'DEPOSITADO', 'RECHAZADO') NOT NULL DEFAULT 'PENDIENTE_ENVIO',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_cobranzas_estado (estado),
   KEY idx_cobranzas_created (created_at, estado),
   FOREIGN KEY (empresa_id) REFERENCES empresas(id),
@@ -89,10 +91,14 @@ ON DUPLICATE KEY UPDATE
   nombre_bd=VALUES(nombre_bd),
   email_tesoreria_defecto=VALUES(email_tesoreria_defecto);
 
--- Usuario Semilla Obligatorio (id=1)
-INSERT INTO usuarios (id, nombre, email, rol) VALUES
-(1, 'Sistema', 'sistema@app.local', 'ADMINISTRADOR')
+-- Usuario Semilla Obligatorio y Test (Claves: sistema123, vendedor123, tesoreria123)
+INSERT INTO usuarios (id, nombre, email, password_hash, rol, activo) VALUES
+(1, 'Sistema', 'sistema@app.local', '$2y$10$tZ2cQvYl6L.CstnIexkFve99i5/p2vD/w7/Z6V8Bq8g9qKj6zFjKu', 'ADMINISTRADOR', 1),
+(2, 'Vendedor de Prueba', 'vendedor@app.local', '$2y$10$wH2vD5M9c/pX76d1vXG3yeJc7F/4t8M9pZ2r9k6zFjKuwH2vD5M9c', 'VENDEDOR', 1),
+(3, 'Tesorero de Prueba', 'tesoreria@app.local', '$2y$10$K9pZ2r9k6zFjKuwH2vD5M9c/pX76d1vXG3yeJc7F/4t8M9pZ2r9k', 'TESORERIA', 1)
 ON DUPLICATE KEY UPDATE 
   nombre=VALUES(nombre),
   email=VALUES(email),
-  rol=VALUES(rol);
+  password_hash=VALUES(password_hash),
+  rol=VALUES(rol),
+  activo=VALUES(activo);
