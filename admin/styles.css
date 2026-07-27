@@ -531,44 +531,74 @@ body.modal-open {
 }
 
 /* Botón CTA Sticky Bottom (Ley de Fitts) */
-.sticky-bottom-actions {
+.admin-detail-footer {
     position: sticky;
     bottom: 0;
     background: #ffffff;
-    padding: 16px;
-    border-top: 1px solid var(--color-border);
-    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
-    z-index: 20;
+    border-top: 1px solid #e2e8f0;
+    padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    align-items: stretch;
+    z-index: 20;
+    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
 }
 
-/* Visor de Cheque con Controles Flotantes (Canvas de Inspección Documental) */
+/* Visor de Cheque con Controles Flotantes (Canvas de Inspección Documental Compacto) */
 .cheque-card-img-wrapper {
     background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    min-height: 220px;
-    max-height: 280px;
+    height: 200px;
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 10px;
     border-radius: 8px;
-    border: 1px solid var(--color-border);
+    border: 1px solid #e2e8f0;
     position: relative;
     cursor: pointer;
     overflow: hidden;
 }
 
 .cheque-card-img {
-    max-width: 100%;
-    max-height: 240px;
+    max-height: 180px;
+    width: auto;
     object-fit: contain;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
     border-radius: 4px;
     transition: transform 0.2s ease;
+}
+
+/* Grid Compacta de Información General de Factura y Cliente (Ley de Proximidad) */
+.detail-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.detail-info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-info-item .label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.detail-info-item .value {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
 }
 
 .cheque-card-img-wrapper:hover .cheque-card-img {
@@ -876,6 +906,12 @@ body.modal-open {
     box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.2);
 }
 
+.stepper-h-step.active-intermediate .stepper-h-circle {
+    background: #d97706 !important;
+    color: white !important;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2) !important;
+}
+
 .stepper-h-step.rejected .stepper-h-circle {
     background: #dc2626;
     color: white;
@@ -895,6 +931,11 @@ body.modal-open {
 .stepper-h-step.active .stepper-h-label {
     color: var(--color-primary);
     font-weight: 700;
+}
+
+.stepper-h-step.active-intermediate .stepper-h-label {
+    color: #b45309 !important;
+    font-weight: 700 !important;
 }
 
 .stepper-h-step.rejected .stepper-h-label {

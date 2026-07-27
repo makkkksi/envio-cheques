@@ -25,7 +25,7 @@ $usuario_id = getUsuarioActual();
 
 // Filtros opcionales
 $estado = filter_input(INPUT_GET, 'estado', FILTER_DEFAULT);
-$estado = ($estado !== null && $estado !== '' && $estado !== 'TODOS') ? trim($estado) : null;
+$estado = ($estado !== null && $estado !== '') ? trim($estado) : 'BANDEJA_TRABAJO';
 
 $empresa_id = filter_input(INPUT_GET, 'empresa_id', FILTER_VALIDATE_INT);
 $empresa_id = $empresa_id ?: null;
@@ -72,7 +72,7 @@ try {
 
     $params = [];
 
-    if ($estado === null || $estado === 'BANDEJA_TRABAJO') {
+    if ($estado === 'BANDEJA_TRABAJO') {
         $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA')";
     } elseif ($estado === 'ENVIADOS') {
         $sql .= " AND c.estado != 'PENDIENTE_ENVIO'";

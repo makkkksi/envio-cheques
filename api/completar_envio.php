@@ -102,14 +102,21 @@ try {
     // 1. Validar que la cobranza exista, esté PENDIENTE_ENVIO y pertenezca al vendedor (IDOR check)
     //    En producción: vendedor_id = :uid siempre.
     //    En local (bypass): si uid es el usuario 1 (Sistema), se acepta cualquier cobranza.
-    $stmtCob = $pdo->prepare('
+    $sql = '
         SELECT c.*, e.nombre AS empresa_nombre 
         FROM cobranzas c 
         JOIN empresas e ON c.empresa_id = e.id
         WHERE c.id = :id
-          AND (c.vendedor_id = :uid OR c.vendedor_id IS NULL)
-    ');
-    $stmtCob->execute([':id' => $cobranza_id, ':uid' => $usuario_id]);
+    ';
+    $params = [':id' => $cobranza_id];
+
+    if (APP_ENV !== 'local') {
+        $sql .= ' AND (c.vendedor_id = :uid OR c.vendedor_id IS NULL)';
+        $params[':uid'] = $usuario_id;
+    }
+
+    $stmtCob = $pdo->prepare($sql);
+    $stmtCob->execute($params);
     $cobranza = $stmtCob->fetch(PDO::FETCH_ASSOC);
 
     if (!$cobranza) {

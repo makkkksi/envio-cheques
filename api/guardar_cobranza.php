@@ -174,6 +174,20 @@ try {
     // Estado inicial para el Paso 1
     $estadoInicial = 'PENDIENTE_ENVIO';
 
+    // Obtener e identificar el vendedor
+    $vendedor_id_post = filter_input(INPUT_POST, 'vendedor_id', FILTER_VALIDATE_INT);
+    $vendedor_id = $vendedor_id_post ?: ((APP_ENV === 'local') ? 2 : $usuario_id); // En local, usar 2 (Vendedor de Prueba) por defecto
+
+    $vendedor_nombre = 'Sin Asignar';
+    if ($vendedor_id) {
+        $stmtUsr = $pdo->prepare('SELECT nombre FROM usuarios WHERE id = :id');
+        $stmtUsr->execute([':id' => $vendedor_id]);
+        $usrRow = $stmtUsr->fetch();
+        if ($usrRow) {
+            $vendedor_nombre = $usrRow['nombre'];
+        }
+    }
+
     // Iniciar transacción SQL
     $pdo->beginTransaction();
 
@@ -190,8 +204,8 @@ try {
 
     $stmtCobranza->execute([
         ':empresa_id' => $empresa_id,
-        ':vendedor_id' => (APP_ENV === 'local') ? 1 : $usuario_id,
-        ':vendedor_nombre' => (APP_ENV === 'local') ? 'Sistema' : null,
+        ':vendedor_id' => $vendedor_id,
+        ':vendedor_nombre' => $vendedor_nombre,
         ':numero_factura' => $numero_factura,
         ':rut_cliente' => $rut_cliente,
         ':razon_social_cliente' => $razon_social_cliente,

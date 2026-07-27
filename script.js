@@ -73,6 +73,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let montoFacturaActual = 0;
     let debounceTimer = null;
 
+    // Cargar vendedor_id desde la URL (para WebView de Android)
+    const urlParams = new URLSearchParams(window.location.search);
+    const vendedorIdParam = urlParams.get('vendedor_id') || urlParams.get('vendedor');
+    const vendedorIdInput = document.getElementById('vendedorIdInput');
+    if (vendedorIdInput && vendedorIdParam) {
+        vendedorIdInput.value = vendedorIdParam;
+    }
+
     // Variables globales para la edición de cheques
     let cobranzasPendientesGlobal = [];
     let eliminadosIdsEdicion = [];
@@ -158,12 +166,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // RENDERIZADO DEL FLUJO DE ESTADOS Y TARJETAS
     // ==========================================
     const ESTADOS_CONFIG = {
-        'PENDIENTE_ENVIO':     { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pendiente Envío',       class: 'pendiente_envio' },
-        'EN_TRANSITO':         { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito',           class: 'en_transito' },
-        'ENTREGADO_SANTIAGO':  { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado (Sntg)',      class: 'entregado_santiago' },
-        'RECIBIDO_TESORERIA':  { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Tesorería',    class: 'recibido_tesoreria' },
-        'DEPOSITADO':          { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado',            class: 'depositado' },
-        'RECHAZADO':           { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado',             class: 'rechazado' }
+        'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pendiente Envío', class: 'pendiente_envio' },
+        'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'en_transito' },
+        'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado (Sntg)', class: 'entregado_santiago' },
+        'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Tesoreria', class: 'recibido_tesoreria' },
+        'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado', class: 'depositado' },
+        'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'rechazado' }
     };
 
     function renderTarjetas(cobranzas, containerEl) {
@@ -384,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
         rutClienteInput.value = '';
         if (razonSocialClienteInput) razonSocialClienteInput.value = '';
         if (montoTotalFacturaInput) montoTotalFacturaInput.value = '';
-        
+
         emailClienteERP = '';
         if (chkEmailCliente) chkEmailCliente.checked = false;
         if (wrapperEmailCliente) wrapperEmailCliente.style.display = 'none';
@@ -403,10 +411,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Limpiar todo excepto números y k/K
         let cleaned = rutInput.toString().replace(/[^0-9kK]/g, '');
         if (cleaned.length < 2) return rutInput;
-        
+
         let rutStr = cleaned.slice(0, -1);
         let dv = cleaned.slice(-1).toUpperCase();
-        
+
         // Poner puntos a los miles
         let formatRut = '';
         while (rutStr.length > 3) {
@@ -696,20 +704,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
 
             // Campos de texto y ocultos
-            formData.set('empresa_id',           empresaSelect.value);
-            formData.set('numero_factura',        numFacturaInput.value);
-            formData.set('rut_cliente',           rutClienteInput.value);
-            formData.set('razon_social_cliente',  razonSocialClienteInput ? razonSocialClienteInput.value : '');
-            formData.set('monto_total_factura',   montoTotalFacturaInput ? montoTotalFacturaInput.value : '');
-            formData.set('email_cliente',         emailClienteInput.value);
-            formData.set('email_tesoreria',       document.getElementById('emailTesoreria').value);
+            formData.set('empresa_id', empresaSelect.value);
+            formData.set('numero_factura', numFacturaInput.value);
+            formData.set('rut_cliente', rutClienteInput.value);
+            formData.set('razon_social_cliente', razonSocialClienteInput ? razonSocialClienteInput.value : '');
+            formData.set('monto_total_factura', montoTotalFacturaInput ? montoTotalFacturaInput.value : '');
+            formData.set('email_cliente', emailClienteInput.value);
+            formData.set('email_tesoreria', document.getElementById('emailTesoreria').value);
+            if (vendedorIdInput && vendedorIdInput.value) {
+                formData.set('vendedor_id', vendedorIdInput.value);
+            }
 
             // ── Cheques: campos de texto ──
-            const bancos        = formCobranza.querySelectorAll('select[name="banco[]"]');
-            const numsCheque    = formCobranza.querySelectorAll('input[name="numero_cheque[]"]');
-            const montosCheque  = formCobranza.querySelectorAll('input.hidden-monto-cheque');
-            const fechas        = formCobranza.querySelectorAll('input[name="fecha_vencimiento[]"]');
-            const comentarios   = formCobranza.querySelectorAll('textarea[name="comentario_cheque[]"]');
+            const bancos = formCobranza.querySelectorAll('select[name="banco[]"]');
+            const numsCheque = formCobranza.querySelectorAll('input[name="numero_cheque[]"]');
+            const montosCheque = formCobranza.querySelectorAll('input.hidden-monto-cheque');
+            const fechas = formCobranza.querySelectorAll('input[name="fecha_vencimiento[]"]');
+            const comentarios = formCobranza.querySelectorAll('textarea[name="comentario_cheque[]"]');
 
             bancos.forEach(el => formData.append('banco[]', el.value));
             numsCheque.forEach(el => formData.append('numero_cheque[]', el.value));
@@ -833,7 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalSeccionSantiago.style.display = 'none';
         });
 
-        window.abrirModalCompletar = function(cobranzaId) {
+        window.abrirModalCompletar = function (cobranzaId) {
             document.getElementById('modalCobranzaId').value = cobranzaId;
             modalCompletarEnvio.style.display = 'flex';
         };
@@ -1086,7 +1097,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lblTotalChequesEdicion.textContent = '$' + total.toLocaleString('es-CL');
     }
 
-    window.eliminarChequeEdicion = function(idx, databaseId = null) {
+    window.eliminarChequeEdicion = function (idx, databaseId = null) {
         // Al menos debe quedar un cheque en el formulario (los activos en el cont)
         const tarjetasActivas = contenedorEditarCheques.querySelectorAll('.cheque-card');
         if (tarjetasActivas.length <= 1) {
@@ -1104,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.abrirModalEditar = function(cobranzaId) {
+    window.abrirModalEditar = function (cobranzaId) {
         const cobranza = cobranzasPendientesGlobal.find(c => c.id === cobranzaId);
         if (!cobranza) {
             showToast('No se encontró la cobranza localmente.', 'error');
@@ -1121,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             contadorChequesEdicion++;
             const row = crearChequeRowEdicion(contadorChequesEdicion, chk);
             contenedorEditarCheques.appendChild(row);
-            
+
             // Configurar preview dinámico después de que el elemento existe en el DOM
             configurarPreviewConBorrado(`fotoChequeEdicion_${contadorChequesEdicion}`, `imgChequeEdicion_${contadorChequesEdicion}`, `boxPreviewChequeEdicion_${contadorChequesEdicion}`);
         });
@@ -1310,7 +1321,7 @@ window.quitarImagen = function (idInput, idImg, idContainer) {
     if (input) input.value = '';
     if (img) img.src = '';
     if (container) container.style.display = 'none';
-    
+
     // Si hay un label asociado al input, volver a mostrarlo
     const label = document.querySelector(`label[for="${idInput}"]`);
     if (label) label.style.display = 'inline-flex';
@@ -1329,7 +1340,7 @@ window.configurarPreviewConBorrado = function (idInput, idImg, idContainer) {
                 reader.onload = (event) => {
                     img.src = event.target.result;
                     container.style.display = 'flex';
-                    
+
                     // Ocultar el botón label para no duplicar UI
                     const label = document.querySelector(`label[for="${idInput}"]`);
                     if (label) label.style.display = 'none';
@@ -1380,7 +1391,7 @@ window.compressImage = function (file, maxWidthPx = 1600, qualityJpeg = 0.8) {
                             type: 'image/jpeg',
                             lastModified: Date.now()
                         });
-                        console.log(`[Compresión] ${file.name}: ${(file.size/1024).toFixed(0)}KB → ${(compressedFile.size/1024).toFixed(0)}KB`);
+                        console.log(`[Compresión] ${file.name}: ${(file.size / 1024).toFixed(0)}KB → ${(compressedFile.size / 1024).toFixed(0)}KB`);
                         resolve(compressedFile);
                     },
                     'image/jpeg',

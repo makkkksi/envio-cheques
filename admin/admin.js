@@ -266,7 +266,7 @@ const ESTADOS_MAP = {
     'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Por Enviar', class: 'badge-PENDIENTE_ENVIO' },
     'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'badge-EN_TRANSITO' },
     'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado Stgo', class: 'badge-ENTREGADO_SANTIAGO' },
-    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Tesorería', class: 'badge-RECIBIDO_TESORERIA' },
+    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Fisicamente', class: 'badge-RECIBIDO_TESORERIA' },
     'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado', class: 'badge-DEPOSITADO' },
     'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'badge-RECHAZADO' }
 };
@@ -374,7 +374,7 @@ function renderMasterTable(cobranzas) {
     if (!cobranzas || cobranzas.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" style="text-align: center; padding: 40px 16px; color: var(--color-text-muted);">
+                <td colspan="5" style="text-align: center; padding: 40px 16px; color: var(--color-text-muted);">
                     No se encontraron cobranzas registradas para los filtros seleccionados.
                 </td>
             </tr>
@@ -402,14 +402,13 @@ function renderMasterTable(cobranzas) {
         return `
             <tr class="${isSelected ? 'active-row' : ''}" onclick="seleccionarCobranza(${item.id})">
                 <td style="font-weight: 600;">${item.empresa_nombre || '-'}</td>
-                <td><strong style="color: var(--color-primary);">N° ${item.numero_factura}</strong></td>
+                <td>${vendedorDisplay}</td>
                 <td>
                     <div style="font-weight: 600; color: var(--color-text);">${item.razon_social_cliente || '-'}</div>
                     <div style="font-size: 0.78rem; color: var(--color-text-muted);">RUT: ${item.rut_cliente || '-'}</div>
                 </td>
-                <td>${vendedorDisplay}</td>
                 <td>
-                    <div style="font-weight: 700; color: #0F172A;">$${montoChequesFmt} <span style="color: #64748B; font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${item.cantidad_cheques} cheque(s))</span></div>
+                    <div style="font-weight: 700; color: #0F172A; white-space: nowrap;">$${montoChequesFmt} <span style="color: #64748B; font-size: 0.8rem; font-weight: normal; margin-left: 4px;">${item.cantidad_cheques} cheque(s)</span></div>
                     ${tieneDiscrepancia ? `<span class="badge-mismatch">⚠️ Dif: ${difText}</span>` : ''}
                 </td>
                 <td><span class="badge ${estConfig.class}">${estConfig.label}</span></td>
@@ -594,61 +593,8 @@ function renderSidePanelDetail(data) {
         `).join('');
     }
 
-    // Sección 4: Vertical Stepper de Trazabilidad (Ley de Zeigarnik)
-    renderVerticalStepper(cob, historial);
-
     // Sección 5: Barra de Acciones Fija Inferior (Ley de Tesler & Von Restorff)
     renderStickyActionButtons(cob);
-}
-
-// RENDERIZADOR DE STEPPER VERTICAL TIMELINE (LEY DE ZEIGARNIK)
-function renderVerticalStepper(cob, historial) {
-    const container = document.getElementById('boxPanelStepper');
-    if (!container) return;
-
-    container.className = 'stepper-vertical';
-
-    const pasos = [
-        { key: 'PENDIENTE_ENVIO', label: '1. Registrado por Vendedor' },
-        { key: 'EN_TRANSITO', label: '2. En Tránsito / Despachado' },
-        { key: 'RECIBIDO_TESORERIA', label: '3. Recepción en Tesorería' },
-        { key: 'DEPOSITADO', label: '4. Depositado en Banco' }
-    ];
-
-    let currentIdx = 0;
-    if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO') currentIdx = 1;
-    if (cob.estado === 'RECIBIDO_TESORERIA') currentIdx = 2;
-    if (cob.estado === 'DEPOSITADO') currentIdx = 3;
-    if (cob.estado === 'RECHAZADO') currentIdx = 3;
-
-    container.innerHTML = pasos.map((paso, idx) => {
-        let isCompleted = idx < currentIdx;
-        let isActive = idx === currentIdx;
-        let stepClass = isCompleted ? 'completed' : (isActive ? 'active' : '');
-        let circleSymbol = isCompleted ? '✓' : (idx + 1);
-
-        if (cob.estado === 'RECHAZADO' && idx === 3) {
-            paso.label = '4. Cheque Rechazado / Protestado';
-            stepClass = 'active';
-            circleSymbol = '✖';
-        }
-
-        const hitHist = historial.find(h => h.estado_nuevo === paso.key || (paso.key === 'EN_TRANSITO' && h.estado_nuevo === 'ENTREGADO_SANTIAGO'));
-        const timeText = hitHist ? hitHist.created_at.replace('T', ' ') : (isCompleted || isActive ? 'Completado' : 'Pendiente');
-
-        return `
-            <div class="stepper-step ${stepClass}">
-                <div class="stepper-node">
-                    <div class="stepper-circle">${circleSymbol}</div>
-                    <div class="stepper-line"></div>
-                </div>
-                <div class="stepper-content">
-                    <div class="stepper-title">${paso.label}</div>
-                    <div class="stepper-time">${timeText}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
 }
 
 // RENDERIZADOR DE BOTONES DINÁMICOS (LEY DE TESLER & VON RESTORFF)
@@ -719,6 +665,9 @@ function renderHorizontalStepper(cob) {
         const isActive = idx === currentIdx;
         const isRejected = cob.estado === 'RECHAZADO' && idx === 3;
         let stepClass = isCompleted ? 'completed' : (isActive ? 'active' : '');
+        if (isActive && cob.estado !== 'DEPOSITADO' && cob.estado !== 'RECHAZADO') {
+            stepClass += ' active-intermediate';
+        }
         if (isRejected) stepClass = 'rejected';
 
         let symbol = isCompleted ? '✓' : (isRejected ? '✖' : (isActive ? '●' : (idx + 1)));

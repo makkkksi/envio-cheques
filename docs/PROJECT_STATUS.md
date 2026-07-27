@@ -9,7 +9,7 @@ El proyecto se encuentra en **Fase 2 (Portal de Tesorería)** completada y asegu
 |------|-------------|--------|--------|
 | **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | ✅ Completado | 100% |
 | **Fase 2** | Portal de Tesorería (`/admin/`) con Hardening de Seguridad | ✅ Completado | 100% |
-| **Fase 3** | Notificaciones por correo SMTP host | ✅ Completado | 100% |
+| **Fase 3** | Notificaciones por correo SMTP host | INCLONCLUSO | 80% | FALTA CONECTAR A SMPT DE PRODUCCION
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
 | **Fase 5** | Integración de autenticación con App Android | ⏳ Pendiente | 0% |
 
@@ -28,6 +28,7 @@ El proyecto se encuentra en **Fase 2 (Portal de Tesorería)** completada y asegu
 - [x] `services/AuditService.php` — Bitácora de auditoría transaccional.
 - [x] `api/completar_envio.php` — Segundo paso del vendedor asegurado contra IDOR.
 - [x] `admin/index.php` & `admin/admin.js` — Portal web de Tesorería integrado.
+- [x] `admin/login.php` — Formulario de acceso seguro para el portal de Tesorería.
 - [x] `admin/api/cambiar_estado.php` — Cambio de estado transaccional y auditado con RBAC estricto.
 - [x] `services/MailService.php` — Implementación de cliente SMTP por sockets robusto con adjuntos de cheques.
 

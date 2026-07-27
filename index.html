@@ -83,6 +83,7 @@
                         </div>
 
                         <input type="hidden" id="emailTesoreria" name="email_tesoreria" value="tesoreria@automarco.cl">
+                        <input type="hidden" id="vendedorIdInput" name="vendedor_id" value="">
 
                         <!-- TARJETA DE DATOS DEL CLIENTE -->
                         <div id="infoClienteBox" class="info-cliente-card" style="display: none;">
@@ -187,7 +188,7 @@
                     <option value="TODOS">Todos los Estados</option>
                     <option value="EN_TRANSITO">En Tránsito (Chilexpress)</option>
                     <option value="ENTREGADO_SANTIAGO">Entregado (Santiago)</option>
-                    <option value="RECIBIDO_TESORERIA">Recibido por Tesorería</option>
+                    <option value="RECIBIDO_TESORERIA">Recibido Fisicamente</option>
                     <option value="DEPOSITADO">Depositado</option>
                     <option value="RECHAZADO">Rechazado / Devuelto</option>
                 </select>
@@ -360,13 +361,7 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- CONSOLA DE DIAGNÓSTICO EN PANTALLA PARA MÓVILES -->
-    <div id="debugConsoleWrapper"
-        style="margin: 20px; padding: 15px; background: #2d2d2d; color: #f8f8f2; font-family: monospace; font-size: 12px; border-radius: 8px; border: 1px dashed #666; max-height: 250px; overflow-y: auto;">
-        <h4 style="margin: 0 0 10px 0; color: #f1fa8c; border-bottom: 1px solid #444; padding-bottom: 5px;">Depurador
-            Web (Consola Móvil)</h4>
-        <div id="debugLogs" style="white-space: pre-wrap; line-height: 1.4;">[Esperando eventos...]</div>
-    </div>
+
 
     <script src="script.js?v=27"></script>
 </body>

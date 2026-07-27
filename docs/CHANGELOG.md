@@ -5,18 +5,27 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 ## [Unreleased] - 2026-07-27
 
 ### Agregado
-- `services/AuditService.php`: Nueva clase de auditoría transaccional para registrar acciones críticas de Tesorería.
-- Tabla `login_attempts`: Implementada para guardar intentos de inicio de sesión fallidos y prevenir ataques de fuerza bruta.
-- Tabla `audit_logs`: Creada para mantener la trazabilidad de operaciones críticas asociadas a un ID de usuario, IP sanitizada y fecha.
-- Rate Limiting en PHP: Funciones `checkRateLimit()` y `registerFailedAttempt()` integradas en `config/auth.php` y en el endpoint de login.
+- `admin/login.php`: Nueva pantalla de inicio de sesión segura para el portal de Tesorería. Incorpora CSRF tokens, Session Fixation protection, y Rate Limiting / Fuerza Bruta vinculando `checkRateLimit`.
+- Botón "📥 Descargar" en el Lightbox: Descarga nativa y directa de la imagen en inspección en el visualizador.
+- Iconos vectoriales en formato SVG: Agregados a los botones de filtros segmentados y a todas las etiquetas de estados (badges) del sistema en ambas interfaces (Vendedor y Tesorería), eliminando dependencias externas.
+- CSS `.badge-mismatch`: Estilo y badge dedicados para alertar sobre discrepancias en la tabla maestro.
+- CSS `.detail-info-grid`: Grid unificada de 3 columnas para la información general del cliente y la factura.
 
 ### Cambiado / Corregido
-- `config/auth.php`: Se implementó la validación segura de tokens hasheados con `SHA-256` y verificación de tiempo de expiración (`token_expires_at`). Agregado middleware de roles `requireAuth()`.
-- `api/auth/login.php`: Modificado para hashear tokens Bearer antes de persistirlos y establecer fecha de expiración a 24 horas. Agregado control de intentos fallidos. Validación obligatoria del password_hash (F-11).
-- `admin/api/cambiar_estado.php`: Asegurado con RBAC estricto a nivel de servidor (`requireAuth`) y logueo atómico en transacciones SQL vinculando `AuditService`.
-- `api/completar_envio.php`: Corrección de IDOR en la query SQL validando la pertenencia de la cobranza con `vendedor_id`.
-- `api/get_factura.php`: Envolver con backticks la interpolación de nombre de BD ERP para blindaje sintáctico (F-04).
-- `config/setup.sql`: Se agregó la columna `token_expires_at` en el DDL de la tabla `usuarios`.
+- `admin/index.php`:
+  * Protegido el acceso directo mediante chequeo de sesiones seguras (`httponly`, `samesite=Strict`) con redirección a `login.php`.
+  * Rediseñada la visual de detalle: se eliminó el botón "X" de cierre y la sección redundante vertical "Trazabilidad del Cheque".
+  * Reincorporada la grid general `.detail-info-grid` al inicio del panel.
+  * Cambiado el nombre de clase a `.admin-detail-footer` en la barra inferior fija.
+  * Removido el botón de "Reajustar Filtros" del bloque de Empty State y el contenedor de depuración móvil (`#debugConsoleWrapper`) del pie de página.
+- `admin/admin.js`:
+  * Implementada la auto-selección de la primera fila al cargar o filtrar la tabla de cobranzas si no hay una selección activa.
+  * Modificada la columna "Total Cheques" para estructurarse en dos líneas: Monto + Cantidad (sin paréntesis y forzado a una sola línea con `white-space: nowrap`) en la primera línea, y el badge de diferencia si corresponde en la segunda.
+  * Reemplazados los contenedores `.cheque-16by9-box` por `.cheque-card-img-wrapper` compactando el canvas a 200px de altura y agregando una barra flotante de herramientas con accesos directos `[ 🔍 Lightbox ]` y `[ 🔄 Rotar ]`.
+  * Modificada la actualización de badges a `innerHTML` para soportar la renderización de SVGs y cambiada la etiqueta del estado a "Recibido Fisicamente".
+- `admin/styles.css`: Rediseñados el canvas de cheques a formato de 200px, el footer fixed `.admin-detail-footer` con sombras de elevación, y aplicados colores de éxito/alerta en CTAs de depósitos y rechazos.
+- `admin/api/get_cobranzas.php`: Corregida la lógica de filtros para que al solicitar `estado=TODOS` se salte el filtro de estados y muestre todo correctamente, usando `BANDEJA_TRABAJO` como fallback por defecto.
+- `docs/ANDROID_INTEGRATION.md`: Actualizada la especificación técnica con las decisiones del entorno unificado (WebView GET, IDs enteros, hosting de AWS común).
 
 ## [Unreleased] - 2026-07-24
 

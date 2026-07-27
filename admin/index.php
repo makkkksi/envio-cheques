@@ -5,6 +5,25 @@
  * Portal de Tesorería — Gestión de Cheques
  * Arquitectura Split Screen (50% / 50%) — Diseñado según AI_RULES_UX.md (Sin Emojis)
  */
+
+// Configuración de sesión segura
+if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/form/admin/',
+        'domain' => '',
+        'secure' => false, // Cambiar a true si se configura HTTPS en producción
+        'httponly' => true,
+        'samesite' => 'Strict'
+    ]);
+    session_start();
+}
+
+// Redirección si no está autenticado
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: login.php');
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -97,16 +116,15 @@
                         <thead>
                             <tr>
                                 <th>Empresa</th>
-                                <th>Factura</th>
-                                <th>Cliente / RUT</th>
                                 <th>Vendedor</th>
+                                <th>Cliente / RUT</th>
                                 <th>Total Cheques</th>
                                 <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody id="masterTableBody">
                             <tr>
-                                <td colspan="6" style="text-align: center; padding: 32px; color: var(--color-text-muted);">
+                                <td colspan="5" style="text-align: center; padding: 32px; color: var(--color-text-muted);">
                                     Cargando cobranzas...
                                 </td>
                             </tr>
@@ -122,7 +140,6 @@
                     <div class="empty-detail-icon">📁</div>
                     <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 4px;">Selecciona una cobranza de la lista para auditar</h3>
                     <p style="font-size: 0.8rem; margin-bottom: 12px;">Haz clic en cualquier fila de la izquierda para inspeccionar sus cheques, comprobante y trazabilidad.</p>
-                    <button type="button" class="btn-b2b btn-b2b-secondary" style="height: 36px; font-size: 0.8rem; padding: 0 12px; border-radius: var(--radius-sm);" onclick="reajustarFiltros()">Reajustar Filtros</button>
                 </div>
 
                 <!-- CONTENIDO DINÁMICO DEL DRAWER -->
@@ -141,33 +158,14 @@
                     <div class="detail-scroll-body">
 
                         <!-- SECCIÓN 1: RESUMEN FACTURA Y CLIENTE -->
-                        <div class="panel-section">
-                            <h4 class="panel-section-title">Información General de Factura</h4>
-                            <div class="kv-grid">
-                                <div class="kv-item" style="grid-column: span 2; background: #eff6ff; padding: 10px; border-radius: 6px; border: 1px solid #bfdbfe; margin-bottom: 4px;">
-                                    <p style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--color-primary); font-size: 0.72rem; margin-bottom: 2px;">Vendedor Responsable de la Gestión</p>
-                                    <strong id="lblPanelVendedor" style="font-size: 1.1rem; color: var(--color-primary); font-weight: 800;">-</strong>
-                                </div>
-                                <div class="kv-item">
-                                    <p>Empresa Holding</p>
-                                    <strong id="lblPanelEmpresa">-</strong>
-                                </div>
-                                <div class="kv-item">
-                                    <p>RUT Cliente</p>
-                                    <strong id="lblPanelRut">-</strong>
-                                </div>
-                                <div class="kv-item" style="grid-column: span 2;">
-                                    <p>Razón Social Cliente</p>
-                                    <strong id="lblPanelCliente">-</strong>
-                                </div>
-                                <div class="kv-item">
-                                    <p>Monto Factura ERP</p>
-                                    <strong id="lblPanelMontoFactura" style="color: var(--color-primary);">-</strong>
-                                </div>
-                                <div class="kv-item">
-                                    <p>Total Cheques</p>
-                                    <strong id="lblPanelTotalCheques" style="color: #166534;">-</strong>
-                                </div>
+                        <div class="panel-section" style="border: none; padding: 0;">
+                            <div class="detail-info-grid">
+                                <div class="detail-info-item"><span class="label">Razón Social Cliente</span><strong class="value" id="lblPanelCliente">-</strong></div>
+                                <div class="detail-info-item"><span class="label">RUT Cliente</span><strong class="value" id="lblPanelRut">-</strong></div>
+                                <div class="detail-info-item"><span class="label">Empresa</span><strong class="value" id="lblPanelEmpresa">-</strong></div>
+                                <div class="detail-info-item"><span class="label">Vendedor</span><span id="lblPanelVendedor" class="value">-</span></div>
+                                <div class="detail-info-item"><span class="label">Monto Factura ERP</span><strong class="value" id="lblPanelMontoFactura">-</strong></div>
+                                <div class="detail-info-item"><span class="label">Total Cheques</span><strong class="value" id="lblPanelTotalCheques">-</strong></div>
                             </div>
                         </div>
 
@@ -198,18 +196,10 @@
                             </div>
                         </div>
 
-                        <!-- SECCIÓN 4: TRAZABILIDAD -->
-                        <div class="panel-section">
-                            <h4 class="panel-section-title">Trazabilidad del Cheque</h4>
-                            <div id="boxPanelStepper" class="stepper-vertical">
-                                <!-- Vertical Stepper renderizado dinámicamente -->
-                            </div>
-                        </div>
-
                     </div>
 
                     <!-- SECCIÓN 5: FOOTER DE ACCIÓN DINÁMICO (STICKY BOTTOM - LEY DE FITTS) -->
-                    <div class="sticky-bottom-actions" id="boxPanelAcciones">
+                    <div class="admin-detail-footer" id="boxPanelAcciones">
                         <!-- CTA primario dinámico según estado -->
                     </div>
 
