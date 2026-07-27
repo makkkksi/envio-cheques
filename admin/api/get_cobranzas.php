@@ -41,6 +41,7 @@ try {
     $metricsRaw = $stmtMetrics->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $metrics = [
+        'bandeja_trabajo'    => (int)($metricsRaw['EN_TRANSITO'] ?? 0) + (int)($metricsRaw['ENTREGADO_SANTIAGO'] ?? 0) + (int)($metricsRaw['RECIBIDO_TESORERIA'] ?? 0),
         'pendientes_envio'   => (int)($metricsRaw['PENDIENTE_ENVIO'] ?? 0),
         'en_transito'        => (int)($metricsRaw['EN_TRANSITO'] ?? 0) + (int)($metricsRaw['ENTREGADO_SANTIAGO'] ?? 0),
         'recibidos'          => (int)($metricsRaw['RECIBIDO_TESORERIA'] ?? 0),
@@ -63,7 +64,7 @@ try {
                 c.comprobante_url,
                 c.estado,
                 c.created_at,
-                u.nombre AS vendedor_nombre
+                COALESCE(u.nombre, NULLIF(c.vendedor_nombre, ''), 'Vendedor no especificado (Registro del Sistema)') AS vendedor_nombre
             FROM cobranzas c
             INNER JOIN empresas e ON c.empresa_id = e.id
             LEFT JOIN usuarios u ON c.vendedor_id = u.id
@@ -71,7 +72,9 @@ try {
 
     $params = [];
 
-    if ($estado === null || $estado === 'ENVIADOS') {
+    if ($estado === null || $estado === 'BANDEJA_TRABAJO') {
+        $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA')";
+    } elseif ($estado === 'ENVIADOS') {
         $sql .= " AND c.estado != 'PENDIENTE_ENVIO'";
     } elseif ($estado !== 'TODOS') {
         $sql .= " AND c.estado = :estado";
@@ -91,7 +94,7 @@ try {
         $params[':b4'] = '%' . $busqueda . '%';
     }
 
-    $sql .= " ORDER BY c.created_at DESC";
+    $sql .= " ORDER BY FIELD(c.estado, 'RECIBIDO_TESORERIA', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'DEPOSITADO', 'RECHAZADO', 'PENDIENTE_ENVIO'), c.created_at DESC";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);

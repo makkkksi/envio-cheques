@@ -1,5 +1,6 @@
 /* ==========================================================================
-   PORTAL DE TESORERÍA - ESTILOS BASE (ULTRA SIMPLE Y LIMPIO)
+   PORTAL DE TESORERÍA - ARQUITECTURA UX/UI AI_RULES_UX.md
+   Split-Screen (50% / 50%) + Ley de Tesler + Stepper + WCAG 2.1 AA
    ========================================================================== */
 
 :root {
@@ -7,32 +8,25 @@
     --color-primary-hover: #1e40af;
     --color-secondary: #64748b;
     --color-bg: #f8fafc;
-    --color-card: #ffffff;
+    --color-surface: #ffffff;
     --color-border: #e2e8f0;
-    --color-text: #0f172a;
+    --color-border-subtle: #f1f5f9;
+    --color-text: #0f172a;          /* WCAG 2.1 AA Compliant */
+    --color-text-secondary: #475569;
     --color-text-muted: #64748b;
 
-    /* Badges */
-    --status-pendiente-bg: #fef3c7;
-    --status-pendiente-color: #92400e;
-    
-    --status-transito-bg: #e0f2fe;
-    --status-transito-color: #0369a1;
-
-    --status-recibido-bg: #dbeafe;
-    --status-recibido-color: #1e40af;
-
-    --status-depositado-bg: #dcfce7;
-    --status-depositado-color: #166534;
-
-    --status-rechazado-bg: #fee2e2;
-    --status-rechazado-color: #991b1b;
+    /* Badges de Estado (Design Tokens AI_RULES_UX.md) */
+    --status-pendiente-bg: #fef3c7;   --status-pendiente-color: #92400e;
+    --status-transito-bg: #e0f2fe;    --status-transito-color: #0369a1;
+    --status-recibido-bg: #dbeafe;    --status-recibido-color: #1e40af;
+    --status-depositado-bg: #dcfce7;  --status-depositado-color: #166534;
+    --status-rechazado-bg: #fee2e2;   --status-rechazado-color: #991b1b;
 
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 16px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 * {
@@ -42,395 +36,782 @@
 }
 
 body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background-color: var(--color-bg);
     color: var(--color-text);
-    line-height: 1.5;
-    font-size: 15px;
-}
-
-/* Scroll Lock */
-body.modal-open {
+    line-height: 1.45;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
     overflow: hidden;
     height: 100vh;
 }
 
-.admin-header {
-    background-color: var(--color-primary);
-    color: white;
-    padding: 16px 24px;
-    box-shadow: var(--shadow-sm);
+/* SCROLL LOCK PARA MODALES / LIGHTBOX */
+body.modal-open {
+    overflow: hidden !important;
+    height: 100vh !important;
 }
 
-.admin-header-content {
-    max-width: 1200px;
-    margin: 0 auto;
+/* APP VIEWPORT CONTAINER */
+.app-viewport {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* 1. HEADER SUPERIOR DELGADO Y LIMPIO */
+.app-header {
+    height: 52px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 0 20px;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
 }
 
-.admin-header h1 {
-    font-size: 1.35rem;
+.app-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.app-logo-badge {
+    background: var(--color-primary);
+    color: white;
     font-weight: 700;
-}
-
-.admin-user-badge {
-    background: rgba(255, 255, 255, 0.15);
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.admin-container {
-    max-width: 1200px;
-    margin: 24px auto;
-    padding: 0 16px;
-}
-
-/* Tarjetas Métrica */
-.metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.metric-card {
-    background: var(--color-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: 16px 20px;
-    box-shadow: var(--shadow-sm);
-}
-
-.metric-card-title {
-    font-size: 0.8rem;
-    text-transform: uppercase;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
     letter-spacing: 0.5px;
-    color: var(--color-text-muted);
-    font-weight: 600;
-    margin-bottom: 6px;
 }
 
-.metric-card-value {
-    font-size: 1.75rem;
-    font-weight: 800;
+.app-header h1 {
+    font-size: 1rem;
+    font-weight: 600;
     color: var(--color-text);
 }
 
-/* Barra de Filtros */
-.filters-bar {
-    background: var(--color-card);
+.user-badge {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    background: var(--color-bg);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: 16px;
-    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+/* 2. BARRA DE CONTROL SEGMENTADO Y FILTROS */
+.control-toolbar {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 12px 20px;
     display: flex;
+    flex-direction: column;
     gap: 12px;
+    flex-shrink: 0;
+}
+
+.segmented-tabs {
+    display: flex;
+    background: var(--color-bg);
+    padding: 3px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    width: fit-content;
+    gap: 2px;
     flex-wrap: wrap;
+}
+
+.segmented-tab {
+    background: transparent;
+    border: none;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
     align-items: center;
-    box-shadow: var(--shadow-sm);
+    gap: 6px;
+    transition: all 0.15s ease;
 }
 
-.search-input {
-    flex: 2;
-    min-width: 240px;
-    padding: 10px 14px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-size: 0.95rem;
+.segmented-tab:hover {
+    color: var(--color-text);
 }
 
-.filter-select {
+.segmented-tab.active {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.tab-count {
+    background: var(--color-border);
+    color: var(--color-text-secondary);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.segmented-tab.active .tab-count {
+    background: #e2e8f0;
+    color: var(--color-primary);
+}
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.search-field {
+    position: relative;
     flex: 1;
-    min-width: 180px;
-    padding: 10px 14px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-size: 0.95rem;
-    background-color: white;
+    max-width: 420px;
 }
 
-/* Tabla de Cobranzas */
-.table-wrapper {
-    background: var(--color-card);
+.search-field input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 34px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-    overflow-x: auto;
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    outline: none;
+    transition: border-color 0.15s;
 }
 
-.admin-table {
+.search-field input:focus {
+    border-color: var(--color-primary);
+}
+
+.search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+.select-compact {
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    outline: none;
+    cursor: pointer;
+}
+
+.select-compact:focus {
+    border-color: var(--color-primary);
+}
+
+/* 3. SPLIT SCREEN LAYOUT CONTAINER (50% / 50%) */
+.split-view-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+/* LADO IZQUIERDO: TABLA MAESTRA (50% ANCHO EXACTO) */
+.master-panel {
+    flex: 50;
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+    overflow: hidden;
+}
+
+.table-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.master-table {
     width: 100%;
     border-collapse: collapse;
     text-align: left;
 }
 
-.admin-table th {
-    background-color: #f1f5f9;
-    padding: 14px 16px;
-    font-size: 0.85rem;
+.master-table th {
+    position: sticky;
+    top: 0;
+    background: #f8fafc;
+    padding: 10px 14px;
+    font-size: 0.75rem;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     color: var(--color-secondary);
     border-bottom: 1px solid var(--color-border);
+    z-index: 10;
     white-space: nowrap;
 }
 
-.admin-table td {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--color-border);
+.master-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-size: 0.85rem;
     vertical-align: middle;
 }
 
-.admin-table tr:hover {
-    background-color: #f8fafc;
+.master-table tbody tr {
+    cursor: pointer;
+    transition: background 0.1s ease;
+    position: relative;
 }
 
-/* Status Badges */
-.status-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.78rem;
+.master-table tbody tr:hover {
+    background: #f1f5f9;
+}
+
+.master-table tbody tr.active-row {
+    background: #eff6ff;
+}
+
+.master-table tbody tr.active-row td:first-child {
+    box-shadow: inset 4px 0 0 var(--color-primary);
+}
+
+/* BADGES DE ESTADO (AI_RULES_UX.md) */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     white-space: nowrap;
 }
 
-.status-badge.status-PENDIENTE_ENVIO {
+.badge-PENDIENTE_ENVIO {
     background: var(--status-pendiente-bg);
     color: var(--status-pendiente-color);
 }
 
-.status-badge.status-EN_TRANSITO,
-.status-badge.status-ENTREGADO_SANTIAGO {
+.badge-EN_TRANSITO, .badge-ENTREGADO_SANTIAGO {
     background: var(--status-transito-bg);
     color: var(--status-transito-color);
 }
 
-.status-badge.status-RECIBIDO_TESORERIA {
+.badge-RECIBIDO_TESORERIA {
     background: var(--status-recibido-bg);
     color: var(--status-recibido-color);
 }
 
-.status-badge.status-DEPOSITADO {
+.badge-DEPOSITADO {
     background: var(--status-depositado-bg);
     color: var(--status-depositado-color);
 }
 
-.status-badge.status-RECHAZADO {
+.badge-RECHAZADO {
     background: var(--status-rechazado-bg);
     color: var(--status-rechazado-color);
 }
 
-/* Botones de Acción */
-.btn-action {
-    display: inline-flex;
+/* LADO DERECHO: DRAWER INSPECTOR (50% ANCHO EXACTO) */
+.detail-panel {
+    flex: 50;
+    width: 50%;
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* EMPTY STATE */
+.empty-detail-state {
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 8px 14px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    border-radius: var(--radius-sm);
-    border: none;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background 0.2s;
-}
-
-.btn-primary {
-    background-color: var(--color-primary);
-    color: white;
-}
-
-.btn-primary:hover {
-    background-color: var(--color-primary-hover);
-}
-
-.btn-success {
-    background-color: #2e7d32;
-    color: white;
-}
-
-.btn-success:hover {
-    background-color: #1b5e20;
-}
-
-.btn-danger {
-    background-color: #dc2626;
-    color: white;
-}
-
-.btn-danger:hover {
-    background-color: #b91c1c;
-}
-
-.btn-secondary {
-    background-color: #e2e8f0;
-    color: #334155;
-}
-
-.btn-secondary:hover {
-    background-color: #cbd5e1;
-}
-
-/* Ficha de Detalle */
-.detail-card {
-    background: var(--color-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: var(--shadow-sm);
-}
-
-.detail-section-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--color-primary);
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 8px;
-    margin-bottom: 16px;
-}
-
-.detail-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
-}
-
-.detail-item p {
-    font-size: 0.85rem;
+    height: 100%;
+    padding: 40px;
+    text-align: center;
     color: var(--color-text-muted);
 }
 
-.detail-item strong {
-    font-size: 1rem;
+.empty-detail-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+/* DETAIL CONTENT STACK */
+.detail-header-bar {
+    height: 52px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+    flex-shrink: 0;
+}
+
+.detail-header-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detail-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.detail-close-btn:hover {
+    background: var(--color-border);
     color: var(--color-text);
 }
 
-/* Foto Previews en Detalle */
-.photo-thumbnail {
-    width: 140px;
-    height: 90px;
-    object-fit: cover;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.photo-thumbnail:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Galería Visual de Cheques (Tarjetas Grandes con Foto Principal) */
-.cheque-gallery-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 20px;
-    margin-top: 16px;
-}
-
-.cheque-card-visual {
-    background: #ffffff;
-    border: 2px solid #e2e8f0;
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-direction: column;
-    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-}
-
-.cheque-card-visual:hover {
-    transform: translateY(-2px);
-    border-color: var(--color-primary);
-    box-shadow: var(--shadow-md);
-}
-
-.cheque-card-img-wrapper {
-    position: relative;
-    width: 100%;
-    height: 220px;
-    background-color: #0f172a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    overflow: hidden;
-}
-
-.cheque-card-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    transition: transform 0.3s;
-}
-
-.cheque-card-img-wrapper:hover .cheque-card-img {
-    transform: scale(1.04);
-}
-
-.cheque-card-badge-zoom {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    background: rgba(15, 23, 42, 0.75);
-    color: white;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    backdrop-filter: blur(4px);
-    pointer-events: none;
-}
-
-.cheque-card-info {
+.detail-scroll-body {
+    flex: 1;
+    overflow-y: auto;
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 16px;
 }
 
-.cheque-card-header {
+/* SECCIONES DEL DRAWER */
+.panel-section {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    padding: 14px;
+}
+
+.panel-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-secondary);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.kv-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.kv-item p {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.kv-item strong {
+    font-size: 0.88rem;
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+/* CALLOUT DE ALERTA POR DISCREPANCIA (EFECTO VON RESTORFF) */
+.discrepancy-callout {
+    background-color: var(--status-pendiente-bg);
+    border: 1px solid var(--status-pendiente-color);
+    border-left: 4px solid var(--status-pendiente-color);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    color: var(--status-pendiente-color);
+}
+
+.discrepancy-callout-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: 8px;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 0.88rem;
     margin-bottom: 4px;
 }
 
-.cheque-banco-tag {
-    font-weight: 700;
-    font-size: 0.95rem;
-    color: var(--color-primary);
-    background-color: #eff6ff;
-    padding: 3px 10px;
-    border-radius: 6px;
+.discrepancy-callout-body {
+    font-size: 0.8rem;
+    line-height: 1.4;
 }
 
-.cheque-monto-highlight {
-    font-size: 1.25rem;
-    font-weight: 800;
+/* FILTRO DE ALTO CONTRASTE Y ROTACIÓN DE FOTOS DE CHEQUE */
+.high-contrast-image {
+    filter: contrast(1.85) brightness(1.1) grayscale(0.3) !important;
+}
+
+.image-tool-btn {
+    background: rgba(15, 23, 42, 0.85);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.image-tool-btn:hover {
+    background: rgba(15, 23, 42, 1);
+}
+
+/* Fallback de Vendedor Neutro */
+.seller-badge-muted {
+    display: inline-block;
+    padding: 4px 10px;
+    background-color: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Stepper de Trazabilidad Compacto (Ley de Zeigarnik) */
+.stepper-progress-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    margin: 16px 0;
+}
+
+.stepper-node {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stepper-node.completed {
     color: #166534;
 }
 
-/* Modal Lightbox & Decision Modals */
+.stepper-node.active {
+    color: #0369a1;
+    font-weight: 700;
+}
+
+.stepper-arrow {
+    color: #cbd5e1;
+    font-size: 0.8rem;
+}
+
+/* Botón CTA Sticky Bottom (Ley de Fitts) */
+.sticky-bottom-actions {
+    position: sticky;
+    bottom: 0;
+    background: #ffffff;
+    padding: 16px;
+    border-top: 1px solid var(--color-border);
+    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
+    z-index: 20;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Visor de Cheque con Controles Flotantes */
+.cheque-card-img-wrapper {
+    position: relative;
+}
+
+.cheque-controls-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 5;
+}
+
+.cheque-card-img-wrapper:hover .cheque-controls-overlay {
+    opacity: 1;
+}
+
+.btn-cheque-control {
+    background: rgba(15, 23, 42, 0.85);
+    color: #ffffff;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s ease;
+}
+
+.btn-cheque-control:hover {
+    background: rgba(15, 23, 42, 1);
+}
+
+/* TARJETAS DE INSPECCIÓN DE CHEQUES (PROPORCIÓN 16:9 + LEY DE PROXIMIDAD) */
+.cheque-inspection-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    margin-bottom: 12px;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cheque-inspection-card:last-child {
+    margin-bottom: 0;
+}
+
+.cheque-16by9-box {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 180px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    background: #0f172a;
+    position: relative;
+    cursor: pointer;
+}
+
+.cheque-16by9-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.cheque-16by9-hover {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.cheque-16by9-box:hover .cheque-16by9-hover {
+    opacity: 1;
+}
+
+.cheque-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cheque-card-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cheque-banco-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--color-primary);
+}
+
+.cheque-monto-value {
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: #166534;
+}
+
+.quote-comment {
+    font-size: 0.78rem;
+    background: #f1f5f9;
+    padding: 8px 10px;
+    border-left: 3px solid var(--color-primary);
+    border-radius: 2px;
+    margin-top: 4px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/* VERICAL STEPPER DE TRAZABILIDAD (LEY DE ZEIGARNIK) */
+.stepper-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-left: 4px;
+}
+
+.stepper-step {
+    display: flex;
+    gap: 12px;
+    position: relative;
+}
+
+.stepper-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stepper-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.stepper-step.completed .stepper-circle {
+    background: #16a34a;
+    color: white;
+}
+
+.stepper-step.active .stepper-circle {
+    background: var(--color-primary);
+    color: white;
+}
+
+.stepper-line {
+    width: 2px;
+    flex: 1;
+    background: #e2e8f0;
+    margin-top: 4px;
+}
+
+.stepper-step:last-child .stepper-line {
+    display: none;
+}
+
+.stepper-content {
+    flex: 1;
+    padding-bottom: 8px;
+}
+
+.stepper-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--color-text);
+}
+
+.stepper-time {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+}
+
+/* BARRA DE ACCIONES FIJA INFERIOR (LEY DE FITTS - ALTURA MIN 48PX) */
+.detail-bottom-bar {
+    padding: 12px 16px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.btn-b2b {
+    flex: 1;
+    height: 48px; /* Ley de Fitts */
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-b2b-success {
+    background: #16a34a;
+    color: white;
+}
+
+.btn-b2b-success:hover {
+    background: #15803d;
+}
+
+.btn-b2b-primary {
+    background: var(--color-primary);
+    color: white;
+}
+
+.btn-b2b-primary:hover {
+    background: var(--color-primary-hover);
+}
+
+.btn-b2b-danger {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-b2b-danger:hover {
+    background: #b91c1c;
+}
+
+.btn-b2b-secondary {
+    background: #f1f5f9;
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+}
+
+.btn-b2b-secondary:hover {
+    background: #e2e8f0;
+    color: var(--color-text);
+}
+
+/* MODALES PLANOS */
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(15, 23, 42, 0.7);
-    backdrop-filter: blur(4px);
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(2px);
     z-index: 2000;
     display: flex;
     align-items: center;
@@ -439,51 +820,59 @@ body.modal-open {
 }
 
 .modal-box {
-    background: white;
+    background: var(--color-surface);
     padding: 24px;
-    border-radius: var(--radius-md);
-    max-width: 500px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    max-width: 440px;
     width: 100%;
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
 }
 
 .modal-box h3 {
-    margin-bottom: 12px;
-    color: var(--color-primary);
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 6px;
 }
 
 .modal-form-group {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 
 .modal-form-group label {
     display: block;
+    font-size: 0.82rem;
     font-weight: 600;
-    font-size: 0.9rem;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .modal-form-group input,
 .modal-form-group textarea {
     width: 100%;
-    padding: 10px;
+    padding: 10px 12px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-size: 0.95rem;
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
+    outline: none;
+}
+
+.modal-form-group input:focus,
+.modal-form-group textarea:focus {
+    border-color: var(--color-primary);
 }
 
 .modal-actions {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-    margin-top: 20px;
+    margin-top: 18px;
 }
 
-/* Toast Container */
+/* TOAST */
 .toast-container {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    bottom: 20px;
+    right: 20px;
     z-index: 3000;
     display: flex;
     flex-direction: column;
@@ -491,12 +880,12 @@ body.modal-open {
 }
 
 .toast {
-    padding: 12px 20px;
-    border-radius: var(--radius-sm);
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
     color: white;
     font-weight: 600;
-    box-shadow: var(--shadow-md);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .toast.success { background-color: #16a34a; }

@@ -1,12 +1,3 @@
-# PROJECT_STATUS.md — Estado Actual del Proyecto
-
-**Última actualización:** 2026-07-24  
-**Versión:** 1.3  
-**Fase activa:** Fase 1 — Backend Base y Conexión con Frontend
-
----
-
-## Resumen del Estado
 
 El proyecto se encuentra en **Fase 1 (Backend Base)**. Se ha iniciado la creación de la capa de configuración base del sistema mediante el script SQL DDL `config/setup.sql`.
 

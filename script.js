@@ -835,7 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalCompletarEnvio.style.display = 'flex';
         };
 
-        formCompletarEnvio.addEventListener('submit', async (e) => {
+        formCompletarEnvio.addEventListener('submit', (e) => {
             e.preventDefault();
 
             if (!formCompletarEnvio.checkValidity()) {
@@ -844,6 +844,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            pedirConfirmacionDespachoVendedor();
+        });
+
+        function pedirConfirmacionDespachoVendedor() {
+            let modalConfirm = document.getElementById('modalConfirmarDespachoVendedor');
+            if (!modalConfirm) {
+                modalConfirm = document.createElement('div');
+                modalConfirm.id = 'modalConfirmarDespachoVendedor';
+                modalConfirm.className = 'modal-overlay';
+                modalConfirm.style.cssText = 'display: none; z-index: 1100; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);';
+                modalConfirm.innerHTML = `
+                    <div class="modal-content" style="max-width: 420px; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); z-index: 1101;">
+                        <h3 class="modal-title" style="color: #1e3a8a; margin-bottom: 10px; font-size: 1.15rem;">¿Confirmar envío de documentos?</h3>
+                        <p style="font-size: 0.9rem; line-height: 1.4; color: #334155; margin-bottom: 20px;">
+                            Estás a punto de declarar el despacho de la documentación de esta cobranza. Una vez enviado, Tesorería recibirá la notificación de recepción en su bandeja.
+                        </p>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" id="btnCancelarConfirmVendedor" style="padding: 10px 16px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Volver</button>
+                            <button type="button" id="btnEjecutarEnvioVendedor" style="padding: 10px 16px; background: #1e3a8a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">Sí, Confirmar Envío</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modalConfirm);
+
+                document.getElementById('btnCancelarConfirmVendedor').onclick = () => {
+                    modalConfirm.style.display = 'none';
+                };
+                document.getElementById('btnEjecutarEnvioVendedor').onclick = () => {
+                    modalConfirm.style.display = 'none';
+                    ejecutarSubidaEnvioVendedor();
+                };
+            }
+            modalConfirm.style.display = 'flex';
+        }
+
+        async function ejecutarSubidaEnvioVendedor() {
             const btnSubmitModal = document.getElementById('btnConfirmarEnvioSubmit');
             btnSubmitModal.disabled = true;
             btnSubmitModal.textContent = 'Enviando...';
@@ -900,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnSubmitModal.disabled = false;
                 btnSubmitModal.textContent = 'Confirmar Envío';
             }
-        });
+        }
     }
 
     // ==========================================

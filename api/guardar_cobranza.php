@@ -190,8 +190,8 @@ try {
 
     $stmtCobranza->execute([
         ':empresa_id' => $empresa_id,
-        ':vendedor_id' => (APP_ENV === 'local') ? null : $usuario_id,
-        ':vendedor_nombre' => (APP_ENV === 'local') ? 'Pendiente' : null,
+        ':vendedor_id' => (APP_ENV === 'local') ? 1 : $usuario_id,
+        ':vendedor_nombre' => (APP_ENV === 'local') ? 'Sistema' : null,
         ':numero_factura' => $numero_factura,
         ':rut_cliente' => $rut_cliente,
         ':razon_social_cliente' => $razon_social_cliente,

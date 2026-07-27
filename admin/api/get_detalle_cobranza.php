@@ -47,7 +47,7 @@ try {
                 c.comprobante_url,
                 c.estado,
                 c.created_at,
-                u.nombre AS vendedor_nombre
+                COALESCE(u.nombre, NULLIF(c.vendedor_nombre, ''), 'Vendedor no especificado (Registro del Sistema)') AS vendedor_nombre
             FROM cobranzas c
             INNER JOIN empresas e ON c.empresa_id = e.id
             LEFT JOIN usuarios u ON c.vendedor_id = u.id
