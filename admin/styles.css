@@ -1,0 +1,503 @@
+/* ==========================================================================
+   PORTAL DE TESORERÍA - ESTILOS BASE (ULTRA SIMPLE Y LIMPIO)
+   ========================================================================== */
+
+:root {
+    --color-primary: #1e3a8a;
+    --color-primary-hover: #1e40af;
+    --color-secondary: #64748b;
+    --color-bg: #f8fafc;
+    --color-card: #ffffff;
+    --color-border: #e2e8f0;
+    --color-text: #0f172a;
+    --color-text-muted: #64748b;
+
+    /* Badges */
+    --status-pendiente-bg: #fef3c7;
+    --status-pendiente-color: #92400e;
+    
+    --status-transito-bg: #e0f2fe;
+    --status-transito-color: #0369a1;
+
+    --status-recibido-bg: #dbeafe;
+    --status-recibido-color: #1e40af;
+
+    --status-depositado-bg: #dcfce7;
+    --status-depositado-color: #166534;
+
+    --status-rechazado-bg: #fee2e2;
+    --status-rechazado-color: #991b1b;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.5;
+    font-size: 15px;
+}
+
+/* Scroll Lock */
+body.modal-open {
+    overflow: hidden;
+    height: 100vh;
+}
+
+.admin-header {
+    background-color: var(--color-primary);
+    color: white;
+    padding: 16px 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.admin-header h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.admin-user-badge {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.admin-container {
+    max-width: 1200px;
+    margin: 24px auto;
+    padding: 0 16px;
+}
+
+/* Tarjetas Métrica */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.metric-card-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.metric-card-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text);
+}
+
+/* Barra de Filtros */
+.filters-bar {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.search-input {
+    flex: 2;
+    min-width: 240px;
+    padding: 10px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+}
+
+.filter-select {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    background-color: white;
+}
+
+/* Tabla de Cobranzas */
+.table-wrapper {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.admin-table th {
+    background-color: #f1f5f9;
+    padding: 14px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-secondary);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.admin-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+}
+
+.admin-table tr:hover {
+    background-color: #f8fafc;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.status-badge.status-PENDIENTE_ENVIO {
+    background: var(--status-pendiente-bg);
+    color: var(--status-pendiente-color);
+}
+
+.status-badge.status-EN_TRANSITO,
+.status-badge.status-ENTREGADO_SANTIAGO {
+    background: var(--status-transito-bg);
+    color: var(--status-transito-color);
+}
+
+.status-badge.status-RECIBIDO_TESORERIA {
+    background: var(--status-recibido-bg);
+    color: var(--status-recibido-color);
+}
+
+.status-badge.status-DEPOSITADO {
+    background: var(--status-depositado-bg);
+    color: var(--status-depositado-color);
+}
+
+.status-badge.status-RECHAZADO {
+    background: var(--status-rechazado-bg);
+    color: var(--status-rechazado-color);
+}
+
+/* Botones de Acción */
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.btn-success {
+    background-color: #2e7d32;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #1b5e20;
+}
+
+.btn-danger {
+    background-color: #dc2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c;
+}
+
+.btn-secondary {
+    background-color: #e2e8f0;
+    color: #334155;
+}
+
+.btn-secondary:hover {
+    background-color: #cbd5e1;
+}
+
+/* Ficha de Detalle */
+.detail-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.detail-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.detail-item p {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.detail-item strong {
+    font-size: 1rem;
+    color: var(--color-text);
+}
+
+/* Foto Previews en Detalle */
+.photo-thumbnail {
+    width: 140px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.photo-thumbnail:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Galería Visual de Cheques (Tarjetas Grandes con Foto Principal) */
+.cheque-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.cheque-card-visual {
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.cheque-card-visual:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.cheque-card-img-wrapper {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    background-color: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.cheque-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s;
+}
+
+.cheque-card-img-wrapper:hover .cheque-card-img {
+    transform: scale(1.04);
+}
+
+.cheque-card-badge-zoom {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(15, 23, 42, 0.75);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+
+.cheque-card-info {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cheque-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+}
+
+.cheque-banco-tag {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--color-primary);
+    background-color: #eff6ff;
+    padding: 3px 10px;
+    border-radius: 6px;
+}
+
+.cheque-monto-highlight {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #166534;
+}
+
+/* Modal Lightbox & Decision Modals */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-box {
+    background: white;
+    padding: 24px;
+    border-radius: var(--radius-md);
+    max-width: 500px;
+    width: 100%;
+    box-shadow: var(--shadow-md);
+}
+
+.modal-box h3 {
+    margin-bottom: 12px;
+    color: var(--color-primary);
+}
+
+.modal-form-group {
+    margin-bottom: 16px;
+}
+
+.modal-form-group label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+}
+
+.modal-form-group input,
+.modal-form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* Toast Container */
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.toast {
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+    font-size: 0.9rem;
+}
+
+.toast.success { background-color: #16a34a; }
+.toast.error { background-color: #dc2626; }

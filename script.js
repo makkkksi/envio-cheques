@@ -184,10 +184,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Botón para completar envío o editar cheques sólo si está pendiente
             const btnCompletar = item.estado === 'PENDIENTE_ENVIO' ? `
                 <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;">
-                    <button type="button" class="btn-completar-envio" style="background-color: var(--color-accent-light); color: var(--color-accent); border: 1px solid var(--color-border);" onclick="abrirModalEditar(${item.id})">
+                    <button type="button" class="btn-completar-envio" style="background-color: var(--color-accent-light); color: var(--color-accent); border: 1px solid var(--color-border); display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px;" onclick="abrirModalEditar(${item.id})">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 6px;">
+                            <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.86z"/>
+                        </svg>
                         Editar Cheques
                     </button>
-                    <button type="button" class="btn-completar-envio" onclick="abrirModalCompletar(${item.id})">
+                    <button type="button" class="btn-completar-envio" style="background-color: #2e7d32; color: #ffffff; border: none; display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px;" onclick="abrirModalCompletar(${item.id})">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 6px;">
+                            <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
+                        </svg>
                         Completar Envío
                     </button>
                 </div>

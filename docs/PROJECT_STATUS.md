@@ -16,8 +16,8 @@ El proyecto se encuentra en **Fase 1 (Backend Base)**. Se ha iniciado la creaci�
 
 | Fase | Descripción | Estado | Avance |
 |------|-------------|--------|--------|
-| **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | 🔄 En desarrollo | 95% |
-| **Fase 2** | Portal de Tesorería (`/admin/`) | ⏳ Pendiente | 0% |
+| **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | ✅ Completado | 100% |
+| **Fase 2** | Portal de Tesorería (`/admin/`) | ✅ Completado | 100% |
 | **Fase 3** | Notificaciones por correo SMTP host | ⏳ Pendiente | 0% |
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
 | **Fase 5** | Integración de autenticación con App Android | ⏳ Pendiente | 0% |
