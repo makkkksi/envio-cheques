@@ -1,5 +1,4 @@
-
-El proyecto se encuentra en **Fase 2 (Portal de Tesorería)** completada y asegurada con hardening de seguridad. Se inicia la **Fase 3 (Notificaciones SMTP)**.
+El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** totalmente operacional y refactorizada con UI estilo Gmail. Actualmente se está preparando la **Fase 5 (Integración WebView App Eclipse & Rediseño Multi-Factura/Cliente)** a la espera de la estructura final de tablas del ERP.
 
 ---
 
@@ -8,10 +7,10 @@ El proyecto se encuentra en **Fase 2 (Portal de Tesorería)** completada y asegu
 | Fase | Descripción | Estado | Avance |
 |------|-------------|--------|--------|
 | **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | ✅ Completado | 100% |
-| **Fase 2** | Portal de Tesorería (`/admin/`) con Hardening de Seguridad | ✅ Completado | 100% |
-| **Fase 3** | Notificaciones por correo SMTP host | INCLONCLUSO | 80% | FALTA CONECTAR A SMPT DE PRODUCCION
+| **Fase 2** | Portal de Tesorería (`/admin/`) con UI compacta, sub-filtros y tiempo relativo | ✅ Completado | 100% |
+| **Fase 3** | Notificaciones por correo SMTP host | 🟡 En pausa | 80% | FALTA CONECTAR A SMTP DE PRODUCCIÓN
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
-| **Fase 5** | Integración de autenticación con App Android | ⏳ Pendiente | 0% |
+| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | 🔄 En Especificación | 20% | A la espera de esquemas de tablas ERP |
 
 ---
 
@@ -26,12 +25,15 @@ El proyecto se encuentra en **Fase 2 (Portal de Tesorería)** completada y asegu
 - [x] `api/get_mis_cobranzas.php` — Historial de cobranzas del vendedor ordenable por última modificación.
 - [x] `api/auth/login.php` — Autenticación segura con hasheo de tokens, expiración y control de intentos fallidos.
 - [x] `services/AuditService.php` — Bitácora de auditoría transaccional.
-- [x] `api/completar_envio.php` — Segundo paso del vendedor asegurado contra IDOR.
-- [x] `admin/index.php` & `admin/admin.js` — Portal web de Tesorería integrado.
+- [x] `api/completar_envio.php` — Segundo paso del vendedor asegurado contra IDOR y bypass en local.
+- [x] `admin/index.php` & `admin/admin.js` — Portal web de Tesorería con sub-filtros dinámicos, columna de tiempo relativo y botón de cierre visible.
 - [x] `admin/login.php` — Formulario de acceso seguro para el portal de Tesorería.
 - [x] `admin/api/cambiar_estado.php` — Cambio de estado transaccional y auditado con RBAC estricto.
 - [x] `services/MailService.php` — Implementación de cliente SMTP por sockets robusto con adjuntos de cheques.
+- [x] `docs/ANDROID_INTEGRATION.md` — Documentación y especificación técnica de la App Android (Eclipse) y flujo Vendedor ➔ Cliente ➔ Multi-Factura.
 
 ## Próximo trabajo inmediato
 
-Implementar el motor de alertas por días transcurridos mediante Cron Job (Fase 4).
+1. Recepción de estructura de tablas de Clientes / Cobranzas de ERP por parte del usuario.
+2. Adaptación del backend para soportar la selección por cliente y marcado múltiple de facturas (Multi-Empresa).
+3. Adaptación final del panel de auditoría de Tesorería (`/admin/`).

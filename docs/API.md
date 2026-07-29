@@ -42,6 +42,88 @@
 
 ---
 
+### GET `/api/get_clientes.php`
+
+Retorna la lista de clientes únicos asociados a la cartera del vendedor que poseen documentos impagos en la tabla consolidada `bd_automarco.tbl_cobranza`.
+
+**Disparado por:** Carga del formulario del vendedor o lectura del `vendedor_id`.
+
+#### Request
+
+| Parámetro | Tipo | Requerido | Descripción |
+|-----------|------|-----------|-------------|
+| `vendedor_id` | int | Opcional | ID del vendedor (si no se envía, toma el usuario autenticado) |
+
+```
+GET /api/get_clientes.php?vendedor_id=2
+```
+
+#### Response — Éxito (200)
+
+```json
+{
+  "success": true,
+  "vendedor_id": 2,
+  "count": 2,
+  "data": [
+    {
+      "rut_completo": "77891200-7",
+      "clirut": "77891200",
+      "clidv": "7",
+      "razon_social": "BALEO REPUESTOS LTDA.",
+      "email_cliente": "ba-leo_ltda@hotmail.com",
+      "total_facturas": 108,
+      "total_deuda": 617543028
+    }
+  ]
+}
+```
+
+---
+
+### GET `/api/get_facturas_cliente.php`
+
+Retorna todas las facturas impagas asociadas al RUT de un cliente a través de todas las empresas del holding (`EMP01`, `EMP03`, `EMP06`, `EMP10`).
+
+**Disparado por:** Selección de un cliente en el dropdown del vendedor.
+
+#### Request
+
+| Parámetro | Tipo | Requerido | Descripción |
+|-----------|------|-----------|-------------|
+| `rut_cliente` | string | ✅ | RUT del cliente (numérico o formateado con DV) |
+
+```
+GET /api/get_facturas_cliente.php?rut_cliente=77891200
+```
+
+#### Response — Éxito (200)
+
+```json
+{
+  "success": true,
+  "clirut": "77891200",
+  "count": 1,
+  "total_deuda": 3023727,
+  "data": [
+    {
+      "codigo_empresa": "EMP10",
+      "empresa_id": 4,
+      "empresa_nombre": "Gabtec S.A",
+      "numero_factura": "003163",
+      "fecha_emision": "05-08-2024",
+      "fecha_vencimiento": "01-08-2023",
+      "glosa": "CH.PROT.B-CH.EXTRAVIO",
+      "total_cuota": 3023727,
+      "saldo_cuota": 3023727,
+      "tipo_doc": 6
+    }
+  ]
+}
+```
+
+---
+
 ### GET `/api/get_factura.php`
 
 Busca una factura en la BD ERP de la empresa seleccionada y retorna los datos del cliente con el monto calculado con IVA.
@@ -297,15 +379,128 @@ Preparado para integración con la app Android.
 
 ---
 
-## Endpoints Futuros (Fase 2 — Portal Tesorería)
+## Endpoints del Portal de Tesorería (`/admin/`)
 
-> Estos endpoints aún no se implementan. Se documentan para planificación.
+---
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| `GET` | `/admin/api/get_cobranzas.php` | Listado completo con filtros (todas las empresas) |
-| `POST` | `/admin/api/cambiar_estado.php` | Cambia estado + inserta en `historial_estados` |
-| `GET` | `/admin/api/get_detalle_cobranza.php` | Detalle completo con historial de estados |
+### GET `/admin/api/get_cobranzas.php`
+
+Listado general de cobranzas para el Portal de Tesorería. Incluye resumen de facturas desglosadas (`facturas`) y cheques anidados.
+
+#### Request
+
+| Parámetro | Tipo | Requerido | Descripción |
+|-----------|------|-----------|-------------|
+| `estado` | string | — | Estado o grupo (`BANDEJA_TRABAJO`, `EN_TRANSITO`, `DEPOSITADO`, `TODOS`) |
+| `empresa_id` | int | — | ID de la empresa central |
+| `busqueda` | string | — | Búsqueda libre (Factura, RUT, Cliente, Vendedor) |
+
+#### Response — Éxito (200)
+
+```json
+{
+  "success": true,
+  "metrics": {
+    "bandeja_trabajo": 3,
+    "pendientes_envio": 2,
+    "en_transito": 2,
+    "recibidos": 1,
+    "depositados": 5,
+    "rechazados": 1,
+    "total": 11
+  },
+  "data": [
+    {
+      "id": 12,
+      "empresa_nombre": "Multi-Empresa",
+      "rut_cliente": "14395118-9",
+      "razon_social_cliente": "HERRERA PEREIRA GERARDO",
+      "monto_total_factura": 308000,
+      "estado": "PENDIENTE_ENVIO",
+      "created_at": "2026-07-29 11:45:03",
+      "vendedor_nombre": "Juan Carlos Quiróz",
+      "facturas": [
+        {
+          "codigo_empresa": "EMP03",
+          "numero_factura": "022048",
+          "monto_cubierto": 154000
+        },
+        {
+          "codigo_empresa": "EMP03",
+          "numero_factura": "022050",
+          "monto_cubierto": 154000
+        }
+      ],
+      "cheques": [
+        {
+          "id": 14,
+          "banco": "BANCO DE CHILE",
+          "numero_cheque": "99887766",
+          "monto": 308000,
+          "foto_cheque_url": "uploads/cheque_test_e2e.jpg"
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### GET `/admin/api/get_detalle_cobranza.php`
+
+Obtiene el detalle completo de una cobranza específica para el drawer o modal de auditoría de Tesorería.
+
+#### Request
+
+```
+GET /admin/api/get_detalle_cobranza.php?id=12
+```
+
+#### Response — Éxito (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "cobranza": {
+      "id": 12,
+      "empresa_nombre": "Multi-Empresa",
+      "rut_cliente": "14395118-9",
+      "razon_social_cliente": "HERRERA PEREIRA GERARDO",
+      "monto_total_factura": "308000",
+      "estado": "PENDIENTE_ENVIO",
+      "vendedor_nombre": "Juan Carlos Quiróz",
+      "total_cheques": 308000,
+      "cantidad_cheques": 1
+    },
+    "facturas": [
+      {
+        "id": 3,
+        "codigo_empresa": "EMP03",
+        "numero_factura": "022048",
+        "monto_cubierto": "154000"
+      },
+      {
+        "id": 4,
+        "codigo_empresa": "EMP03",
+        "numero_factura": "022050",
+        "monto_cubierto": "154000"
+      }
+    ],
+    "cheques": [
+      {
+        "id": 14,
+        "banco": "BANCO DE CHILE",
+        "numero_cheque": "99887766",
+        "monto": "308000",
+        "foto_cheque_url": "uploads/cheque_test_e2e.jpg"
+      }
+    ],
+    "historial": []
+  }
+}
+```
 
 ---
 

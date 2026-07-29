@@ -28,10 +28,10 @@ CREATE TABLE IF NOT EXISTS usuarios (
 -- 3. Cabecera del Registro de Cobranza
 CREATE TABLE IF NOT EXISTS cobranzas (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  empresa_id INT NOT NULL,
+  empresa_id INT NULL,
   vendedor_id INT NULL,
   vendedor_nombre VARCHAR(100) NULL,
-  numero_factura VARCHAR(50) NOT NULL,
+  numero_factura VARCHAR(50) NULL,
   rut_cliente VARCHAR(20) NOT NULL,
   razon_social_cliente VARCHAR(200) NULL,
   monto_total_factura DECIMAL(12,0) NULL,
@@ -47,6 +47,22 @@ CREATE TABLE IF NOT EXISTS cobranzas (
   KEY idx_cobranzas_created (created_at, estado),
   FOREIGN KEY (empresa_id) REFERENCES empresas(id),
   FOREIGN KEY (vendedor_id) REFERENCES usuarios(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 3.1 Detalle de Facturas Canceladas (Soporta múltiples facturas cross-empresa por cobranza)
+CREATE TABLE IF NOT EXISTS cobranza_facturas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cobranza_id INT NOT NULL,
+  empresa_id INT NOT NULL,
+  codigo_empresa VARCHAR(20) NOT NULL, -- EMP01, EMP03, EMP06, EMP10
+  numero_factura VARCHAR(50) NOT NULL,
+  total_cuota DECIMAL(12,0) NOT NULL,
+  saldo_cuota DECIMAL(12,0) NOT NULL,
+  monto_cubierto DECIMAL(12,0) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_cobranza_facturas_cobranza (cobranza_id),
+  FOREIGN KEY (cobranza_id) REFERENCES cobranzas(id) ON DELETE CASCADE,
+  FOREIGN KEY (empresa_id) REFERENCES empresas(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Detalle de Cheques (Soporta múltiples cheques por cobranza)

@@ -186,7 +186,7 @@ class AuditService {
 ```
 
 ---
-
+    
 ## 4. Validación de Archivos Subidos
 
 El backend **siempre** re-valida los archivos en el servidor, independiente de la validación del frontend:
@@ -260,7 +260,7 @@ header('Access-Control-Allow-Headers: Authorization, Content-Type');
 
 ## 8. Consideraciones para Producción
 
-| Acción | Estado | Prioridad |
+| Action | Estado | Prioridad |
 |--------|--------|-----------|
 | Cambiar `APP_ENV = 'production'` | ⏳ Pendiente | Alta |
 | Asignar credenciales de BD dedicadas (no `root`) | ⏳ Pendiente | Alta |
@@ -270,3 +270,31 @@ header('Access-Control-Allow-Headers: Authorization, Content-Type');
 | HTTPS obligatorio (Let's Encrypt o hosting SSL) | ⏳ Pendiente | Alta |
 | Rotar credenciales y tokens antes de go-live | ⏳ Pendiente | Alta |
 | Validar que `error_reporting` esté en `0` en producción | ⏳ Pendiente | Media |
+
+---
+
+## 9. Auditoría de Brechas e Inconsistencias de Datos Internos
+
+**Contexto del Entorno Legado:**  
+El sistema se integra con una App Android legada (Eclipse) y bases de datos MySQL directas del ERP Softland. Dichos sistemas legados históricamente operan con bajo nivel de aislamiento (parámetros GET planos sin firma digital). No obstante, para evitar que este nuevo módulo sea el eslabón débil de la infraestructura, se auditan y priorizan los siguientes hallazgos:
+
+| ID | Hallazgo | Gravedad | Impacto / Riesgo | Necesidad de Reparación |
+|---|---|---|---|---|
+| **SEC-01** | **Impersonación de Vendedor (IDOR en `vendedor_id`)** | 🔴 **ALTA** | Endpoints como `api/get_clientes.php` y `api/guardar_cobranza.php` aceptan `vendedor_id` enviado por GET/POST sin validar contra la sesión. Un usuario puede cambiar `?vendedor_id=X` y acceder a carteras ajenas. | **Obligatorio para Go-Live.** En entorno `production`, la API debe forzar la identidad desde la sesión o validar un token firmado del WebView. |
+| **SEC-02** | **Descalce de Auth en Admin (Sesión vs Bearer Token)** | 🔴 **ALTA** *(Bloqueante)* | `admin/index.php` autentica con `$_SESSION['admin_logged_in']`, pero los endpoints de `/admin/api/` invocan `requireAuth()` que exige `Authorization: Bearer`. Funciona solo por el bypass de `APP_ENV='local'`. En `production` el portal dará error `401` en todas las acciones. | **Imprescindible.** Se debe adaptar `auth.php` para soportar `$_SESSION` activas en peticiones al portal admin. |
+| **SEC-03** | **Ejecución Directa en `/uploads`** | 🟡 **MEDIA-ALTA** | Si bien se filtran extensiones y MIME types en PHP, no existe restricción a nivel de servidor web en `uploads/`. Un archivo PHP maliciosamente cargado podría ejecutarse. | **Alta Necesidad.** Crear `uploads/.htaccess` con `php_flag engine off` y `Deny from all` para scripts. |
+| **SEC-04** | **Falta de Re-Validación de Cuotas en Backend** | 🟡 **MEDIA** | `guardar_cobranza.php` confía en los montos de facturas/cuotas enviados desde el cliente sin contrastar la suma contra la deuda oficial en `bd_automarco.tbl_cobranza`. | **Recomendado.** En backend recalcular el total sumando las cuotas seleccionadas y verificar que el saldo de la cuota no haya sido alterado en el cliente. |
+
+---
+
+### Estrategia de Mitigación Gradual:
+
+1. **Fase Inmediata (MVP / Local):**  
+   - Mantener `APP_ENV = 'local'` durante pruebas de usabilidad y feedback de UI/UX.
+   - Mantener la experiencia fluida en la App Eclipse (WebView recibe `vendedor_id` por parámetro URL).
+
+2. **Fase Pre-Producción (Go-Live):**  
+   - Unificar middleware en `config/auth.php` para resolver **SEC-02** (Sesión PHP + Bearer).
+   - Crear `uploads/.htaccess` para resolver **SEC-03**.
+   - Implementar validación de sesión/token en `api/get_clientes.php` (**SEC-01**).
+

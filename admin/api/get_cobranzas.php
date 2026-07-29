@@ -54,7 +54,7 @@ try {
     $sql = "SELECT 
                 c.id,
                 c.empresa_id,
-                e.nombre AS empresa_nombre,
+                COALESCE(e.nombre, 'Multi-Empresa') AS empresa_nombre,
                 c.numero_factura,
                 c.razon_social_cliente,
                 c.rut_cliente,
@@ -66,7 +66,7 @@ try {
                 c.created_at,
                 COALESCE(u.nombre, NULLIF(c.vendedor_nombre, ''), 'Vendedor no especificado (Registro del Sistema)') AS vendedor_nombre
             FROM cobranzas c
-            INNER JOIN empresas e ON c.empresa_id = e.id
+            LEFT JOIN empresas e ON c.empresa_id = e.id
             LEFT JOIN usuarios u ON c.vendedor_id = u.id
             WHERE 1=1";
 
@@ -74,6 +74,8 @@ try {
 
     if ($estado === 'BANDEJA_TRABAJO') {
         $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA')";
+    } elseif ($estado === 'EN_TRANSITO') {
+        $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO')";
     } elseif ($estado === 'ENVIADOS') {
         $sql .= " AND c.estado != 'PENDIENTE_ENVIO'";
     } elseif ($estado !== 'TODOS') {
@@ -82,16 +84,18 @@ try {
     }
 
     if ($empresa_id !== null) {
-        $sql .= " AND c.empresa_id = :empresa_id";
+        $sql .= " AND (c.empresa_id = :empresa_id OR EXISTS (SELECT 1 FROM cobranza_facturas cf WHERE cf.cobranza_id = c.id AND cf.empresa_id = :empresa_id_cf))";
         $params[':empresa_id'] = $empresa_id;
+        $params[':empresa_id_cf'] = $empresa_id;
     }
 
     if ($busqueda !== null) {
-        $sql .= " AND (c.numero_factura LIKE :b1 OR c.rut_cliente LIKE :b2 OR c.razon_social_cliente LIKE :b3 OR u.nombre LIKE :b4)";
+        $sql .= " AND (c.numero_factura LIKE :b1 OR c.rut_cliente LIKE :b2 OR c.razon_social_cliente LIKE :b3 OR u.nombre LIKE :b4 OR EXISTS (SELECT 1 FROM cobranza_facturas cf2 WHERE cf2.cobranza_id = c.id AND cf2.numero_factura LIKE :b5))";
         $params[':b1'] = '%' . $busqueda . '%';
         $params[':b2'] = '%' . $busqueda . '%';
         $params[':b3'] = '%' . $busqueda . '%';
         $params[':b4'] = '%' . $busqueda . '%';
+        $params[':b5'] = '%' . $busqueda . '%';
     }
 
     $sql .= " ORDER BY FIELD(c.estado, 'RECIBIDO_TESORERIA', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'DEPOSITADO', 'RECHAZADO', 'PENDIENTE_ENVIO'), c.created_at DESC";
@@ -109,10 +113,31 @@ try {
         exit;
     }
 
-    // 3. Traer los cheques anidados
+    // 3. Traer los cheques y las facturas asociadas
     $cobranzasIds = array_column($cobranzas, 'id');
     $placeholders = implode(',', array_fill(0, count($cobranzasIds), '?'));
 
+    // Facturas en cobranza_facturas
+    $stmtFacturas = $pdo->prepare("SELECT 
+                                    cobranza_id,
+                                    empresa_id,
+                                    codigo_empresa,
+                                    numero_factura,
+                                    total_cuota,
+                                    saldo_cuota,
+                                    monto_cubierto
+                                FROM cobranza_facturas
+                                WHERE cobranza_id IN ($placeholders)
+                                ORDER BY id ASC");
+    $stmtFacturas->execute($cobranzasIds);
+    $todasFacturas = $stmtFacturas->fetchAll(PDO::FETCH_ASSOC);
+
+    $facturasPorCobranza = [];
+    foreach ($todasFacturas as $f) {
+        $facturasPorCobranza[$f['cobranza_id']][] = $f;
+    }
+
+    // Cheques
     $stmtCheques = $pdo->prepare("SELECT 
                                     id,
                                     cobranza_id,
@@ -136,8 +161,9 @@ try {
         $chequesPorCobranza[$chk['cobranza_id']][] = $chk;
     }
 
-    // Inyectar cheques y totales acumulados
+    // Inyectar facturas, cheques y totales acumulados
     foreach ($cobranzas as &$cobranza) {
+        $cobranza['facturas'] = $facturasPorCobranza[$cobranza['id']] ?? [];
         $cobranza['cheques'] = $chequesPorCobranza[$cobranza['id']] ?? [];
         $totalMontoCheques = 0;
         foreach ($cobranza['cheques'] as $chq) {

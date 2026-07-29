@@ -73,13 +73,48 @@ document.addEventListener('DOMContentLoaded', () => {
     let montoFacturaActual = 0;
     let debounceTimer = null;
 
-    // Cargar vendedor_id desde la URL (para WebView de Android)
+    // Cargar parámetros desde la URL (para WebView de Android)
     const urlParams = new URLSearchParams(window.location.search);
     const vendedorIdParam = urlParams.get('vendedor_id') || urlParams.get('vendedor');
+    const empresaParam    = urlParams.get('empresa')     || urlParams.get('empresa_id');
     const vendedorIdInput = document.getElementById('vendedorIdInput');
     if (vendedorIdInput && vendedorIdParam) {
         vendedorIdInput.value = vendedorIdParam;
     }
+
+    // Guardia de acceso: sin vendedor_id no hay identidad — bloquear la app
+    if (!vendedorIdParam && !urlParams.get('vendedor_email') && !urlParams.get('email')) {
+        // Ocultar todo el contenido del formulario
+        const appWrapper = document.querySelector('.app-wrapper');
+        if (appWrapper) appWrapper.style.display = 'none';
+
+        // Mostrar pantalla de error bloqueante
+        const blocker = document.createElement('div');
+        blocker.style.cssText = `
+            position: fixed; inset: 0; z-index: 9999;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: #f8fafc; padding: 32px; text-align: center;
+        `;
+        blocker.innerHTML = `
+            <svg width="52" height="52" fill="none" viewBox="0 0 24 24" stroke="#dc2626" stroke-width="1.5" style="margin-bottom:16px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <h2 style="font-size:1.2rem; font-weight:700; color:#0f172a; margin:0 0 8px;">Acceso no autorizado</h2>
+            <p style="font-size:0.9rem; color:#64748b; max-width:320px; line-height:1.5; margin:0 0 20px;">
+                Este formulario debe abrirse desde la aplicación de vendedores.<br>
+                No se recibió una identificación de vendedor válida.
+            </p>
+            <code style="font-size:0.75rem; background:#fee2e2; color:#b91c1c; padding:6px 12px; border-radius:6px;">
+                Parámetro requerido: vendedor_id
+            </code>
+        `;
+        document.body.appendChild(blocker);
+
+        // Detener toda ejecución del script
+        return;
+    }
+
 
     // Variables globales para la edición de cheques
     let cobranzasPendientesGlobal = [];
@@ -385,7 +420,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // BÚSQUEDA REAL DE FACTURA EN API
     // ==========================================
     function limpiarInfoCliente() {
-        infoClienteBox.style.display = 'none';
+        if (infoClienteBox) infoClienteBox.style.display = 'none';
+        if (cardClienteSeleccionado) cardClienteSeleccionado.style.display = 'none';
+        const pickerWrapper = document.querySelector('.client-picker-wrapper');
+        if (pickerWrapper) pickerWrapper.style.display = 'block';
+        if (inputBuscarCliente) inputBuscarCliente.value = '';
+        if (btnClearSearchClient) btnClearSearchClient.style.display = 'none';
+
         if (errorClienteBox) errorClienteBox.style.display = 'none';
         montoFacturaActual = 0;
         if (lblMontoFacturaResumen) lblMontoFacturaResumen.textContent = '$0';
@@ -402,20 +443,26 @@ document.addEventListener('DOMContentLoaded', () => {
         lblNombreCliente.textContent = '-';
         lblRutCliente.textContent = '-';
         lblMontoFactura.textContent = '0';
+        if (lblMontoFacturaResumen) lblMontoFacturaResumen.textContent = '$0';
+        
+        const wrapperFacturas = document.getElementById('wrapperFacturasCliente');
+        if (wrapperFacturas) wrapperFacturas.style.display = 'none';
+        const contFacturas = document.getElementById('contenedorFacturasCliente');
+        if (contFacturas) contFacturas.innerHTML = '';
+        
+        montoFacturaActual = 0;
         calcularTotalCheques();
     }
 
     // Función para formatear RUT (ej: 12345678-9 -> 12.345.678-9)
     function formatRut(rutInput) {
         if (!rutInput) return '-';
-        // Limpiar todo excepto números y k/K
         let cleaned = rutInput.toString().replace(/[^0-9kK]/g, '');
         if (cleaned.length < 2) return rutInput;
 
         let rutStr = cleaned.slice(0, -1);
         let dv = cleaned.slice(-1).toUpperCase();
 
-        // Poner puntos a los miles
         let formatRut = '';
         while (rutStr.length > 3) {
             formatRut = '.' + rutStr.slice(-3) + formatRut;
@@ -425,89 +472,610 @@ document.addEventListener('DOMContentLoaded', () => {
         return formatRut;
     }
 
-    async function buscarFactura(empresaId, numeroFactura) {
+    // Array global para mantener clientes y facturas
+    let clientesCacheGlobal = [];
+    let facturasClienteSeleccionado = [];
+
+    const inputBuscarCliente = document.getElementById('inputBuscarCliente');
+    const btnClearSearchClient = document.getElementById('btnClearSearchClient');
+    const dropdownResultadosClientes = document.getElementById('dropdownResultadosClientes');
+    const cardClienteSeleccionado = document.getElementById('cardClienteSeleccionado');
+    const btnCambiarCliente = document.getElementById('btnCambiarCliente');
+
+    let estaCargandoClientes = false;
+
+    // Cargar la lista de clientes del vendedor
+    async function cargarClientesVendedor() {
+        const vId = (vendedorIdInput && vendedorIdInput.value) ? vendedorIdInput.value : '';
+        const vEmail = urlParams.get('vendedor_email') || urlParams.get('email');
+        const vEmpresa = urlParams.get('empresa') || urlParams.get('empresa_id');
+
+        let queryParams = [];
+        if (vId) queryParams.push(`vendedor_id=${encodeURIComponent(vId)}`);
+        if (vEmail) queryParams.push(`vendedor_email=${encodeURIComponent(vEmail)}`);
+        if (vEmpresa) queryParams.push(`empresa=${encodeURIComponent(vEmpresa)}`);
+
+        const url = 'api/get_clientes.php' + (queryParams.length > 0 ? '?' + queryParams.join('&') : '');
+
         try {
-            const response = await fetch(
-                `api/get_factura.php?empresa_id=${encodeURIComponent(empresaId)}&numero_factura=${encodeURIComponent(numeroFactura)}`
-            );
+            estaCargandoClientes = true;
+            if (inputBuscarCliente) inputBuscarCliente.placeholder = 'Cargando clientes de la cartera...';
+            const response = await fetch(url);
             const data = await response.json();
 
-            if (!response.ok || !data.success) {
-                limpiarInfoCliente();
-                if (errorClienteBox && data.message && data.message.includes('no encontrada')) {
-                    errorClienteBox.style.display = 'block';
-                } else if (data.message) {
-                    showToast(data.message, 'error');
-                }
+            if (!data.success || !data.data) {
+                if (inputBuscarCliente) inputBuscarCliente.placeholder = 'Error al cargar clientes';
+                showToast(data.message || 'Error al cargar cartera de clientes', 'error');
                 return;
             }
 
-            const factura = data.data;
-            montoFacturaActual = parseFloat(factura.monto_total_factura) || 0;
+            clientesCacheGlobal = data.data;
 
-            // Ocultar el recuadro de error si estaba visible
-            if (errorClienteBox) errorClienteBox.style.display = 'none';
-
-            lblNombreCliente.textContent = factura.razon_social || '-';
-            lblRutCliente.textContent = formatRut(factura.rut_cliente);
-            lblMontoFactura.textContent = montoFacturaActual.toLocaleString('es-CL');
-            if (lblMontoFacturaResumen) {
-                lblMontoFacturaResumen.textContent = '$' + montoFacturaActual.toLocaleString('es-CL');
+            const badgeVendedor = document.getElementById('lblHeaderNombreVendedor');
+            if (badgeVendedor && data.vendedor_nombre) {
+                badgeVendedor.textContent = `Vendedor: ${data.vendedor_nombre}`;
+                badgeVendedor.style.display = 'inline-block';
             }
 
-            rutClienteInput.value = factura.rut_cliente || '';
-            if (razonSocialClienteInput) razonSocialClienteInput.value = factura.razon_social || '';
-            if (montoTotalFacturaInput) montoTotalFacturaInput.value = montoFacturaActual;
-            emailClienteERP = factura.email_cliente || '';
-            if (chkEmailCliente && chkEmailCliente.checked) {
-                emailClienteInput.value = emailClienteERP;
-            } else {
-                emailClienteInput.value = '';
+            if (inputBuscarCliente) {
+                if (clientesCacheGlobal.length === 0) {
+                    inputBuscarCliente.placeholder = 'Sin clientes con deudas activas';
+                    inputBuscarCliente.disabled = true;
+                } else {
+                    inputBuscarCliente.placeholder = 'Escriba nombre o RUT del cliente...';
+                    inputBuscarCliente.disabled = false;
+                }
             }
 
-            infoClienteBox.style.display = 'flex';
-            calcularTotalCheques();
+            // Si el input tenía foco durante la carga, actualizar el dropdown inmediatamente
+            if (document.activeElement === inputBuscarCliente && clientesCacheGlobal.length > 0) {
+                renderDropdownResultados(inputBuscarCliente.value);
+            }
 
         } catch (err) {
-            limpiarInfoCliente();
-            showToast('Error de conexión al buscar factura.', 'error');
+            console.error(err);
+            if (inputBuscarCliente) inputBuscarCliente.placeholder = 'Error de conexión al cargar clientes';
+        } finally {
+            estaCargandoClientes = false;
         }
     }
 
-    numFacturaInput.addEventListener('input', (e) => {
-        const val = e.target.value.replace(/\D/g, '');
-        e.target.value = val;
+    // Filtrar y renderizar dropdown de clientes
+    function renderDropdownResultados(query = '') {
+        if (!dropdownResultadosClientes) return;
 
-        clearTimeout(debounceTimer);
-
-        if (val.length < 4) {
-            limpiarInfoCliente();
+        if (estaCargandoClientes && clientesCacheGlobal.length === 0) {
+            dropdownResultadosClientes.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--color-text-muted); font-size: 0.9rem;">Cargando clientes de la cartera...</div>';
+            dropdownResultadosClientes.style.display = 'block';
             return;
         }
 
-        const empresaId = empresaSelect ? empresaSelect.value : '';
-        if (!empresaId) {
-            showToast('Seleccione una empresa primero.', 'error');
-            return;
+        const cleanQ = query.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        const filtrados = clientesCacheGlobal.filter(c => {
+            if (!cleanQ) return true;
+            const normNombre = (c.razon_social || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const normRut = (c.rut_completo || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return normNombre.includes(cleanQ) || normRut.includes(cleanQ);
+        });
+
+        if (filtrados.length === 0) {
+            const cleanText = query.replace(/[&<>"']/g, '');
+            dropdownResultadosClientes.innerHTML = `
+                <div style="padding: 16px; text-align: center; color: var(--color-text-muted); font-size: 0.9rem;">
+                    No se encontraron clientes para "<strong>${cleanText}</strong>"
+                    <div style="margin-top: 8px; font-size: 0.8rem; color: #1e40af; background: #eff6ff; padding: 10px 12px; border-radius: 8px; border: 1px solid #bfdbfe; text-align: left;">
+                        💡 <strong>Sugerencia de Búsqueda:</strong><br>
+                        Este buscador filtra los <strong>Clientes</strong> (empresas o compradoras). Ingrese su Nombre o RUT (ej: <em>Herrera, Baleo, 77891200</em>).
+                    </div>
+                </div>
+            `;
+        } else {
+            dropdownResultadosClientes.innerHTML = filtrados.map((c, idx) => `
+                <div class="client-result-item" data-index="${idx}" tabindex="0">
+                    <div class="client-result-info">
+                        <span class="client-result-name">${c.razon_social}</span>
+                        <span class="client-result-meta">RUT: ${formatRut(c.rut_completo)} • ${c.total_facturas} documento(s) impago(s)</span>
+                    </div>
+                    <span class="client-result-deuda-badge">$${parseFloat(c.total_deuda).toLocaleString('es-CL')}</span>
+                </div>
+            `).join('');
+
+            // Eventos click en cada tarjeta de resultado
+            dropdownResultadosClientes.querySelectorAll('.client-result-item').forEach((itemEl, idx) => {
+                const clienteObj = filtrados[idx];
+                itemEl.addEventListener('click', () => {
+                    seleccionarClientePicker(clienteObj);
+                });
+            });
         }
 
-        debounceTimer = setTimeout(() => {
-            buscarFactura(empresaId, val);
-        }, 600);
-    });
+        dropdownResultadosClientes.style.display = 'block';
+    }
 
-    // Si cambia la empresa, limpiar la info del cliente y re-buscar si hay factura
-    if (empresaSelect) {
-        empresaSelect.addEventListener('change', () => {
-            const val = numFacturaInput.value.replace(/\D/g, '');
-            if (val.length >= 4) {
-                const empresaId = empresaSelect.value;
-                if (empresaId) buscarFactura(empresaId, val);
-            } else {
-                limpiarInfoCliente();
+    // Eventos del input de búsqueda
+    if (inputBuscarCliente) {
+        inputBuscarCliente.addEventListener('focus', () => {
+            renderDropdownResultados(inputBuscarCliente.value);
+        });
+
+        inputBuscarCliente.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (btnClearSearchClient) {
+                btnClearSearchClient.style.display = val ? 'block' : 'none';
             }
+            renderDropdownResultados(val);
         });
     }
+
+    if (btnClearSearchClient) {
+        btnClearSearchClient.addEventListener('click', () => {
+            if (inputBuscarCliente) {
+                inputBuscarCliente.value = '';
+                inputBuscarCliente.focus();
+            }
+            btnClearSearchClient.style.display = 'none';
+            renderDropdownResultados('');
+        });
+    }
+
+    // Ocultar dropdown al hacer click fuera
+    document.addEventListener('click', (e) => {
+        const wrapper = document.querySelector('.client-picker-wrapper');
+        if (wrapper && !wrapper.contains(e.target) && dropdownResultadosClientes) {
+            dropdownResultadosClientes.style.display = 'none';
+        }
+    });
+
+    // Acción al seleccionar un cliente
+    async function seleccionarClientePicker(clienteObj) {
+        if (!clienteObj) return;
+
+        emailClienteERP = clienteObj.email_cliente || '';
+
+        // Actualizar tarjeta de cliente activo
+        lblNombreCliente.textContent = clienteObj.razon_social || '-';
+        lblRutCliente.textContent = formatRut(clienteObj.rut_completo);
+        lblMontoFactura.textContent = '$0';  // Se llenará al seleccionar facturas
+
+        // Mostrar deuda total real del ERP (dato fijo del cliente)
+        const lblDeudaTotal = document.getElementById('lblDeudaTotalCliente');
+        if (lblDeudaTotal && clienteObj.total_deuda != null) {
+            lblDeudaTotal.textContent = '$' + parseFloat(clienteObj.total_deuda).toLocaleString('es-CL');
+        }
+        
+        rutClienteInput.value = clienteObj.rut_completo;
+        if (razonSocialClienteInput) razonSocialClienteInput.value = clienteObj.razon_social;
+
+        if (chkEmailCliente && chkEmailCliente.checked) {
+            emailClienteInput.value = emailClienteERP;
+        } else {
+            emailClienteInput.value = '';
+        }
+
+        // Ocultar buscador y mostrar tarjeta activa
+        const pickerWrapper = document.querySelector('.client-picker-wrapper');
+        if (pickerWrapper) pickerWrapper.style.display = 'none';
+        if (dropdownResultadosClientes) dropdownResultadosClientes.style.display = 'none';
+        if (cardClienteSeleccionado) cardClienteSeleccionado.style.display = 'flex';
+
+        if (errorClienteBox) errorClienteBox.style.display = 'none';
+
+        // Cargar facturas abiertas del cliente
+        const contFacturas = document.getElementById('contenedorFacturasCliente');
+        const wrapperFacturas = document.getElementById('wrapperFacturasCliente');
+        
+        if (contFacturas && wrapperFacturas) {
+            contFacturas.innerHTML = '<p style="text-align: center; color: var(--color-text-muted); font-size: 0.9rem;">Cargando facturas pendientes...</p>';
+            wrapperFacturas.style.display = 'block';
+
+            try {
+                const response = await fetch(`api/get_facturas_cliente.php?rut_cliente=${encodeURIComponent(clienteObj.clirut)}`);
+                const data = await response.json();
+
+                if (!data.success || !data.data || data.data.length === 0) {
+                    contFacturas.innerHTML = '<p style="text-align: center; color: var(--color-text-muted); padding: 12px;">Sin facturas impagas registradas para este cliente.</p>';
+                    facturasClienteSeleccionado = [];
+                    calcularTotalFacturasSeleccionadas();
+                    return;
+                }
+
+                facturasClienteSeleccionado = data.data;
+                renderFacturasCliente(data.data);
+
+            } catch (err) {
+                console.error(err);
+                contFacturas.innerHTML = '<p style="text-align: center; color: #b91c1c; padding: 12px;">Error al cargar las facturas impagas del cliente.</p>';
+            }
+        }
+    }
+
+    // Botón Cambiar Cliente
+    if (btnCambiarCliente) {
+        btnCambiarCliente.addEventListener('click', () => {
+            if (cardClienteSeleccionado) cardClienteSeleccionado.style.display = 'none';
+            const pickerWrapper = document.querySelector('.client-picker-wrapper');
+            if (pickerWrapper) pickerWrapper.style.display = 'block';
+            if (inputBuscarCliente) {
+                inputBuscarCliente.value = '';
+                inputBuscarCliente.focus();
+            }
+            if (btnClearSearchClient) btnClearSearchClient.style.display = 'none';
+            limpiarInfoCliente();
+        });
+    }
+
+    // Parsea fecha en formato DD-MM-YYYY que viene del ERP (Softland)
+    function parseFechaVto(str) {
+        if (!str) return null;
+        const p = str.split('-');
+        if (p.length !== 3) return null;
+        return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+    }
+
+    // Crea una fila de cuota individual
+    function crearFilaCuota(f, empCode, esSubCuota) {
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const vto = parseFechaVto(f.fecha_vencimiento);
+        const esVencida = vto && vto < hoy;
+
+        const row = document.createElement('div');
+        row.className = 'factura-row' + (esSubCuota ? ' factura-row--cuota' : '');
+        row.dataset.index = f._idx;
+
+        // En filas de sub-cuota no repetimos el número de doc, solo la cuota y monto
+        const numDocSpan = !esSubCuota
+            ? `<span class="factura-row-num">Doc. ${f.numero_factura}</span>`
+            : `<span class="factura-row-num" style="color:var(--color-text-muted);">Cuota ${f.cuota_label || '-'}</span>`;
+
+        row.innerHTML = `
+            <input type="checkbox" class="chk-factura-item" data-index="${f._idx}" data-empresa="${empCode}">
+            ${numDocSpan}
+            <span class="factura-row-vto${esVencida ? ' vencida' : ''}">Vto: ${f.fecha_vencimiento || '-'}</span>
+            <span class="factura-row-monto">$${parseFloat(f.saldo_cuota).toLocaleString('es-CL')}</span>
+        `;
+        return row;
+    }
+
+    function renderFacturasCliente(facturas) {
+        const contFacturas = document.getElementById('contenedorFacturasCliente');
+        if (!contFacturas) return;
+        contFacturas.innerHTML = '';
+
+        const EMPRESAS_ORDEN  = ['EMP01', 'EMP03', 'EMP06', 'EMP10'];
+        const EMPRESAS_NOMBRES = {
+            'EMP01': 'Automarco LTDA',
+            'EMP03': 'Autotec S.A',
+            'EMP06': 'HD Automarco',
+            'EMP10': 'Gabtec S.A'
+        };
+
+        // Nivel 1: agrupar por empresa
+        const grupos = {};
+        facturas.forEach((f, idx) => {
+            const emp = f.codigo_empresa || 'OTRO';
+            if (!grupos[emp]) grupos[emp] = [];
+            grupos[emp].push({ ...f, _idx: idx });
+        });
+
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+
+        const orden = EMPRESAS_ORDEN.filter(e => grupos[e])
+            .concat(Object.keys(grupos).filter(e => !EMPRESAS_ORDEN.includes(e)));
+
+        orden.forEach((empCode, grupoIdx) => {
+            const items  = grupos[empCode];
+            const nombre = EMPRESAS_NOMBRES[empCode] || empCode;
+            const totalGrupo = items.reduce((s, f) => s + (parseFloat(f.saldo_cuota) || 0), 0);
+
+            // Nivel 2: agrupar por numero_factura dentro de la empresa
+            const docsMap = {};
+            items.forEach(f => {
+                if (!docsMap[f.numero_factura]) docsMap[f.numero_factura] = [];
+                docsMap[f.numero_factura].push(f);
+            });
+            const numDocs   = Object.keys(docsMap).length;
+            const numCuotas = items.length;
+
+            // Resumen del header de empresa
+            const resumenLabel = numDocs === numCuotas
+                ? `${numDocs} doc.`
+                : `${numDocs} doc. · ${numCuotas} cuotas`;
+
+            // Vencidas a nivel empresa
+            const contVencidas = items.filter(f => {
+                const v = parseFechaVto(f.fecha_vencimiento);
+                return v && v < hoy;
+            }).length;
+
+            const grupoEl = document.createElement('div');
+            grupoEl.className = 'factura-grupo' + (grupoIdx === 0 ? ' abierto' : '');
+            grupoEl.dataset.empresa = empCode;
+
+            const chevronSVG = `<svg class="factura-grupo-toggle" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>`;
+            const alertaVencidas = contVencidas > 0
+                ? `<span style="color:#dc2626;font-size:0.72rem;font-weight:600;background:#fef2f2;padding:1px 6px;border-radius:8px;flex-shrink:0;">${contVencidas} vencida${contVencidas > 1 ? 's' : ''}</span>`
+                : '';
+
+            grupoEl.innerHTML = `
+                <div class="factura-grupo-header">
+                    <input type="checkbox" class="chk-grupo" data-empresa="${empCode}">
+                    <div class="factura-grupo-empresa">
+                        <span class="badge-empresa ${empCode}">${empCode.replace('EMP', '')}</span>
+                        <span class="factura-grupo-nombre">${nombre}</span>
+                        <span class="factura-grupo-resumen">${resumenLabel}</span>
+                        ${alertaVencidas}
+                    </div>
+                    <span class="factura-grupo-total">$${totalGrupo.toLocaleString('es-CL')}</span>
+                    ${chevronSVG}
+                </div>
+                <div class="factura-grupo-items"></div>
+            `;
+
+            const itemsContainer = grupoEl.querySelector('.factura-grupo-items');
+            const chkGrupo       = grupoEl.querySelector('.chk-grupo');
+            const headerEl       = grupoEl.querySelector('.factura-grupo-header');
+
+            // Ordenar documentos por vencimiento más próximo
+            const docOrder = Object.keys(docsMap).sort((a, b) => {
+                const va = docsMap[a][0].fecha_vencimiento || '';
+                const vb = docsMap[b][0].fecha_vencimiento || '';
+                return va.localeCompare(vb);
+            });
+
+            // Nivel 2: por documento
+            docOrder.forEach(docNum => {
+                const cuotas       = docsMap[docNum];
+                const isMultiCuota = cuotas.length > 1;
+                const docEl        = document.createElement('div');
+                docEl.className    = 'factura-doc';
+
+                if (isMultiCuota) {
+                    // --- Documento con múltiples cuotas ---
+                    const totalDoc = cuotas.reduce((s, c) => s + (parseFloat(c.saldo_cuota) || 0), 0);
+                    const docVencidas = cuotas.filter(c => {
+                        const v = parseFechaVto(c.fecha_vencimiento);
+                        return v && v < hoy;
+                    }).length;
+                    const vencidasBadge = docVencidas > 0
+                        ? `<span class="factura-doc-vencidas">${docVencidas} venc.</span>`
+                        : '';
+
+                    const docHeader = document.createElement('div');
+                    docHeader.className = 'factura-doc-header';
+                    docHeader.innerHTML = `
+                        <input type="checkbox" class="chk-doc">
+                        <span class="factura-doc-num">Doc. ${docNum}</span>
+                        <span class="factura-doc-cuotas-badge">${cuotas.length} cuotas</span>
+                        ${vencidasBadge}
+                        <span class="factura-doc-total">$${totalDoc.toLocaleString('es-CL')}</span>
+                    `;
+
+                    const cuotasContainer = document.createElement('div');
+                    cuotasContainer.className = 'factura-doc-cuotas';
+
+                    const chkDoc = docHeader.querySelector('.chk-doc');
+
+                    // Nivel 3: cuotas individuales
+                    cuotas.forEach(f => {
+                        const row = crearFilaCuota(f, empCode, true);
+                        const chk = row.querySelector('.chk-factura-item');
+                        row.addEventListener('click', (e) => {
+                            if (e.target !== chk) chk.checked = !chk.checked;
+                            row.classList.toggle('selected', chk.checked);
+                            sincronizarChkDoc(docEl, chkDoc);
+                            sincronizarChkGrupo(grupoEl, chkGrupo);
+                            calcularTotalFacturasSeleccionadas();
+                        });
+                        cuotasContainer.appendChild(row);
+                    });
+
+                    // Checkbox de documento: selecciona todas sus cuotas
+                    chkDoc.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        const checked = chkDoc.checked;
+                        cuotasContainer.querySelectorAll('.chk-factura-item').forEach(chk => {
+                            chk.checked = checked;
+                            chk.closest('.factura-row').classList.toggle('selected', checked);
+                        });
+                        chkDoc.indeterminate = false;
+                        sincronizarChkGrupo(grupoEl, chkGrupo);
+                        calcularTotalFacturasSeleccionadas();
+                    });
+
+                    docEl.appendChild(docHeader);
+                    docEl.appendChild(cuotasContainer);
+
+                } else {
+                    // --- Documento de pago único — fila directa ---
+                    const row = crearFilaCuota(cuotas[0], empCode, false);
+                    const chk = row.querySelector('.chk-factura-item');
+                    row.addEventListener('click', (e) => {
+                        if (e.target !== chk) chk.checked = !chk.checked;
+                        row.classList.toggle('selected', chk.checked);
+                        sincronizarChkGrupo(grupoEl, chkGrupo);
+                        calcularTotalFacturasSeleccionadas();
+                    });
+                    docEl.appendChild(row);
+                }
+
+                itemsContainer.appendChild(docEl);
+            });
+
+            // Toggle acordeon (click en header, no en checkbox)
+            headerEl.addEventListener('click', (e) => {
+                if (e.target === chkGrupo) return;
+                grupoEl.classList.toggle('abierto');
+            });
+
+            // Checkbox empresa: selecciona todo dentro del grupo
+            chkGrupo.addEventListener('change', (e) => {
+                e.stopPropagation();
+                const checked = chkGrupo.checked;
+                // Sync checkboxes de documento
+                itemsContainer.querySelectorAll('.chk-doc').forEach(chk => {
+                    chk.checked = checked;
+                    chk.indeterminate = false;
+                });
+                // Sync todas las cuotas
+                itemsContainer.querySelectorAll('.chk-factura-item').forEach(chk => {
+                    chk.checked = checked;
+                    chk.closest('.factura-row').classList.toggle('selected', checked);
+                });
+                if (checked) grupoEl.classList.add('abierto');
+                grupoEl.classList.toggle('grupo-activo', checked);
+                calcularTotalFacturasSeleccionadas();
+            });
+
+            contFacturas.appendChild(grupoEl);
+        });
+
+        calcularTotalFacturasSeleccionadas();
+    }
+
+    function sincronizarChkDoc(docEl, chkDoc) {
+        const chks        = docEl.querySelectorAll('.chk-factura-item');
+        const checkedCount = docEl.querySelectorAll('.chk-factura-item:checked').length;
+        chkDoc.checked     = checkedCount === chks.length && chks.length > 0;
+        chkDoc.indeterminate = checkedCount > 0 && checkedCount < chks.length;
+    }
+
+    function sincronizarChkGrupo(grupoEl, chkGrupo) {
+        const chks        = grupoEl.querySelectorAll('.chk-factura-item');
+        const checkedCount = grupoEl.querySelectorAll('.chk-factura-item:checked').length;
+        chkGrupo.checked   = checkedCount === chks.length && chks.length > 0;
+        chkGrupo.indeterminate = checkedCount > 0 && checkedCount < chks.length;
+        grupoEl.classList.toggle('grupo-activo', checkedCount > 0);
+    }
+
+    const chkSeleccionarTodas = document.getElementById('chkSeleccionarTodas');
+    if (chkSeleccionarTodas) {
+        chkSeleccionarTodas.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            // Sync todas las cuotas
+            document.querySelectorAll('.chk-factura-item').forEach(chk => {
+                chk.checked = isChecked;
+                const row = chk.closest('.factura-row');
+                if (row) row.classList.toggle('selected', isChecked);
+            });
+            // Sync checkboxes de documento
+            document.querySelectorAll('.chk-doc').forEach(chk => {
+                chk.checked = isChecked;
+                chk.indeterminate = false;
+            });
+            // Sync checkboxes de empresa
+            document.querySelectorAll('.factura-grupo').forEach(grupoEl => {
+                const chkGrupo = grupoEl.querySelector('.chk-grupo');
+                if (chkGrupo) { chkGrupo.checked = isChecked; chkGrupo.indeterminate = false; }
+                grupoEl.classList.toggle('grupo-activo', isChecked);
+                if (isChecked) grupoEl.classList.add('abierto');
+            });
+            calcularTotalFacturasSeleccionadas();
+        });
+    }
+
+
+    function calcularTotalFacturasSeleccionadas() {
+        const chks = document.querySelectorAll('.chk-factura-item:checked');
+        const totalDisponibles = facturasClienteSeleccionado.length;
+        let suma = 0;
+
+        chks.forEach(chk => {
+            const idx = parseInt(chk.dataset.index, 10);
+            if (facturasClienteSeleccionado[idx]) {
+                suma += parseFloat(facturasClienteSeleccionado[idx].saldo_cuota) || 0;
+            }
+        });
+
+        montoFacturaActual = suma;
+        if (lblMontoFactura) lblMontoFactura.textContent = '$' + suma.toLocaleString('es-CL');
+        if (lblMontoFacturaResumen) lblMontoFacturaResumen.textContent = '$' + suma.toLocaleString('es-CL');
+        if (montoTotalFacturaInput) montoTotalFacturaInput.value = suma;
+
+        // Actualizar contador visual
+        const lblContador = document.getElementById('lblContadorFacturas');
+        if (lblContador) {
+            lblContador.textContent = `${chks.length} de ${totalDisponibles} seleccionadas`;
+        }
+
+        // Sincronizar checkbox "Seleccionar Todas"
+        if (chkSeleccionarTodas) {
+            chkSeleccionarTodas.checked = (chks.length > 0 && chks.length === totalDisponibles);
+        }
+
+        actualizarBarraValidacionTiempoReal();
+    }
+
+    function obtenerTotalCheques() {
+        const hiddenInputs = document.querySelectorAll('.hidden-monto-cheque');
+        let total = 0;
+        hiddenInputs.forEach(input => {
+            total += parseFloat(input.value) || 0;
+        });
+        return total;
+    }
+
+    function calcularTotalCheques() {
+        const total = obtenerTotalCheques();
+        if (lblTotalCheques) lblTotalCheques.textContent = '$' + total.toLocaleString('es-CL');
+        actualizarBarraValidacionTiempoReal();
+    }
+
+    // ==========================================
+    // BARRA DE VALIDACIÓN EN TIEMPO REAL (STICKY FOOTER)
+    // ==========================================
+    function actualizarBarraValidacionTiempoReal() {
+        const totalCheques = obtenerTotalCheques();
+        const totalFacturas = montoFacturaActual;
+
+        const lblValFactura = document.getElementById('lblValMontoFactura');
+        const lblValCheques = document.getElementById('lblValMontoCheques');
+        const lblTextoStatus = document.getElementById('lblStatusValidacionTexto');
+        const indicatorBox = document.getElementById('indicatorStatusValidacion');
+        const btnSubmit = document.getElementById('btnSubmitForm');
+        const btnAgregarChequeEl = document.getElementById('btnAgregarCheque');
+
+        if (lblValFactura) lblValFactura.textContent = '$' + totalFacturas.toLocaleString('es-CL');
+        if (lblValCheques) lblValCheques.textContent = '$' + totalCheques.toLocaleString('es-CL');
+
+        if (!lblTextoStatus || !indicatorBox) return;
+
+        const diff = totalCheques - totalFacturas;
+
+        if (totalFacturas === 0) {
+            indicatorBox.innerHTML = '<span class="status-dot dot-neutral"></span><span id="lblStatusValidacionTexto">Seleccione la(s) factura(s) a pagar</span>';
+            if (btnSubmit) btnSubmit.disabled = true;
+        } else if (Math.abs(diff) < 0.01) {
+            // Calce perfecto (🟢)
+            indicatorBox.innerHTML = `<span class="status-dot dot-green"></span><span id="lblStatusValidacionTexto" style="color: #15803D;">🟢 Calce Perfecto: Montos Coinciden ($${totalCheques.toLocaleString('es-CL')})</span>`;
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+            }
+            if (btnAgregarChequeEl) btnAgregarChequeEl.style.boxShadow = 'none';
+        } else if (diff < 0) {
+            // Faltan fondos en cheques (🔴)
+            const faltante = Math.abs(diff);
+            indicatorBox.innerHTML = `<span class="status-dot dot-red"></span><span id="lblStatusValidacionTexto" style="color: #B91C1C;">🔴 Descalce: Monto faltante: $${faltante.toLocaleString('es-CL')}</span>`;
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+            }
+            // Destacar botón de agregar cheque (Ley de Von Restorff)
+            if (btnAgregarChequeEl) {
+                btnAgregarChequeEl.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.4)';
+            }
+        } else {
+            // Cheques superan el monto (🟡)
+            indicatorBox.innerHTML = `<span class="status-dot dot-yellow"></span><span id="lblStatusValidacionTexto" style="color: #B45309;">🟡 Exceso: $${diff.toLocaleString('es-CL')} por sobre la factura</span>`;
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+            }
+            if (btnAgregarChequeEl) btnAgregarChequeEl.style.boxShadow = 'none';
+        }
+    }
+
+    // Inicializar clientes al cargar
+    cargarClientesVendedor();
 
     // ==========================================
     // REGISTRO Y SUMA DINÁMICA DE CHEQUES
@@ -628,20 +1196,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    function obtenerTotalCheques() {
-        const hiddenInputs = document.querySelectorAll('.hidden-monto-cheque');
-        let total = 0;
-        hiddenInputs.forEach(input => {
-            total += parseFloat(input.value) || 0;
-        });
-        return total;
-    }
-
-    function calcularTotalCheques() {
-        const total = obtenerTotalCheques();
-        lblTotalCheques.textContent = '$' + total.toLocaleString('es-CL');
-    }
-
     agregarCheque();
     btnAgregarCheque.addEventListener('click', agregarCheque);
 
@@ -658,7 +1212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!rutClienteInput || !rutClienteInput.value) {
-            showToast('Debe ingresar un N° de Factura válido y esperar a que carguen los datos del cliente.', 'error');
+            showToast('Debe seleccionar un cliente y al menos una factura a pagar.', 'error');
             return;
         }
 
@@ -704,8 +1258,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
 
             // Campos de texto y ocultos
-            formData.set('empresa_id', empresaSelect.value);
-            formData.set('numero_factura', numFacturaInput.value);
+            const facturasSeleccionadasPayload = [];
+            const chksSel = document.querySelectorAll('.chk-factura-item:checked');
+            chksSel.forEach(chk => {
+                const idx = parseInt(chk.dataset.index, 10);
+                if (facturasClienteSeleccionado[idx]) {
+                    const itemF = facturasClienteSeleccionado[idx];
+                    facturasSeleccionadasPayload.push({
+                        empresa_id: itemF.empresa_id,
+                        codigo_empresa: itemF.codigo_empresa,
+                        numero_factura: itemF.numero_factura,
+                        total_cuota: itemF.total_cuota,
+                        saldo_cuota: itemF.saldo_cuota,
+                        monto_cubierto: itemF.saldo_cuota
+                    });
+                }
+            });
+
+            if (facturasSeleccionadasPayload.length === 0) {
+                showToast('Debe seleccionar al menos una factura a pagar.', 'error');
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Registrar Cobranza';
+                return;
+            }
+
+            formData.set('facturas', JSON.stringify(facturasSeleccionadasPayload));
             formData.set('rut_cliente', rutClienteInput.value);
             formData.set('razon_social_cliente', razonSocialClienteInput ? razonSocialClienteInput.value : '');
             formData.set('monto_total_factura', montoTotalFacturaInput ? montoTotalFacturaInput.value : '');
@@ -781,6 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
             contadorCheques = 0;
             agregarCheque();
             limpiarInfoCliente();
+            cargarClientesVendedor();
 
             // Cambiar automáticamente a la pestaña de seguimiento
             setTimeout(() => {
@@ -1320,11 +1898,20 @@ window.quitarImagen = function (idInput, idImg, idContainer) {
     const container = document.getElementById(idContainer);
     if (input) input.value = '';
     if (img) img.src = '';
-    if (container) container.style.display = 'none';
+    if (container) {
+        container.style.display = 'none';
+        const badge = container.querySelector('.photo-success-badge');
+        if (badge) badge.remove();
+    }
 
-    // Si hay un label asociado al input, volver a mostrarlo
     const label = document.querySelector(`label[for="${idInput}"]`);
-    if (label) label.style.display = 'inline-flex';
+    if (label) {
+        label.style.display = 'inline-flex';
+        label.innerHTML = `<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle; display: inline-block;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg><span>Tomar Foto Cheque</span>`;
+        label.style.backgroundColor = '#eff6ff';
+        label.style.borderColor = '#3b82f6';
+        label.style.color = '#1d4ed8';
+    }
 };
 
 window.configurarPreviewConBorrado = function (idInput, idImg, idContainer) {
@@ -1340,10 +1927,27 @@ window.configurarPreviewConBorrado = function (idInput, idImg, idContainer) {
                 reader.onload = (event) => {
                     img.src = event.target.result;
                     container.style.display = 'flex';
+                    container.style.flexDirection = 'column';
+                    container.style.alignItems = 'center';
+                    container.style.gap = '8px';
 
-                    // Ocultar el botón label para no duplicar UI
+                    // Mostrar indicador verde ✓ Foto Cargada Correctamente
+                    let statusBadge = container.querySelector('.photo-success-badge');
+                    if (!statusBadge) {
+                        statusBadge = document.createElement('div');
+                        statusBadge.className = 'photo-success-badge';
+                        statusBadge.innerHTML = '<span style="color:#166534; font-weight:700; font-size:0.85rem; display:inline-flex; align-items:center; gap:4px; background:#dcfce7; padding:4px 10px; border-radius:12px; border:1px solid #86efac;"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>Foto Cargada Correctamente</span>';
+                        container.insertBefore(statusBadge, container.firstChild);
+                    }
+
                     const label = document.querySelector(`label[for="${idInput}"]`);
-                    if (label) label.style.display = 'none';
+                    if (label) {
+                        label.style.display = 'inline-flex';
+                        label.innerHTML = `<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>Cambiar Foto`;
+                        label.style.backgroundColor = '#f8fafc';
+                        label.style.borderColor = '#cbd5e1';
+                        label.style.color = '#475569';
+                    }
                 };
                 reader.readAsDataURL(file);
             }

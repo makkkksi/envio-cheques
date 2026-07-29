@@ -22,6 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+if (!$id && isset($_GET['id'])) {
+    $id = (int)$_GET['id'];
+}
+
 if (!$id) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'ID de cobranza inválido']);
@@ -35,7 +39,7 @@ try {
     $stmt = $pdo->prepare("SELECT 
                 c.id,
                 c.empresa_id,
-                e.nombre AS empresa_nombre,
+                COALESCE(e.nombre, 'Multi-Empresa') AS empresa_nombre,
                 c.numero_factura,
                 c.razon_social_cliente,
                 c.rut_cliente,
@@ -49,7 +53,7 @@ try {
                 c.created_at,
                 COALESCE(u.nombre, NULLIF(c.vendedor_nombre, ''), 'Vendedor no especificado (Registro del Sistema)') AS vendedor_nombre
             FROM cobranzas c
-            INNER JOIN empresas e ON c.empresa_id = e.id
+            LEFT JOIN empresas e ON c.empresa_id = e.id
             LEFT JOIN usuarios u ON c.vendedor_id = u.id
             WHERE c.id = :id");
     $stmt->execute([':id' => $id]);
@@ -61,7 +65,23 @@ try {
         exit;
     }
 
-    // 2. Obtener cheques
+    // 2. Obtener facturas desglosadas (cobranza_facturas)
+    $stmtFacturas = $pdo->prepare("SELECT 
+                                    id,
+                                    empresa_id,
+                                    codigo_empresa,
+                                    numero_factura,
+                                    total_cuota,
+                                    saldo_cuota,
+                                    monto_cubierto,
+                                    created_at
+                                FROM cobranza_facturas 
+                                WHERE cobranza_id = :id
+                                ORDER BY id ASC");
+    $stmtFacturas->execute([':id' => $id]);
+    $facturas = $stmtFacturas->fetchAll(PDO::FETCH_ASSOC);
+
+    // 3. Obtener cheques
     $stmtCheques = $pdo->prepare("SELECT 
                                     id,
                                     banco,
@@ -78,7 +98,7 @@ try {
     $stmtCheques->execute([':id' => $id]);
     $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. Obtener historial de auditoría
+    // 4. Obtener historial de auditoría
     $stmtHistorial = $pdo->prepare("SELECT 
                                         h.id,
                                         h.estado_anterior,
@@ -105,6 +125,7 @@ try {
         'success' => true,
         'data' => [
             'cobranza' => $cobranza,
+            'facturas' => $facturas,
             'cheques' => $cheques,
             'historial' => $historial
         ]

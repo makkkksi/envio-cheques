@@ -39,7 +39,7 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
     }
 
     $tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'];
-    $mime = mime_content_type($fileData['tmp_name']);
+    $mime = function_exists('mime_content_type') ? mime_content_type($fileData['tmp_name']) : ($fileData['type'] ?? 'image/jpeg');
     if (!in_array($mime, $tiposPermitidos, true)) {
         throw new InvalidArgumentException("Tipo de archivo no permitido en {$subcarpeta}: {$mime}");
     }
@@ -63,7 +63,11 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
     }
 
     $rutaAbsolutaCompleta = $dirAbsoluto . '/' . $nombreGuardado;
-    if (!move_uploaded_file($fileData['tmp_name'], $rutaAbsolutaCompleta)) {
+    $moved = is_uploaded_file($fileData['tmp_name']) 
+        ? move_uploaded_file($fileData['tmp_name'], $rutaAbsolutaCompleta)
+        : @copy($fileData['tmp_name'], $rutaAbsolutaCompleta);
+
+    if (!$moved) {
         throw new RuntimeException("No se pudo mover el archivo subido");
     }
 
@@ -73,7 +77,7 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
 // 5. Captura y validación de entradas de cabecera
 $errors = [];
 
-$empresa_id = filter_input(INPUT_POST, 'empresa_id', FILTER_VALIDATE_INT);
+$empresa_id = filter_input(INPUT_POST, 'empresa_id', FILTER_VALIDATE_INT) ?: null;
 $numero_factura = trim($_POST['numero_factura'] ?? '');
 $rut_cliente = trim($_POST['rut_cliente'] ?? '');
 $razon_social_cliente = trim($_POST['razon_social_cliente'] ?? '');
@@ -81,11 +85,20 @@ $monto_total_factura = filter_input(INPUT_POST, 'monto_total_factura', FILTER_VA
 $email_cliente = trim($_POST['email_cliente'] ?? '');
 $email_tesoreria = trim($_POST['email_tesoreria'] ?? '');
 
-if (!$empresa_id) $errors[] = 'empresa_id es requerido y debe ser entero';
-if (empty($numero_factura)) $errors[] = 'numero_factura es requerido';
+// Captura de facturas múltiples (si vienen en el payload JSON o Form)
+$facturasInput = $_POST['facturas'] ?? null;
+$facturasLista = [];
+
+if ($facturasInput) {
+    if (is_string($facturasInput)) {
+        $facturasLista = json_decode($facturasInput, true) ?: [];
+    } elseif (is_array($facturasInput)) {
+        $facturasLista = $facturasInput;
+    }
+}
+
 if (empty($rut_cliente)) $errors[] = 'rut_cliente es requerido';
 if (empty($razon_social_cliente)) $errors[] = 'razon_social_cliente es requerida';
-if (empty($email_tesoreria)) $errors[] = 'email_tesoreria es requerido';
 
 // Validar arreglos de cheques
 $bancos = $_POST['banco'] ?? [];
@@ -111,17 +124,6 @@ if (!empty($errors)) {
 $archivosFisicosSubidos = [];
 try {
     $pdo = Database::getCobranzasConnection();
-
-    // Validar existencia de la empresa
-    $stmtEmp = $pdo->prepare('SELECT nombre FROM empresas WHERE id = :id');
-    $stmtEmp->execute([':id' => $empresa_id]);
-    $empresaRow = $stmtEmp->fetch();
-    if (!$empresaRow) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'La empresa especificada no existe']);
-        exit;
-    }
-    $empresa_nombre = $empresaRow['nombre'];
 
     // Procesar fotos de cheques individuales
     $chequesParaInsertar = [];
@@ -158,7 +160,8 @@ try {
             'size' => $fotos_cheque['size'][$i],
         ];
 
-        $fotoChequeUrl = procesarSubidaArchivo($fileDataIndiv, $empresa_id, 'cheques');
+        $subfolderEmpresa = $empresa_id ?: 1;
+        $fotoChequeUrl = procesarSubidaArchivo($fileDataIndiv, $subfolderEmpresa, 'cheques');
         $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $fotoChequeUrl);
 
         $chequesParaInsertar[] = [
@@ -176,7 +179,7 @@ try {
 
     // Obtener e identificar el vendedor
     $vendedor_id_post = filter_input(INPUT_POST, 'vendedor_id', FILTER_VALIDATE_INT);
-    $vendedor_id = $vendedor_id_post ?: ((APP_ENV === 'local') ? 2 : $usuario_id); // En local, usar 2 (Vendedor de Prueba) por defecto
+    $vendedor_id = $vendedor_id_post ?: ((APP_ENV === 'local') ? 2 : $usuario_id);
 
     $vendedor_nombre = 'Sin Asignar';
     if ($vendedor_id) {
@@ -186,6 +189,30 @@ try {
         if ($usrRow) {
             $vendedor_nombre = $usrRow['nombre'];
         }
+    }
+
+    // Normalizar lista de facturas a insertar
+    if (empty($facturasLista) && $numero_factura !== '') {
+        $facturasLista[] = [
+            'empresa_id' => $empresa_id ?: 1,
+            'codigo_empresa' => 'EMP01',
+            'numero_factura' => $numero_factura,
+            'total_cuota' => $monto_total_factura ?: 0,
+            'saldo_cuota' => $monto_total_factura ?: 0,
+            'monto_cubierto' => $monto_total_factura ?: 0
+        ];
+    }
+
+    // Si viene lista de facturas, derivar empresa_id y numero_factura primario y recalcular el total en servidor
+    if (!empty($facturasLista)) {
+        $primeraFactura = $facturasLista[0];
+        $empresa_id = $empresa_id ?: ($primeraFactura['empresa_id'] ?? 1);
+        $numero_factura = $numero_factura ?: ($primeraFactura['numero_factura'] ?? '');
+        
+        // Recalcular el total siempre en el servidor desde la suma de cuotas seleccionadas
+        $monto_total_factura = array_reduce($facturasLista, function($sum, $item) {
+            return $sum + (float)($item['monto_cubierto'] ?? $item['saldo_cuota'] ?? 0);
+        }, 0.0);
     }
 
     // Iniciar transacción SQL
@@ -211,11 +238,30 @@ try {
         ':razon_social_cliente' => $razon_social_cliente,
         ':monto_total_factura' => $monto_total_factura ?: null,
         ':email_cliente' => $email_cliente !== '' ? $email_cliente : null,
-        ':email_tesoreria' => $email_tesoreria,
+        ':email_tesoreria' => $email_tesoreria !== '' ? $email_tesoreria : 'tesoreria@automarco.cl',
         ':estado' => $estadoInicial
     ]);
 
     $cobranza_id = (int) $pdo->lastInsertId();
+
+    // 2. Insertar facturas asociadas en cobranza_facturas
+    $stmtFacturaPivot = $pdo->prepare('INSERT INTO cobranza_facturas (
+        cobranza_id, empresa_id, codigo_empresa, numero_factura, total_cuota, saldo_cuota, monto_cubierto
+    ) VALUES (
+        :cobranza_id, :empresa_id, :codigo_empresa, :numero_factura, :total_cuota, :saldo_cuota, :monto_cubierto
+    )');
+
+    foreach ($facturasLista as $fItem) {
+        $stmtFacturaPivot->execute([
+            ':cobranza_id' => $cobranza_id,
+            ':empresa_id' => $fItem['empresa_id'] ?? 1,
+            ':codigo_empresa' => $fItem['codigo_empresa'] ?? 'EMP01',
+            ':numero_factura' => $fItem['numero_factura'],
+            ':total_cuota' => $fItem['total_cuota'] ?? 0,
+            ':saldo_cuota' => $fItem['saldo_cuota'] ?? 0,
+            ':monto_cubierto' => $fItem['monto_cubierto'] ?? $fItem['saldo_cuota'] ?? 0
+        ]);
+    }
 
     // 2. Insertar cheques
     $stmtCheque = $pdo->prepare('INSERT INTO cheques (

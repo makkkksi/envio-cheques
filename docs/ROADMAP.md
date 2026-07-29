@@ -10,10 +10,9 @@
 
 ```
 Fase 1 ██████████ 100% — Backend base + flujo dividido + DDL alineado
-Fase 2 ██████████ 100% — Portal Tesorería con Hardening
-Fase 3 ██████████ 100% — Correo SMTP host / Mailtrap
-Fase 4 ░░░░░░░░░░   0% — Cron alertas
-Fase 5 ░░░░░░░░░░   0% — Auth Android integrada
+Fase 2 ██████████ 100% — Portal Tesorería con Hardening & Desglose Multi-Factura
+Fase 4 ░░░░░░░░░░   0% — Cron alertas por días transcurridos
+Fase 5 ██████████ 100% — WebView App Eclipse, Smart Client Picker & Multi-Factura Cross-Empresa
 ```
 
 ---
@@ -98,7 +97,6 @@ Fase 5 ░░░░░░░░░░   0% — Auth Android integrada
 
 **Objetivo:** Implementar un proceso automático que detecte cobranzas en tránsito demoradas y envíe alertas por correo.
 
-
 **Entregables:**
 
 | Archivo | Descripción |
@@ -126,20 +124,57 @@ Fase 5 ░░░░░░░░░░   0% — Auth Android integrada
 
 ---
 
-## Fase 5 — Integración de Autenticación con App Android
+## Fase 5 — WebView App Eclipse & Rediseño Cliente/Multi-Factura
 
-**Objetivo:** Activar el middleware de autenticación real para que los tokens de la app Android se validen correctamente.
+**Objetivo:** Adaptar el portal móvil de cobranza para integrarse mediante un WebView dentro de la App Android legada (Eclipse) del holding y migrar del registro manual de facturas a un flujo de selección guiado por cartera de clientes y multi-facturas.
+
+### Flujo del Usuario (Vendedor) en la App:
+
+```
+┌────────────────────────┐
+│  1. Lee vendedor_id    │ ◄─── (Parámetro GET desde WebView de Android legada)
+└───────────┬────────────┘
+            ▼
+┌────────────────────────┐
+│  2. Selector Cliente   │ ◄─── (Carga cartera filtrando vendedor en tbl_cobranza)
+└───────────┬────────────┘
+            ▼
+┌────────────────────────┐
+│ 3. Checkbox Facturas   │ ◄─── (Lista facturas impagas del cliente cross-empresa)
+└───────────┬────────────┘
+            ▼
+┌────────────────────────┐
+│  4. Ingreso Cheque(s)  │ ◄─── (Ingresa cheques, fotos y envía cobranza)
+└────────────────────────┘
+```
 
 **Entregables:**
 
 | Tarea | Descripción |
 |-------|-------------|
-| Cambiar `APP_ENV = 'production'` | Activa validación JWT en todos los endpoints |
-| Coordinación con equipo Android | Definir cómo la app Android obtiene y envía el token |
-| Crear usuarios vendedores en BD | INSERT en tabla `usuarios` con roles correctos |
-| Probar flujo completo | Login → token → guardar cobranza → historial |
+| Endpoint `api/get_clientes.php` | Retorna los RUTs y nombres de clientes asociados al `vendedor_id` que tienen deuda activa. |
+| Endpoint `api/get_facturas.php` | Retorna todas las facturas abiertas del RUT cliente consultadas en `bd_automarco.tbl_cobranza` indicando empresa de origen. |
+| Tabla `cobranza_facturas` (BD central) | Tabla pivot para relacionar N:M una cobranza con múltiples facturas cubiertas de distintas empresas. |
+| Refactorización de `api/guardar_cobranza.php` | Inserta cabecera y desglose de facturas canceladas en `cobranza_facturas`. |
+| Rediseño de interfaz `index.html` | Cambiar ingreso manual de Folio/Empresa por dropdown de Clientes y grilla interactiva de selección de Facturas. |
 
-**Dependencias:** Fases 1, 2 y 3 completadas. Coordinación con el equipo de la app Android existente.
+**Dependencias:** Fases 1, 2 y 3 completadas. Conexión de lectura a la base consolidada `bd_automarco` habilitada.
+
+---
+
+## Fase 6 — Hardening de Seguridad & Preparación Go-Live
+
+**Objetivo:** Eliminar las brechas de seguridad identificadas en el análisis previo a producción, unificar esquemas de autenticación y proteger la integridad del flujo de datos en coexistencia con la App Android (Eclipse) legada.
+
+**Entregables:**
+
+| Tarea | ID Ref | Prioridad | Descripción |
+|---|---|---|---|
+| Unificación Auth Admin | SEC-02 | 🔴 Alta (Bloqueante) | Adaptar `config/auth.php` y APIs de `/admin/api/` para aceptar Sesiones de PHP (`$_SESSION`) o Bearer Tokens indistintamente en producción. |
+| Firma / Validación Identity | SEC-01 | 🔴 Alta | Validar origen de peticiones `vendedor_id` para evitar consultas/envíos no autorizados de carteras ajenas. |
+| Protección `uploads/` | SEC-03 | 🟡 Media-Alta | Crear `uploads/.htaccess` impidiendo ejecución de scripts (`php_flag engine off`). |
+| Re-Validación Backend de Cuotas | SEC-04 | 🟡 Media | Verificar en `guardar_cobranza.php` que los saldos y cuotas coincidan exactamente con la deuda viva en `bd_automarco.tbl_cobranza`. |
+| Cierre de Entorno | ENV-01 | 🔴 Alta | Cambiar `APP_ENV` de `'local'` a `'production'`, eliminar usuarios bypass y forzar HTTPS. |
 
 ---
 
@@ -154,27 +189,4 @@ Estas funcionalidades fueron identificadas pero excluidas del alcance actual:
 | App Android nativa de fotografía | Ya se usa `capture="environment"` en WebView |
 | Firma digital electrónica | Complejidad legal (Ley 19.799 Chile) |
 | Integración bancaria para depósitos | Fuera del alcance, se hace manualmente |
-| **Cartera de clientes por vendedor** | Ver nota técnica abajo |
 
----
-
-## Nota Técnica: Cartera de Clientes por Vendedor
-
-**Idea propuesta por jefatura:** En vez de que el vendedor deba digitar el N° de factura manualmente, la app mostraría directamente su cartera de clientes asignados con sus facturas pendientes de cobro.
-
-**¿Por qué no se puede implementar ahora?**
-
-Las bases de datos ERP disponibles (`tbl_ventas_devoluciones` y `tbl_clientes`) **no contienen información de qué vendedor tiene asignado cada cliente**. Esa relación (vendedor ↔ cartera de clientes) existe en la aplicación interna del holding, pero actualmente no se tiene acceso de lectura a esa tabla.
-
-**Bloqueante técnico:**
-
-| Qué falta | Dónde está | Acción requerida |
-|-----------|------------|------------------|
-| Tabla o campo que vincule `usuario_vendedor` con `cliente_rut` | App interna del holding (sin acceso aún) | Solicitar acceso de lectura a esa tabla o que TI exporte la relación |
-
-**Propuesta de implementación futura (cuando se tenga acceso):**
-1. Agregar tabla `cartera_vendedor` en `bd_modulo_cobranzas` con columnas `usuario_id`, `cliente_rut`, `empresa_id`.
-2. Endpoint `api/get_mi_cartera.php` que devuelva las facturas pendientes del ERP filtradas por los clientes de la cartera del vendedor autenticado.
-3. Reemplazar el input manual de N° Factura por un selector dinámico: **Empresa → Cliente → Factura**.
-
-**Estado:** ⏸ Bloqueado — pendiente acceso a tabla de asignaciones de la app interna.

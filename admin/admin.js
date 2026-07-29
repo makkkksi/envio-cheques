@@ -279,6 +279,7 @@ function initSplitView() {
     const inputBuscar = document.getElementById('inputBuscarAdmin');
     const selectEmpresa = document.getElementById('selectEmpresaAdmin');
     const selectOrden = document.getElementById('selectOrdenAdmin');
+    const selectFiltroBandeja = document.getElementById('selectFiltroBandeja');
 
     // Eventos Pestañas Segmentadas
     segmentedTabs.forEach(tab => {
@@ -286,6 +287,15 @@ function initSplitView() {
             segmentedTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             estadoActualFilter = tab.dataset.estado;
+
+            if (selectFiltroBandeja) {
+                if (estadoActualFilter === 'BANDEJA_TRABAJO') {
+                    selectFiltroBandeja.style.display = 'inline-block';
+                } else {
+                    selectFiltroBandeja.style.display = 'none';
+                }
+            }
+
             cargarCobranzas();
         });
     });
@@ -294,10 +304,19 @@ function initSplitView() {
     if (inputBuscar) inputBuscar.addEventListener('input', debounce(cargarCobranzas, 300));
     if (selectEmpresa) selectEmpresa.addEventListener('change', cargarCobranzas);
     if (selectOrden) selectOrden.addEventListener('change', aplicarOrdenamientoYRenderizar);
+    if (selectFiltroBandeja) selectFiltroBandeja.addEventListener('change', cargarCobranzas);
 
     const activeTab = document.querySelector('#segmentedTabs .segmented-tab.active');
     if (activeTab && activeTab.dataset.estado) {
         estadoActualFilter = activeTab.dataset.estado;
+    }
+
+    if (selectFiltroBandeja) {
+        if (estadoActualFilter === 'BANDEJA_TRABAJO') {
+            selectFiltroBandeja.style.display = 'inline-block';
+        } else {
+            selectFiltroBandeja.style.display = 'none';
+        }
     }
 
     cargarCobranzas();
@@ -309,9 +328,20 @@ function initSplitView() {
 function cargarCobranzas() {
     const inputBuscar = document.getElementById('inputBuscarAdmin');
     const selectEmpresa = document.getElementById('selectEmpresaAdmin');
+    const selectFiltroBandeja = document.getElementById('selectFiltroBandeja');
 
     const params = new URLSearchParams();
-    if (estadoActualFilter) params.append('estado', estadoActualFilter);
+    
+    if (estadoActualFilter === 'BANDEJA_TRABAJO') {
+        if (selectFiltroBandeja && selectFiltroBandeja.value !== 'TODOS_BANDEJA') {
+            params.append('estado', selectFiltroBandeja.value);
+        } else {
+            params.append('estado', 'BANDEJA_TRABAJO');
+        }
+    } else if (estadoActualFilter) {
+        params.append('estado', estadoActualFilter);
+    }
+    
     if (inputBuscar && inputBuscar.value.trim()) params.append('busqueda', inputBuscar.value.trim());
     if (selectEmpresa && selectEmpresa.value) params.append('empresa_id', selectEmpresa.value);
 
@@ -340,9 +370,6 @@ function setElText(id, val) {
 function actualizarTabCounters(metrics) {
     if (!metrics) return;
     setElText('cntBandeja', metrics.bandeja_trabajo || 0);
-    setElText('cntEnviados', (metrics.en_transito || 0) + (metrics.recibidos || 0) + (metrics.depositados || 0) + (metrics.rechazados || 0));
-    setElText('cntTransito', metrics.en_transito || 0);
-    setElText('cntRecibidos', metrics.recibidos || 0);
     setElText('cntDepositados', metrics.depositados || 0);
     setElText('cntRechazados', metrics.rechazados || 0);
     setElText('cntPendientes', metrics.pendientes_envio || 0);
@@ -367,6 +394,25 @@ function aplicarOrdenamientoYRenderizar() {
     renderMasterTable(lista);
 }
 
+function formatRelativeTime(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString.replace(/-/g, '/'));
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Ahora';
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    if (diffHours < 24) return `Hace ${diffHours} h`;
+    if (diffDays === 1) return 'Ayer';
+    if (diffDays < 7) return `Hace ${diffDays} d`;
+    
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return `${date.getDate()} ${months[date.getMonth()]}`;
+}
+
 function renderMasterTable(cobranzas) {
     const tbody = document.getElementById('masterTableBody');
     if (!tbody) return;
@@ -374,7 +420,7 @@ function renderMasterTable(cobranzas) {
     if (!cobranzas || cobranzas.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 40px 16px; color: var(--color-text-muted);">
+                <td colspan="6" style="text-align: center; padding: 40px 16px; color: var(--color-text-muted);">
                     No se encontraron cobranzas registradas para los filtros seleccionados.
                 </td>
             </tr>
@@ -399,9 +445,15 @@ function renderMasterTable(cobranzas) {
             ? `<span class="seller-badge-muted">Sin Asignar (Registro Auto)</span>` 
             : `<span style="font-weight: 600; color: var(--color-text);">${vendedorRaw}</span>`;
 
+        let empresaDisplay = item.empresa_nombre || '-';
+        if (item.facturas && item.facturas.length > 0) {
+            const codigosUnicos = [...new Set(item.facturas.map(f => f.codigo_empresa))];
+            empresaDisplay = codigosUnicos.map(cod => `<span class="badge-empresa ${cod}" style="font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600; margin-right:4px;">${cod}</span>`).join('');
+        }
+
         return `
             <tr class="${isSelected ? 'active-row' : ''}" onclick="seleccionarCobranza(${item.id})">
-                <td style="font-weight: 600;">${item.empresa_nombre || '-'}</td>
+                <td style="font-weight: 600;">${empresaDisplay}</td>
                 <td>${vendedorDisplay}</td>
                 <td>
                     <div style="font-weight: 600; color: var(--color-text);">${item.razon_social_cliente || '-'}</div>
@@ -412,16 +464,12 @@ function renderMasterTable(cobranzas) {
                     ${tieneDiscrepancia ? `<span class="badge-mismatch">⚠️ Dif: ${difText}</span>` : ''}
                 </td>
                 <td><span class="badge ${estConfig.class}">${estConfig.label}</span></td>
+                <td style="color: var(--color-text-secondary); white-space: nowrap; font-weight: 500;">${formatRelativeTime(item.created_at)}</td>
             </tr>
         `;
     }).join('');
 
-    // Auto-seleccionar primer elemento si no hay selección activa
-    if (cobranzas && cobranzas.length > 0) {
-        if (!cobranzaSeleccionadaId || !cobranzas.some(c => c.id == cobranzaSeleccionadaId)) {
-            seleccionarCobranza(cobranzas[0].id);
-        }
-    }
+
 }
 
 // ==========================================
@@ -465,15 +513,64 @@ function deseleccionarCobranza() {
 
 function renderSidePanelDetail(data) {
     const cob = data.cobranza;
+    const facturas = data.facturas || [];
     const cheques = data.cheques || [];
     const historial = data.historial || [];
 
     // Header
-    document.getElementById('lblPanelFacturaTitle').textContent = `Factura N° ${cob.numero_factura}`;
+    const titleText = facturas.length > 1 ? `Cobranza Multi-Factura (${facturas.length} docs)` : `Factura N° ${cob.numero_factura || '-'}`;
+    document.getElementById('lblPanelFacturaTitle').textContent = titleText;
     const estConfig = ESTADOS_MAP[cob.estado] || { label: cob.estado, class: '' };
     const badgeEl = document.getElementById('lblPanelEstadoBadge');
     badgeEl.innerHTML = estConfig.label;
     badgeEl.className = `badge ${estConfig.class}`;
+
+    // Renderizar Sección Facturas Cubiertas
+    const secFacturas = document.getElementById('sectionPanelFacturas');
+    const listFacturas = document.getElementById('listPanelFacturas');
+    
+    if (secFacturas && listFacturas) {
+        if (facturas.length > 0) {
+            secFacturas.style.display = 'block';
+            
+            const totalFacturasSuma = facturas.reduce((sum, f) => sum + parseFloat(f.monto_cubierto || f.saldo_cuota || 0), 0);
+            const totalFacturasFmt = totalFacturasSuma.toLocaleString('es-CL');
+            const facturasString = facturas.map(f => `${f.codigo_empresa} Factura #${f.numero_factura}`).join(', ');
+
+            let htmlFacturas = facturas.map(f => {
+                const montoCubiertoNum = parseFloat(f.monto_cubierto || f.saldo_cuota || 0);
+                const saldoCuotaNum = parseFloat(f.saldo_cuota || 0);
+                const tieneDescuento = (saldoCuotaNum > 0 && Math.abs(montoCubiertoNum - saldoCuotaNum) > 0.01);
+                
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px 14px; border-radius: 8px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span class="badge-empresa ${f.codigo_empresa}" style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${f.codigo_empresa}</span>
+                                <strong style="font-size: 0.9rem; color: #0F172A;">Factura N° ${f.numero_factura}</strong>
+                            </div>
+                            ${tieneDescuento ? `<div style="font-size: 0.75rem; color: #64748B; margin-top: 2px;">Saldo ERP: $${saldoCuotaNum.toLocaleString('es-CL')}</div>` : ''}
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 0.92rem; font-weight: 700; color: #1E3A8A;">$${montoCubiertoNum.toLocaleString('es-CL')}</span>
+                            <span style="display: block; font-size: 0.7rem; color: #166534; font-weight: 600;">Cubierto</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            htmlFacturas += `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #EFF6FF; border: 1px solid #BFDBFE; padding: 10px 14px; border-radius: 8px; margin-top: 4px;">
+                    <span style="font-size: 0.82rem; font-weight: 600; color: #1E40AF;">Total Facturas (${facturas.length})</span>
+                    <strong style="font-size: 0.95rem; font-weight: 800; color: #1E3A8A;">$${totalFacturasFmt}</strong>
+                </div>
+            `;
+
+            listFacturas.innerHTML = htmlFacturas;
+        } else {
+            secFacturas.style.display = 'none';
+        }
+    }
 
     // Sección 1: Resumen Factura / Cliente & ALERTA POR DISCREPANCIA (VON RESTORFF)
     const montoFacturaVal = parseFloat(cob.monto_total_factura || 0);

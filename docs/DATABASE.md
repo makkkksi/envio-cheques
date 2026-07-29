@@ -194,30 +194,70 @@ CREATE TABLE historial_estados (
 
 ---
 
+---
+
 ## 2. Bases de Datos ERP (Solo Lectura)
 
-Cuatro BDs independientes con estructura idéntica de tablas. El módulo solo las lee.
+Cuatro bases de datos independientes con estructuras idénticas correspondientes a las empresas del holding.
 
-### 2.1 Tabla: `tbl_clientes`
+### 2.1 Tabla: `tbl_clientes` (Catálogo de Clientes por Empresa)
 
-| Campo | Descripción |
-|-------|-------------|
-| `cli_rut` | RUT del cliente (PK natural) |
-| `cli_razon_social` | Nombre/razón social |
-| `cli_mail` | Email del cliente |
-| `cli_direccion` | Dirección comercial |
-| `cli_vendedor` | Vendedor asignado |
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `cli_id` | `int unsigned` | PK Autoincremental |
+| `cli_rut` | `varchar(15)` | RUT formateado del cliente (ej: `76516950-K` o `76.516.950-K`) |
+| `cli_razon_social` | `varchar(200)` | Razón social / Nombre del cliente |
+| `cli_mail` | `varchar(100)` | Email registrado del cliente |
+| `cli_direccion` | `varchar(200)` | Dirección comercial |
+| `cli_vendedor` | `smallint` | Código del vendedor asociado a este cliente |
 
-### 2.2 Tabla: `tbl_ventas_devoluciones`
+### 2.2 Tabla: `tbl_vendedores` (Catálogo de Vendedores por Empresa)
 
-| Campo | Descripción |
-|-------|-------------|
-| `factura` | Número de factura |
-| `cliente_rut` | FK a `tbl_clientes.cli_rut` |
-| `neto_item` | Valor neto del ítem (sin IVA) |
-| `fecha_documento` | Fecha de emisión |
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `cli_vendedor` | `bigint` | PK / Código único local de la empresa |
+| `nombre_vendedor` | `varchar(255)` | Nombre real del vendedor |
+| `ven_mail` | `varchar(255)` | Correo electrónico único del vendedor (Clave de Homologación) |
 
-> El monto con IVA se calcula como `ROUND(SUM(neto_item * 1.19))` agrupado por factura.
+> ⚠️ **Manejo de Colisión de IDs de Vendedor Multi-Empresa:**  
+> Como cada ERP tiene sus propios autoincrementales en `tbl_vendedores`, un mismo vendedor puede tener IDs numéricos distintos según la empresa (ej: *Angel Fereira* es ID `25` en Automarco LTDA y es ID `1` en Gabtec S.A).  
+> **Estrategia de Homologación:** El backend utiliza el correo electrónico del vendedor (`ven_mail`) como identificador universal. Al consultar los clientes asignados en `api/get_clientes.php`, el sistema busca el correo de la persona y unifica dinámicamente todos los folios asociados a sus distintos IDs de vendedor en las 4 empresas.
+
+### 2.3 Tabla: `tbl_ventas_devoluciones` (Historial de Transacciones por Empresa)
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `factura` | `varchar(45)` | Folio/Número de factura |
+| `cliente_rut` | `varchar(15)` | RUT del cliente asociado |
+| `neto_item` | `decimal` | Monto neto del item |
+| `fecha_documento` | `date` | Fecha de emisión |
+
+### 2.4 Tabla Consolidada: `bd_automarco.tbl_cobranza` (Tabla Maestra de Documentos Impagos)
+
+Esta tabla centraliza todos los documentos pendientes de pago de los vendedores del holding en todas las razones sociales.
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `empresa` | `varchar(45)` | Código de empresa: `EMP01` (Automarco LTDA), `EMP10` (Gabtec S.A), `EMP03` (Autotec S.A), `EMP06` (HD Automarco S.A), `EMP07` (ITC - Omitida) |
+| `vendedor` | `bigint unsigned` | ID del Vendedor (`vendedor_id`) asignado al documento (Cruza con `tbl_vendedores.cli_vendedor`) |
+| `clirut` | `bigint unsigned` | RUT del cliente (solo número sin dígito verificador) |
+| `clidv` | `varchar(45)` | Dígito verificador del cliente |
+| `clisec` | `varchar(45)` | Secuencia / Sucursal del cliente (Omitida / No utilizada en este proyecto) |
+| `docto` | `varchar(45)` | Número de documento / Factura impaga |
+| `vencto` | `varchar(45)` | Fecha de vencimiento del documento (`DD-MM-YYYY`) |
+| `emision` | `varchar(45)` | Fecha de emisión del documento (`DD-MM-YYYY`) |
+| `glosa` | `varchar(255)` | Descripción o tipo de movimiento comercial |
+| `total_cuota` | `varchar(45)` | Monto total original de la cuota / factura |
+| `saldo_cuota` | `varchar(45)` | Saldo pendiente por cobrar |
+| `tipo_doc` | `decimal(10,0)` | Tipo de documento contable |
+| `tipo_cliente` | `varchar(255)` | Categorización ABC de riesgo del cliente (No utilizado para efectos de cobranza) |
+
+#### Mapeo de Códigos de Empresa:
+* `EMP01` ➔ **Automarco LTDA** (`automarc_automarco`)
+* `EMP10` ➔ **Gabtec S.A** (`gabteccl_sitbdd1978`)
+* `EMP03` ➔ **Autotec S.A** (`autotec_ecom`)
+* `EMP06` ➔ **HD Automarco S.A** (`autohd_automarcohd`)
+* `EMP07` ➔ *ITC (Omitida en la lógica operativa)*
 
 ---
 
@@ -246,6 +286,24 @@ GROUP BY
 
 > **Nota Técnica sobre el JOIN (Formato de RUTs):**
 > En los ERPs existe una discrepancia en cómo se almacena el RUT. En `tbl_ventas_devoluciones`, el RUT se guarda sin el guion (ej: `52752361`), mientras que en `tbl_clientes` se guarda con el guion antes del dígito verificador (ej: `5275236-1`). 
+>
+> En la tabla consolidada `bd_automarco.tbl_cobranza`, el RUT se separa en dos columnas físicas:
+> * `clirut` (ej: `76516950` - tipo `BIGINT`)
+> * `clidv` (ej: `K` - tipo `VARCHAR`)
+>
+> Para realizar la traducción e identificar al cliente en el catálogo ERP (`tbl_clientes`), se debe limpiar el RUT del ERP y compararlo usando la concatenación:
+> ```sql
+> ON REPLACE(REPLACE(cli.cli_rut, '.', ''), '-', '') = CONCAT(c.clirut, c.clidv)
+> ```
+>
+> En la tabla consolidada `bd_automarco.tbl_cobranza`, el RUT se separa en dos columnas físicas:
+> * `clirut` (ej: `76516950` - tipo `BIGINT`)
+> * `clidv` (ej: `K` - tipo `VARCHAR`)
+>
+> Para realizar la traducción e identificar al cliente en el catálogo ERP (`tbl_clientes`), se debe limpiar el RUT del ERP y compararlo usando la concatenación:
+> ```sql
+> ON REPLACE(REPLACE(cli.cli_rut, '.', ''), '-', '') = CONCAT(c.clirut, c.clidv)
+> ```
 > Para poder cruzarlos correctamente, **SIEMPRE** se debe usar `LEFT JOIN` con la función `REPLACE()` quitando los guiones a ambos lados de la igualdad. Se usa `LEFT JOIN` para que, en caso de que el cliente haya sido borrado, la factura igual retorne el monto total y no bloquee el sistema de cobranzas.
 
 ### 3.2 Historial de cobranzas del vendedor (con cheques anidados)

@@ -176,7 +176,7 @@ body.modal-open {
 .search-field {
     position: relative;
     flex: 1;
-    max-width: 420px;
+    max-width: 240px;
 }
 
 .search-field input {
@@ -381,11 +381,17 @@ body.modal-open {
 .detail-close-btn {
     background: transparent;
     border: none;
-    font-size: 1.2rem;
-    color: var(--color-text-muted);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 2px 8px;
     border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: all 0.2s ease;
 }
 
 .detail-close-btn:hover {
