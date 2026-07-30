@@ -336,4 +336,30 @@ CREATE INDEX idx_historial_cobranza ON historial_estados(cobranza_id);
 
 -- Para el cron de alertas (Fase 4)
 CREATE INDEX idx_cobranzas_created  ON cobranzas(created_at, estado);
+
+---
+
+## 5. Prevención de Schema Drift e Integridad de Despliegue
+
+### 5.1 Tablas de Seguridad y Auditoría Incorporadas en `setup.sql`
+
+| Tabla | Propósito | Campos Clave |
+|-------|-----------|--------------|
+| `login_attempts` | Control de Fuerza Bruta / Rate-Limiting | `ip_address`, `email`, `attempted_at` |
+| `audit_logs` | Auditoría de Acciones Críticas | `usuario_id`, `email`, `accion`, `detalles`, `ip_address`, `user_agent` |
+
+### 5.2 Protocolo de Verificación de Integridad de Esquema
+
+Para evitar errores en Producción por tablas o columnas faltantes tras la adición de funcionalidades, existe un script de verificación automatizado en el proyecto:
+
+```bash
+php scratch/verify_schema_integrity.php
+```
+
+**Comprobaciones del Verificador:**
+1. Escanea todos los queries PDO del código PHP en búsqueda de nombres de tabla (`FROM`, `INTO`, `UPDATE`, `JOIN`).
+2. Valida que cada tabla usada exista en la base de datos activa MySQL (`SHOW TABLES`).
+3. Valida que la estructura completa de tablas esté formalmente documentada y presente en `config/setup.sql`.
+
+> ⚠️ **Regla de Producción:** Antes de cualquier despliegue o reinicio de esquema, ejecutar `php scratch/verify_schema_integrity.php` para asegurar 100% de coherencia entre el código backend y las tablas creadas.
 ```

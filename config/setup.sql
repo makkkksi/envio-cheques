@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS cobranza_facturas (
   empresa_id INT NOT NULL,
   codigo_empresa VARCHAR(20) NOT NULL, -- EMP01, EMP03, EMP06, EMP10
   numero_factura VARCHAR(50) NOT NULL,
+  cuota_label VARCHAR(20) NULL,
   total_cuota DECIMAL(12,0) NOT NULL,
   saldo_cuota DECIMAL(12,0) NOT NULL,
   monto_cubierto DECIMAL(12,0) NOT NULL,
@@ -96,6 +97,29 @@ CREATE TABLE IF NOT EXISTS historial_estados (
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 6. Intentos de Login (Rate-Limiting y Control de Fuerza Bruta)
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ip_address VARCHAR(45) NOT NULL,
+  email VARCHAR(150) NOT NULL,
+  attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_login_attempts_ip_email (ip_address, email, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 7. Registro de Auditoría General
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NOT NULL,
+  email VARCHAR(150) NOT NULL,
+  accion VARCHAR(100) NOT NULL,
+  detalles TEXT NULL,
+  ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_audit_logs_user (usuario_id),
+  KEY idx_audit_logs_action (accion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Datos Semilla (Seeders)
 INSERT INTO empresas (id, nombre, nombre_bd, email_tesoreria_defecto) VALUES
 (1, 'Automarco LTDA', 'automarc_automarco', 'tesoreria@automarco.cl'),
@@ -109,9 +133,9 @@ ON DUPLICATE KEY UPDATE
 
 -- Usuario Semilla Obligatorio y Test (Claves: sistema123, vendedor123, tesoreria123)
 INSERT INTO usuarios (id, nombre, email, password_hash, rol, activo) VALUES
-(1, 'Sistema', 'sistema@app.local', '$2y$10$tZ2cQvYl6L.CstnIexkFve99i5/p2vD/w7/Z6V8Bq8g9qKj6zFjKu', 'ADMINISTRADOR', 1),
-(2, 'Vendedor de Prueba', 'vendedor@app.local', '$2y$10$wH2vD5M9c/pX76d1vXG3yeJc7F/4t8M9pZ2r9k6zFjKuwH2vD5M9c', 'VENDEDOR', 1),
-(3, 'Tesorero de Prueba', 'tesoreria@app.local', '$2y$10$K9pZ2r9k6zFjKuwH2vD5M9c/pX76d1vXG3yeJc7F/4t8M9pZ2r9k', 'TESORERIA', 1)
+(1, 'Sistema', 'sistema@app.local', '$2y$12$PX7jyHQUa8WEcCP08gCZbeRGv2CH7chHo3zNJGLIFGpIa3eOKdK5q', 'ADMINISTRADOR', 1),
+(2, 'Vendedor de Prueba', 'vendedor@app.local', '$2y$12$KICHjGYdMzIcxiPU0yik7eeJ4K45m.z/DknlSRXQ3jjVx4GjBJBY', 'VENDEDOR', 1),
+(3, 'Tesorero Automarco', 'tesoreria@automarco.cl', '$2y$12$qsi4wIpGJ36qocYfN7Muvujd/GpKw36PGdkyqSmrGjW.K0MktMqzC', 'TESORERIA', 1)
 ON DUPLICATE KEY UPDATE 
   nombre=VALUES(nombre),
   email=VALUES(email),

@@ -42,6 +42,11 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
 body {
     background-color: var(--bg-app);
     color: var(--color-text);
@@ -58,6 +63,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overflow-x: hidden;
 }
 
 /* Cabecera Principal */
@@ -566,24 +572,24 @@ input.input-search-client:focus,
 .factura-row:hover { background: #f8fafc; }
 .factura-row.selected { background: #eff6ff; }
 .factura-row input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     accent-color: var(--color-primary);
     cursor: pointer;
     flex-shrink: 0;
 }
 .factura-row-num {
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     color: var(--color-text);
     flex: 1;
 }
 .factura-row-vto {
-    font-size: 0.75rem;
+    font-size: 0.82rem;
     color: var(--color-text-muted);
     white-space: nowrap;
     flex-shrink: 0;
-    padding: 2px 6px;
+    padding: 3px 8px;
     background: #f1f5f9;
     border-radius: 4px;
 }
@@ -594,11 +600,11 @@ input.input-search-client:focus,
 }
 .factura-row-monto {
     font-weight: 700;
-    font-size: 0.88rem;
+    font-size: 0.96rem;
     color: #0f172a;
     white-space: nowrap;
     flex-shrink: 0;
-    min-width: 75px;
+    min-width: 80px;
     text-align: right;
 }
 
@@ -636,8 +642,8 @@ input.input-search-client:focus,
 }
 .factura-doc-header:hover { background: #f3f7ff; }
 .chk-doc {
-    width: 17px;
-    height: 17px;
+    width: 22px;
+    height: 22px;
     accent-color: var(--color-primary);
     cursor: pointer;
     flex-shrink: 0;
@@ -645,38 +651,72 @@ input.input-search-client:focus,
 .factura-doc-num {
     flex: 1;
     font-weight: 600;
-    font-size: 0.84rem;
+    font-size: 0.95rem;
     color: var(--color-text);
 }
 .factura-doc-cuotas-badge {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     color: #64748b;
     background: #f1f5f9;
-    padding: 1px 6px;
+    padding: 2px 8px;
     border-radius: 4px;
     font-weight: 600;
     flex-shrink: 0;
 }
 .factura-doc-vencidas {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     color: #dc2626;
     background: #fef2f2;
-    padding: 1px 6px;
+    padding: 2px 8px;
     border-radius: 4px;
     font-weight: 600;
     flex-shrink: 0;
 }
 .factura-doc-total {
     font-weight: 700;
-    font-size: 0.84rem;
+    font-size: 0.96rem;
     color: #0f172a;
     white-space: nowrap;
     flex-shrink: 0;
 }
 
+/* Alineación vertical perfecta mediante grid */
+.factura-row-meta-right {
+    display: grid;
+    grid-template-columns: 125px 165px 80px 110px;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.factura-doc-cuotas-badge, .factura-row-vto {
+    grid-column: 1;
+    justify-self: end;
+    margin: 0 !important;
+}
+.btn-ver-desglose {
+    grid-column: 2;
+    justify-self: end;
+    margin: 0 !important;
+}
+.factura-doc-vencidas {
+    grid-column: 3;
+    justify-self: end;
+    margin: 0 !important;
+}
+.factura-doc-total, .factura-row-monto {
+    grid-column: 4;
+    justify-self: end;
+    margin: 0 !important;
+}
+
+/* Alinear documento de pago único con el de múltiples cuotas */
+.factura-row--doc {
+    padding-left: 30px;
+}
+
 /* Filas de cuota con indent adicional (nivel 3) */
 .factura-row--cuota {
-    padding-left: 44px;
+    padding-left: 54px;
     background: #fff;
 }
 .factura-row--cuota:hover { background: #f8fafc; }

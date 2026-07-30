@@ -121,8 +121,8 @@ try {
         exit;
     }
 
-    // Validar pertenencia en producción
-    if (APP_ENV !== 'local' && (int)$cobranza['vendedor_id'] !== (int)$usuario_id) {
+    // Validar pertenencia
+    if (!(defined('APP_ENV') && APP_ENV === 'local' && $usuario_id === 1) && (int)$cobranza['vendedor_id'] !== (int)$usuario_id) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'No tiene permisos para modificar esta cobranza']);
         exit;

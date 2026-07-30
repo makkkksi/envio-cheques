@@ -7,65 +7,55 @@ require_once __DIR__ . '/../config/auth.php';
 try {
     $pdo = Database::getCobranzasConnection();
 
-    // Obtener parámetros opcionales de desambiguación (email o empresa)
-    $usuario_actual = getUsuarioActual();
+    // Validar autenticación
+    $usuario_actual = getUsuarioActual(); // Exige token o sesión de vendedor válida
+    
+    // Obtener parámetros de desambiguación (mantener compatibilidad)
     $vendedor_id_get = filter_input(INPUT_GET, 'vendedor_id', FILTER_VALIDATE_INT);
     $vendedor_id = $vendedor_id_get ?: $usuario_actual;
-    $vendedor_email_param = filter_input(INPUT_GET, 'vendedor_email', FILTER_SANITIZE_EMAIL);
-    $empresa_param = filter_input(INPUT_GET, 'empresa', FILTER_DEFAULT);
-
-    if (!$vendedor_id && !$vendedor_email_param) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Vendedor no especificado (se requiere vendedor_id o vendedor_email)']);
-        exit;
-    }
 
     $sellerEmails = [];
-
     $sellerName = '';
-    
-    // Caso 1: Se proporciona el email directamente (100% inequívoco)
-    if ($vendedor_email_param) {
-        $sellerEmails = [trim($vendedor_email_param)];
-    }
-    // Caso 2: Se proporciona empresa + vendedor_id (Desambigua el ID local)
-    elseif ($empresa_param && $vendedor_id) {
-        $empresa_code = strtoupper(trim($empresa_param));
-        if ($empresa_code === 'EMP01' || $empresa_code === 'AUTOMARCO') {
-            $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM automarc_automarco.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
-        } elseif ($empresa_code === 'EMP10' || $empresa_code === 'GABTEC') {
-            $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM gabteccl_sitbdd1978.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
-        } elseif ($empresa_code === 'EMP03' || $empresa_code === 'AUTOTEC') {
-            $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM autotec_ecom.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
-        } elseif ($empresa_code === 'EMP06' || $empresa_code === 'HD') {
-            $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM autohd_automarcohd.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
-        }
 
-        if (isset($stmt)) {
-            $stmt->execute([':vid' => $vendedor_id]);
-            $res = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($res) {
-                $sellerEmails = [trim($res['ven_mail'])];
-                $sellerName = trim($res['nombre_vendedor'] ?? '');
+    // Si es un vendedor con sesión activa, confiamos plenamente en el email resuelto en el login
+    if (isset($_SESSION['vendedor_auth']['email'])) {
+        $sellerEmails = [trim($_SESSION['vendedor_auth']['email'])];
+        $sellerName = $_SESSION['vendedor_auth']['nombre'] ?? '';
+    } 
+    else {
+        // Fallback en caso de que sea el panel Admin consultando (el admin usa token, no sesión de vendedor)
+        $vendedor_email_param = filter_input(INPUT_GET, 'vendedor_email', FILTER_SANITIZE_EMAIL);
+        $empresa_param = filter_input(INPUT_GET, 'empresa', FILTER_DEFAULT);
+
+        if ($vendedor_email_param) {
+            $sellerEmails = [trim($vendedor_email_param)];
+        } elseif ($empresa_param && $vendedor_id) {
+            $empresa_code = strtoupper(trim($empresa_param));
+            if ($empresa_code === 'EMP01' || $empresa_code === 'AUTOMARCO') {
+                $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM automarc_automarco.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
+            } elseif ($empresa_code === 'EMP10' || $empresa_code === 'GABTEC') {
+                $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM gabteccl_sitbdd1978.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
+            } elseif ($empresa_code === 'EMP03' || $empresa_code === 'AUTOTEC') {
+                $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM autotec_ecom.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
+            } elseif ($empresa_code === 'EMP06' || $empresa_code === 'HD') {
+                $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM autohd_automarcohd.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail != ''");
+            }
+
+            if (isset($stmt)) {
+                $stmt->execute([':vid' => $vendedor_id]);
+                $res = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($res) {
+                    $sellerEmails = [trim($res['ven_mail'])];
+                    $sellerName = trim($res['nombre_vendedor'] ?? '');
+                }
             }
         }
-    }
-
-    // Caso 3: Fallback — Buscar el email por vendedor_id en las 4 empresas
-    if (empty($sellerEmails) && $vendedor_id) {
-        $stmtMail = $pdo->prepare("
-            SELECT DISTINCT email FROM (
-                SELECT TRIM(ven_mail) AS email FROM automarc_automarco.tbl_vendedores WHERE cli_vendedor = :v1 AND ven_mail != '' AND ven_mail IS NOT NULL
-                UNION
-                SELECT TRIM(ven_mail) AS email FROM gabteccl_sitbdd1978.tbl_vendedores WHERE cli_vendedor = :v2 AND ven_mail != '' AND ven_mail IS NOT NULL
-                UNION
-                SELECT TRIM(ven_mail) AS email FROM autotec_ecom.tbl_vendedores WHERE cli_vendedor = :v3 AND ven_mail != '' AND ven_mail IS NOT NULL
-                UNION
-                SELECT TRIM(ven_mail) AS email FROM autohd_automarcohd.tbl_vendedores WHERE cli_vendedor = :v4 AND ven_mail != '' AND ven_mail IS NOT NULL
-            ) t
-        ");
-        $stmtMail->execute([':v1' => $vendedor_id, ':v2' => $vendedor_id, ':v3' => $vendedor_id, ':v4' => $vendedor_id]);
-        $sellerEmails = $stmtMail->fetchAll(PDO::FETCH_COLUMN, 0);
+        
+        // CUIDADO: Se eliminó el UNION cross-db ciego porque causaba fuga de datos inter-empresa.
+        // Si el admin no provee empresa ni email, intentaremos buscar de todas formas si estamos en local.
+        if (empty($sellerEmails) && defined('APP_ENV') && APP_ENV === 'local') {
+             $sellerEmails = ["dev_{$vendedor_id}@local.test"];
+        }
     }
 
     // 2. Construir la consulta de clientes

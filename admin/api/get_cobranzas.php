@@ -123,6 +123,7 @@ try {
                                     empresa_id,
                                     codigo_empresa,
                                     numero_factura,
+                                    cuota_label,
                                     total_cuota,
                                     saldo_cuota,
                                     monto_cubierto

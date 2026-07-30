@@ -65,6 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 4. Validar contraseña y rol
                 if ($user && (bool)$user['activo'] && in_array($user['rol'], ['TESORERIA', 'ADMINISTRADOR'])) {
                     if (password_verify($password, $user['password_hash'])) {
+                        // Limpiar intentos fallidos previos si el login es exitoso
+                        clearFailedAttempts($pdo, $email);
+
                         // Regenerar ID de sesión para prevenir Session Fixation
                         session_regenerate_id(true);
 
@@ -74,7 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['admin_user_nombre'] = $user['nombre'];
                         $_SESSION['admin_user_rol'] = $user['rol'];
 
-                        // Eliminar intentos de login fallidos previos si la IP ya es exitosa (opcional)
                         header('Location: index.php');
                         exit;
                     }
@@ -86,7 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Exception $e) {
             error_log('Error en Login Admin: ' . $e->getMessage());
-            $error = 'Ocurrió un error inesperado al procesar la solicitud.';
+            if (strpos($e->getMessage(), 'Demasiados intentos fallidos') !== false) {
+                $error = $e->getMessage();
+            } else {
+                $error = 'Ocurrió un error inesperado al procesar la solicitud.';
+            }
         }
     }
 }

@@ -9,6 +9,14 @@ let estadoActualFilter = 'BANDEJA_TRABAJO';
 let cobranzaSeleccionadaId = null;
 let cobranzasCache = [];
 
+const EMPRESAS_NOMBRES = {
+    'EMP01': 'Automarco LTDA',
+    'EMP03': 'Autotec S.A',
+    'EMP06': 'HD Automarco S.A',
+    'EMP10': 'Gabtec S.A'
+};
+
+
 function reajustarFiltros() {
     const inputBuscar = document.getElementById('inputBuscarAdmin');
     if (inputBuscar) inputBuscar.value = '';
@@ -448,7 +456,7 @@ function renderMasterTable(cobranzas) {
         let empresaDisplay = item.empresa_nombre || '-';
         if (item.facturas && item.facturas.length > 0) {
             const codigosUnicos = [...new Set(item.facturas.map(f => f.codigo_empresa))];
-            empresaDisplay = codigosUnicos.map(cod => `<span class="badge-empresa ${cod}" style="font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600; margin-right:4px;">${cod}</span>`).join('');
+            empresaDisplay = codigosUnicos.map(cod => `<span class="badge-empresa ${cod}" style="font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600; margin-right:4px;">${EMPRESAS_NOMBRES[cod] || cod}</span>`).join('');
         }
 
         return `
@@ -546,8 +554,8 @@ function renderSidePanelDetail(data) {
                     <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px 14px; border-radius: 8px;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <span class="badge-empresa ${f.codigo_empresa}" style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${f.codigo_empresa}</span>
-                                <strong style="font-size: 0.9rem; color: #0F172A;">Factura N° ${f.numero_factura}</strong>
+                                <span class="badge-empresa ${f.codigo_empresa}" style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${EMPRESAS_NOMBRES[f.codigo_empresa] || f.codigo_empresa}</span>
+                                <strong style="font-size: 0.9rem; color: #0F172A;">Factura N° ${f.numero_factura} ${f.cuota_label ? `<span style="color: #475569; font-weight: normal; font-size: 0.82rem; margin-left: 4px;">(Cuota ${f.cuota_label})</span>` : ''}</strong>
                             </div>
                             ${tieneDescuento ? `<div style="font-size: 0.75rem; color: #64748B; margin-top: 2px;">Saldo ERP: $${saldoCuotaNum.toLocaleString('es-CL')}</div>` : ''}
                         </div>
@@ -578,7 +586,10 @@ function renderSidePanelDetail(data) {
     const deltaVal = montoChequesVal - montoFacturaVal;
     const tieneMismatch = Math.abs(deltaVal) > 0.01;
 
-    document.getElementById('lblPanelEmpresa').textContent = cob.empresa_nombre || '-';
+    const empNombreMapped = (facturas && facturas.length > 0)
+        ? [...new Set(facturas.map(f => EMPRESAS_NOMBRES[f.codigo_empresa] || f.codigo_empresa))].join(', ')
+        : (EMPRESAS_NOMBRES[cob.codigo_empresa] || cob.empresa_nombre || '-');
+    document.getElementById('lblPanelEmpresa').textContent = empNombreMapped;
     document.getElementById('lblPanelRut').textContent = cob.rut_cliente || '-';
     document.getElementById('lblPanelCliente').textContent = cob.razon_social_cliente || '-';
     document.getElementById('lblPanelMontoFactura').textContent = '$' + montoFacturaVal.toLocaleString('es-CL');

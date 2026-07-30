@@ -214,6 +214,6 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
         </div>
     </div>
 
-    <script src="admin.js?v=5"></script>
+    <script src="admin.js?v=6"></script>
 </body>
 </html>

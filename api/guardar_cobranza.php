@@ -177,16 +177,17 @@ try {
     // Estado inicial para el Paso 1
     $estadoInicial = 'PENDIENTE_ENVIO';
 
-    // Obtener e identificar el vendedor
-    $vendedor_id_post = filter_input(INPUT_POST, 'vendedor_id', FILTER_VALIDATE_INT);
-    $vendedor_id = $vendedor_id_post ?: ((APP_ENV === 'local') ? 2 : $usuario_id);
-
+    // Obtener e identificar el vendedor (ignorar POST, usar solo identidad validada)
+    $vendedor_id = $usuario_id;
     $vendedor_nombre = 'Sin Asignar';
-    if ($vendedor_id) {
+
+    if (isset($_SESSION['vendedor_auth']['nombre'])) {
+        $vendedor_nombre = $_SESSION['vendedor_auth']['nombre'];
+    } elseif ($vendedor_id) {
         $stmtUsr = $pdo->prepare('SELECT nombre FROM usuarios WHERE id = :id');
         $stmtUsr->execute([':id' => $vendedor_id]);
         $usrRow = $stmtUsr->fetch();
-        if ($usrRow) {
+        if ($usrRow && !empty($usrRow['nombre'])) {
             $vendedor_nombre = $usrRow['nombre'];
         }
     }
@@ -246,9 +247,9 @@ try {
 
     // 2. Insertar facturas asociadas en cobranza_facturas
     $stmtFacturaPivot = $pdo->prepare('INSERT INTO cobranza_facturas (
-        cobranza_id, empresa_id, codigo_empresa, numero_factura, total_cuota, saldo_cuota, monto_cubierto
+        cobranza_id, empresa_id, codigo_empresa, numero_factura, cuota_label, total_cuota, saldo_cuota, monto_cubierto
     ) VALUES (
-        :cobranza_id, :empresa_id, :codigo_empresa, :numero_factura, :total_cuota, :saldo_cuota, :monto_cubierto
+        :cobranza_id, :empresa_id, :codigo_empresa, :numero_factura, :cuota_label, :total_cuota, :saldo_cuota, :monto_cubierto
     )');
 
     foreach ($facturasLista as $fItem) {
@@ -257,6 +258,7 @@ try {
             ':empresa_id' => $fItem['empresa_id'] ?? 1,
             ':codigo_empresa' => $fItem['codigo_empresa'] ?? 'EMP01',
             ':numero_factura' => $fItem['numero_factura'],
+            ':cuota_label' => isset($fItem['cuota_label']) && $fItem['cuota_label'] !== '' ? $fItem['cuota_label'] : null,
             ':total_cuota' => $fItem['total_cuota'] ?? 0,
             ':saldo_cuota' => $fItem['saldo_cuota'] ?? 0,
             ':monto_cubierto' => $fItem['monto_cubierto'] ?? $fItem['saldo_cuota'] ?? 0

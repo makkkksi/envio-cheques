@@ -67,14 +67,41 @@ try {
     $stmt->execute([':clirut' => $clirut]);
     $rawFacturas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Obtener cuotas actualmente en proceso de cobranza activa (estados != RECHAZADO)
+    // para no mostrarlas duplicadas al vendedor mientras se gestionan.
+    $stmtEnProceso = $pdo->prepare("
+        SELECT cf.codigo_empresa, cf.numero_factura, cf.saldo_cuota
+        FROM cobranza_facturas cf
+        INNER JOIN cobranzas c ON cf.cobranza_id = c.id
+        WHERE c.estado != 'RECHAZADO'
+    ");
+    $stmtEnProceso->execute();
+    $enProceso = $stmtEnProceso->fetchAll(PDO::FETCH_ASSOC);
+
+    // Contador de ocurrencias ocupadas por (empresa + doc + saldo)
+    $ocupadasCount = [];
+    foreach ($enProceso as $op) {
+        $k = trim($op['codigo_empresa']) . '_' . trim($op['numero_factura']) . '_' . (int)round((float)$op['saldo_cuota']);
+        $ocupadasCount[$k] = ($ocupadasCount[$k] ?? 0) + 1;
+    }
+
     $total_deuda = 0;
     $facturas = [];
 
     foreach ($rawFacturas as $f) {
         $codEmp  = trim($f['codigo_empresa']);
+        $numDoc  = trim($f['numero_factura']);
+        $saldo   = (float)$f['saldo_cuota'];
+        $key     = $codEmp . '_' . $numDoc . '_' . (int)round($saldo);
+
+        // Si esta cuota específica ya está en una cobranza activa, omitirla
+        if (!empty($ocupadasCount[$key]) && $ocupadasCount[$key] > 0) {
+            $ocupadasCount[$key]--;
+            continue;
+        }
+
         $empInfo = $empresaMap[$codEmp] ?? ['id' => 1, 'nombre' => 'Empresa No Especificada'];
         $glosa   = trim($f['glosa']);
-        $saldo   = (float)$f['saldo_cuota'];
         $total_deuda += $saldo;
 
         $facturas[] = [

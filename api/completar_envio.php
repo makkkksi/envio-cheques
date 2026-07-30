@@ -110,7 +110,8 @@ try {
     ';
     $params = [':id' => $cobranza_id];
 
-    if (APP_ENV !== 'local') {
+    // Check IDOR if it's not the local Admin bypass
+    if (!(defined('APP_ENV') && APP_ENV === 'local' && $usuario_id === 1)) {
         $sql .= ' AND (c.vendedor_id = :uid OR c.vendedor_id IS NULL)';
         $params[':uid'] = $usuario_id;
     }

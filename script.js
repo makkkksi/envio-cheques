@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Redirigir consola a pantalla para depurar en tablet
     const debugLogs = document.getElementById('debugLogs');
     function logToScreen(message, type = 'info') {
@@ -82,8 +82,22 @@ document.addEventListener('DOMContentLoaded', () => {
         vendedorIdInput.value = vendedorIdParam;
     }
 
-    // Guardia de acceso: sin vendedor_id no hay identidad — bloquear la app
-    if (!vendedorIdParam && !urlParams.get('vendedor_email') && !urlParams.get('email')) {
+    // Guardia de acceso: inicializar sesión PHP
+    try {
+        const authFormData = new FormData();
+        if (vendedorIdParam) authFormData.append('vendedor_id', vendedorIdParam);
+        if (empresaParam) authFormData.append('empresa', empresaParam);
+        const emailParam = urlParams.get('vendedor_email') || urlParams.get('email');
+        if (emailParam) authFormData.append('vendedor_email', emailParam);
+
+        const authRes = await fetch('api/auth_seller.php', { method: 'POST', body: authFormData });
+        const authData = await authRes.json();
+        
+        if (!authRes.ok || !authData.success) {
+            throw new Error(authData.message || 'Error de autenticación');
+        }
+        console.log("Sesión de vendedor validada:", authData.data);
+    } catch (e) {
         // Ocultar todo el contenido del formulario
         const appWrapper = document.querySelector('.app-wrapper');
         if (appWrapper) appWrapper.style.display = 'none';
@@ -102,12 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
             </svg>
             <h2 style="font-size:1.2rem; font-weight:700; color:#0f172a; margin:0 0 8px;">Acceso no autorizado</h2>
             <p style="font-size:0.9rem; color:#64748b; max-width:320px; line-height:1.5; margin:0 0 20px;">
-                Este formulario debe abrirse desde la aplicación de vendedores.<br>
-                No se recibió una identificación de vendedor válida.
+                ${e.message}<br>
+                Asegúrate de abrir este formulario desde la app oficial.
             </p>
-            <code style="font-size:0.75rem; background:#fee2e2; color:#b91c1c; padding:6px 12px; border-radius:6px;">
-                Parámetro requerido: vendedor_id
-            </code>
         `;
         document.body.appendChild(blocker);
 
@@ -720,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const esVencida = vto && vto < hoy;
 
         const row = document.createElement('div');
-        row.className = 'factura-row' + (esSubCuota ? ' factura-row--cuota' : '');
+        row.className = 'factura-row' + (esSubCuota ? ' factura-row--cuota' : ' factura-row--doc');
         row.dataset.index = f._idx;
 
         // En filas de sub-cuota no repetimos el número de doc, solo la cuota y monto
@@ -731,8 +742,10 @@ document.addEventListener('DOMContentLoaded', () => {
         row.innerHTML = `
             <input type="checkbox" class="chk-factura-item" data-index="${f._idx}" data-empresa="${empCode}">
             ${numDocSpan}
-            <span class="factura-row-vto${esVencida ? ' vencida' : ''}">Vto: ${f.fecha_vencimiento || '-'}</span>
-            <span class="factura-row-monto">$${parseFloat(f.saldo_cuota).toLocaleString('es-CL')}</span>
+            <div class="factura-row-meta-right">
+                <span class="factura-row-vto${esVencida ? ' vencida' : ''}">Vto: ${f.fecha_vencimiento || '-'}</span>
+                <span class="factura-row-monto">$${parseFloat(f.saldo_cuota).toLocaleString('es-CL')}</span>
+            </div>
         `;
         return row;
     }
@@ -841,50 +854,85 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<span class="factura-doc-vencidas">${docVencidas} venc.</span>`
                         : '';
 
-                    const docHeader = document.createElement('div');
-                    docHeader.className = 'factura-doc-header';
-                    docHeader.innerHTML = `
-                        <input type="checkbox" class="chk-doc">
-                        <span class="factura-doc-num">Doc. ${docNum}</span>
-                        <span class="factura-doc-cuotas-badge">${cuotas.length} cuotas</span>
-                        ${vencidasBadge}
-                        <span class="factura-doc-total">$${totalDoc.toLocaleString('es-CL')}</span>
-                    `;
+                     const docHeader = document.createElement('div');
+                     docHeader.className = 'factura-doc-header';
+                     docHeader.innerHTML = `
+                         <input type="checkbox" class="chk-doc">
+                         <span class="factura-doc-num">Doc. ${docNum}</span>
+                         <div class="factura-row-meta-right">
+                             <span class="factura-doc-cuotas-badge">${cuotas.length} cuotas</span>
+                             <span class="btn-ver-desglose" style="cursor: pointer; font-size: 0.8rem; color: #2563eb; font-weight: 700; border: 1px dashed #2563eb; background: #eff6ff; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; user-select: none; white-space: nowrap;">
+                                 Ver Desglose
+                                 <svg class="chevron-desglose" style="width: 14px; height: 14px; transition: transform 0.15s;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                             </span>
+                             ${vencidasBadge}
+                             <span class="factura-doc-total">$${totalDoc.toLocaleString('es-CL')}</span>
+                         </div>
+                     `;
+ 
+                     const cuotasContainer = document.createElement('div');
+                     cuotasContainer.className = 'factura-doc-cuotas';
+                     cuotasContainer.style.display = 'none'; // Colapsado por defecto
+ 
+                     const chkDoc = docHeader.querySelector('.chk-doc');
+                     const btnDesglose = docHeader.querySelector('.btn-ver-desglose');
+                     const chevronDesglose = docHeader.querySelector('.chevron-desglose');
 
-                    const cuotasContainer = document.createElement('div');
-                    cuotasContainer.className = 'factura-doc-cuotas';
+                     const toggleDesglose = (e) => {
+                         if (e) e.stopPropagation();
+                         const isExpanded = cuotasContainer.style.display !== 'none';
+                         if (isExpanded) {
+                             cuotasContainer.style.display = 'none';
+                             btnDesglose.childNodes[0].textContent = 'Ver Desglose ';
+                             chevronDesglose.style.transform = 'rotate(0deg)';
+                         } else {
+                             cuotasContainer.style.display = 'block';
+                             btnDesglose.childNodes[0].textContent = 'Ocultar Desglose ';
+                             chevronDesglose.style.transform = 'rotate(180deg)';
+                         }
+                     };
 
-                    const chkDoc = docHeader.querySelector('.chk-doc');
+                     btnDesglose.addEventListener('click', toggleDesglose);
+                     docHeader.addEventListener('click', (e) => {
+                         if (e.target !== chkDoc) {
+                             toggleDesglose(e);
+                         }
+                     });
+ 
+                     // Nivel 3: cuotas individuales
+                     cuotas.forEach(f => {
+                         const row = crearFilaCuota(f, empCode, true);
+                         const chk = row.querySelector('.chk-factura-item');
+                         row.addEventListener('click', (e) => {
+                             if (e.target !== chk) chk.checked = !chk.checked;
+                             row.classList.toggle('selected', chk.checked);
+                             sincronizarChkDoc(docEl, chkDoc);
+                             sincronizarChkGrupo(grupoEl, chkGrupo);
+                             calcularTotalFacturasSeleccionadas();
+                         });
+                         cuotasContainer.appendChild(row);
+                     });
+ 
+                     // Checkbox de documento: selecciona todas sus cuotas
+                     chkDoc.addEventListener('change', (e) => {
+                         e.stopPropagation();
+                         const checked = chkDoc.checked;
+                         cuotasContainer.querySelectorAll('.chk-factura-item').forEach(chk => {
+                             chk.checked = checked;
+                             chk.closest('.factura-row').classList.toggle('selected', checked);
+                         });
+                         chkDoc.indeterminate = false;
+                         sincronizarChkGrupo(grupoEl, chkGrupo);
+                         calcularTotalFacturasSeleccionadas();
 
-                    // Nivel 3: cuotas individuales
-                    cuotas.forEach(f => {
-                        const row = crearFilaCuota(f, empCode, true);
-                        const chk = row.querySelector('.chk-factura-item');
-                        row.addEventListener('click', (e) => {
-                            if (e.target !== chk) chk.checked = !chk.checked;
-                            row.classList.toggle('selected', chk.checked);
-                            sincronizarChkDoc(docEl, chkDoc);
-                            sincronizarChkGrupo(grupoEl, chkGrupo);
-                            calcularTotalFacturasSeleccionadas();
-                        });
-                        cuotasContainer.appendChild(row);
-                    });
-
-                    // Checkbox de documento: selecciona todas sus cuotas
-                    chkDoc.addEventListener('change', (e) => {
-                        e.stopPropagation();
-                        const checked = chkDoc.checked;
-                        cuotasContainer.querySelectorAll('.chk-factura-item').forEach(chk => {
-                            chk.checked = checked;
-                            chk.closest('.factura-row').classList.toggle('selected', checked);
-                        });
-                        chkDoc.indeterminate = false;
-                        sincronizarChkGrupo(grupoEl, chkGrupo);
-                        calcularTotalFacturasSeleccionadas();
-                    });
-
-                    docEl.appendChild(docHeader);
-                    docEl.appendChild(cuotasContainer);
+                         // Auto-expandir si se marca y está colapsado
+                         if (checked && cuotasContainer.style.display === 'none') {
+                             toggleDesglose();
+                         }
+                     });
+ 
+                     docEl.appendChild(docHeader);
+                     docEl.appendChild(cuotasContainer);
 
                 } else {
                     // --- Documento de pago único — fila directa ---
@@ -1268,6 +1316,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         empresa_id: itemF.empresa_id,
                         codigo_empresa: itemF.codigo_empresa,
                         numero_factura: itemF.numero_factura,
+                        cuota_label: itemF.cuota_label,
                         total_cuota: itemF.total_cuota,
                         saldo_cuota: itemF.saldo_cuota,
                         monto_cubierto: itemF.saldo_cuota
@@ -1290,6 +1339,11 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.set('email_tesoreria', document.getElementById('emailTesoreria').value);
             if (vendedorIdInput && vendedorIdInput.value) {
                 formData.set('vendedor_id', vendedorIdInput.value);
+            }
+            const badgeVendedorEl = document.getElementById('lblHeaderNombreVendedor');
+            if (badgeVendedorEl && badgeVendedorEl.textContent) {
+                const cleanVendedorNombre = badgeVendedorEl.textContent.replace(/^Vendedor:\s*/i, '').trim();
+                if (cleanVendedorNombre) formData.set('vendedor_nombre', cleanVendedorNombre);
             }
 
             // ── Cheques: campos de texto ──
