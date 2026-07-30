@@ -83,8 +83,8 @@ Cada cobranza tiene un estado único que evoluciona en una sola dirección. Los 
 | Campo | Regla |
 |-------|-------|
 | `banco` | Requerido. Debe ser uno de los bancos listados en el select de la UI. |
-| `numero_cheque` | Requerido. Solo dígitos. |
-| `monto` | Requerido. Entero positivo mayor a 0. |
+| `numero_cheque` | Requerido. Solo dígitos. Debe ser único dentro del mismo lote/envío del vendedor (se valida en frontend y backend). |
+| `monto` | Requerido. Entero positivo mayor a 0. Se maneja libre e independiente del monto de la factura (UX simplificada). |
 | `fecha_vencimiento` | Requerido. Formato `YYYY-MM-DD`. No puede ser fecha pasada. |
 | `foto_cheque` | Requerido. Archivo de imagen (`image/*`). |
 | `comentario` | Opcional. Texto libre, máximo 1000 caracteres. |
@@ -112,10 +112,18 @@ Al intentar registrar la cobranza (o al guardar cambios desde el modal de edici�
 
 - **Monto Mismatch (Diferencia):** Si los montos no coinciden, se despliega una ventana modal de **Diferencia en Montos** sugiriendo al usuario justificar la diferencia agregando un comentario detallado en el cheque. Cuenta con las opciones **"Cerrar y Revisar"** y **"Enviar Igualmente"** (o **"Guardar Igualmente"** al editar).
 - **Monto Match (Coincidencia):** Si los montos coinciden perfectamente, se despliega una ventana modal de **Confirmación de Registro** (o **Confirmar Cambios** al editar) indicando la coincidencia y preguntando al usuario si está seguro de registrar/guardar para evitar envíos accidentales rápidos. Cuenta con las opciones **"Cancelar"** y **"Confirmar"**.
+- **UX de Montos Simplificada:** El monto de la factura cargado desde el ERP es puramente informativo para el vendedor. Los montos de los cheques se digitan libremente con formateador en tiempo real. Los mensajes de estado del calce eliminan tecnicismos y emojis, indicando si los montos coinciden o cuánto es el monto exacto faltante.
 
 ### 2.6 Confirmación al Descartar/Quitar Cheques
 
 Cualquier acción del usuario destinada a remover o quitar un cheque (tanto en el formulario de creación como en el modal de edición) requiere una confirmación de seguridad interactiva (`confirm()`) por parte del vendedor para evitar pérdidas accidentales de datos e imágenes ya capturadas.
+
+### 2.7 Corrección y Edición Manual por Tesorería
+
+En caso de que el vendedor haya ingresado datos incorrectos (monto erróneo, fecha de vencimiento equivocada, número de cheque equivocado o banco erróneo) al digitalizar los documentos, Tesorería dispone de un control en el inspector lateral para **"Corregir datos de cheques"**.
+- Solo es aplicable a cobranzas que no se encuentren en estado final (`DEPOSITADO` o `RECHAZADO`).
+- Toda modificación requiere autenticación como `TESORERIA` o `ADMINISTRADOR`.
+- Las ediciones persisten en la tabla `cheques` y generan automáticamente una traza en la bitácora de `historial_estados` indicando la corrección junto con los datos de auditoría del usuario que ejecutó el cambio. Esto garantiza que la información sea correcta antes de ser distribuida por Cuentas Corrientes.
 
 ---
 

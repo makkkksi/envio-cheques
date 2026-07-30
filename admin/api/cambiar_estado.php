@@ -123,9 +123,15 @@ try {
 
     $pdo->commit();
 
+    // 5. Notificar automáticamente a Cuentas Corrientes y al Vendedor al validar
+    if ($nuevo_estado === 'RECIBIDO_TESORERIA') {
+        require_once __DIR__ . '/../../services/MailService.php';
+        MailService::notificarValidacionTesorería($pdo, $cobranza_id);
+    }
+
     echo json_encode([
         'success' => true,
-        'message' => 'Estado de cobranza actualizado con éxito',
+        'message' => 'Estado de cobranza actualizado con éxito y notificaciones enviadas',
         'nuevo_estado' => $nuevo_estado
     ]);
 

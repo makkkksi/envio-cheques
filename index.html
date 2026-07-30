@@ -15,7 +15,10 @@
         <header class="app-header">
             <div class="header-top">
                 <h2>Gestión de Cheques</h2>
-                <span class="user-badge">EXAMPLE_USER</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="user-badge" id="lblHeaderVendedor">EXAMPLE_USER</span>
+                    <button type="button" id="btnLogoutVendedor" onclick="abrirModalLogoutVendedor()" style="background:rgba(255,255,255,0.07); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); padding:4px 10px; border-radius:6px; font-size:0.78rem; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='rgba(220,38,38,0.15)';this.style.color='#fca5a5';" onmouseout="this.style.background='rgba(255,255,255,0.07)';this.style.color='#94a3b8';">Salir</button>
+                </div>
             </div>
 
             <!-- NAVEGACIÓN POR PESTAÑAS -->
@@ -234,7 +237,7 @@
                     <option value="TODOS">Todos los Estados</option>
                     <option value="EN_TRANSITO">En Tránsito (Chilexpress)</option>
                     <option value="ENTREGADO_SANTIAGO">Entregado (Santiago)</option>
-                    <option value="RECIBIDO_TESORERIA">Recibido Fisicamente</option>
+                    <option value="RECIBIDO_TESORERIA">Enviado a C.Corrientes</option>
                     <option value="DEPOSITADO">Depositado</option>
                     <option value="RECHAZADO">Rechazado / Devuelto</option>
                 </select>
@@ -409,7 +412,26 @@
 
 
 
+    <!-- MODAL LOGOUT VENDEDOR -->
+    <div id="modalLogoutVendedor" style="display:none; position:fixed; z-index:9999; inset:0; background:rgba(15,23,42,0.8); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+        <div style="background:#1e293b; border:1px solid #334155; border-radius:12px; padding:28px; max-width:360px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+            <h3 style="margin:0 0 10px; color:#f1f5f9; font-size:1.05rem;">Cerrar Sesión</h3>
+            <p style="margin:0 0 22px; color:#94a3b8; font-size:0.88rem;">¿Está seguro que desea salir del sistema?</p>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button type="button" onclick="cerrarModalLogoutVendedor()" style="padding:7px 14px; border-radius:6px; border:1px solid #475569; background:transparent; color:#94a3b8; cursor:pointer; font-size:0.88rem;">Cancelar</button>
+                <button type="button" onclick="confirmarLogoutVendedor()" style="padding:7px 14px; border-radius:6px; background:#dc2626; color:#fff; border:none; font-size:0.88rem; font-weight:600; cursor:pointer;">Sí, salir</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        function abrirModalLogoutVendedor() { document.getElementById('modalLogoutVendedor').style.display = 'flex'; }
+        function cerrarModalLogoutVendedor() { document.getElementById('modalLogoutVendedor').style.display = 'none'; }
+        function confirmarLogoutVendedor() {
+            fetch('api/auth/logout_vendedor.php', { method: 'POST' })
+                .then(() => { window.location.href = 'admin/login.php'; })
+                .catch(() => { window.location.href = 'admin/login.php'; });
+        }
+    </script>
     <script src="script.js?v=42"></script>
 </body>
-
 </html>

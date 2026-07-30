@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $user = $stmt->fetch();
 
                 // 4. Validar contraseña y rol
-                if ($user && (bool)$user['activo'] && in_array($user['rol'], ['TESORERIA', 'ADMINISTRADOR'])) {
+                if ($user && (bool)$user['activo'] && in_array($user['rol'], ['TESORERIA', 'ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                     if (password_verify($password, $user['password_hash'])) {
                         // Limpiar intentos fallidos previos si el login es exitoso
                         clearFailedAttempts($pdo, $email);
@@ -77,7 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['admin_user_nombre'] = $user['nombre'];
                         $_SESSION['admin_user_rol'] = $user['rol'];
 
-                        header('Location: index.php');
+                        if ($user['rol'] === 'SUPERVISORA_CC') {
+                            header('Location: cuentas_corrientes.php');
+                        } else {
+                            header('Location: index.php');
+                        }
                         exit;
                     }
                 }

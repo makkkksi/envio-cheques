@@ -17,19 +17,18 @@ require_once __DIR__ . '/../config/db.php';
 
 session_start();
 
-$vendedor_id = filter_input(INPUT_GET, 'vendedor_id', FILTER_VALIDATE_INT) 
-            ?: filter_input(INPUT_POST, 'vendedor_id', FILTER_VALIDATE_INT);
-$empresa = filter_input(INPUT_GET, 'empresa', FILTER_DEFAULT) 
-        ?: filter_input(INPUT_POST, 'empresa', FILTER_DEFAULT);
+$vendedor_id = null;
+if (isset($_REQUEST['vendedor_id']) && $_REQUEST['vendedor_id'] !== '') {
+    $vendedor_id = (int)$_REQUEST['vendedor_id'];
+} elseif (isset($_REQUEST['vendedor']) && $_REQUEST['vendedor'] !== '') {
+    $vendedor_id = (int)$_REQUEST['vendedor'];
+}
+
+$empresa = trim($_REQUEST['empresa'] ?? $_REQUEST['empresa_id'] ?? '');
 $vendedor_email = filter_input(INPUT_GET, 'vendedor_email', FILTER_SANITIZE_EMAIL) 
                ?: filter_input(INPUT_POST, 'vendedor_email', FILTER_SANITIZE_EMAIL);
 
-if (!$vendedor_id) {
-    $vendedor_id = filter_input(INPUT_GET, 'vendedor', FILTER_VALIDATE_INT) 
-                ?: filter_input(INPUT_POST, 'vendedor', FILTER_VALIDATE_INT);
-}
-
-if (!$vendedor_id && !$vendedor_email) {
+if ($vendedor_id === null && !$vendedor_email) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Faltan parámetros de identidad (vendedor_id o vendedor_email)']);
     exit;
@@ -39,9 +38,9 @@ try {
     $pdo = Database::getCobranzasConnection();
     
     $sellerEmail = null;
-    $sellerName = 'Sin Asignar';
+    $sellerName = null;
 
-    if ($vendedor_id && $empresa) {
+    if ($vendedor_id !== null && $empresa !== '') {
         $empresa_code = strtoupper(trim($empresa));
         $stmt = null;
         
@@ -70,7 +69,10 @@ try {
     
     if (!$sellerEmail && defined('APP_ENV') && APP_ENV === 'local') {
         $sellerEmail = "dev_{$vendedor_id}@local.test";
-        $sellerName = "Vendedor Local {$vendedor_id}";
+    }
+
+    if (!$sellerName || $sellerName === 'Sin Asignar') {
+        $sellerName = ($vendedor_id !== null) ? "Vendedor ID {$vendedor_id}" : "Vendedor Terreno";
     }
 
     if (!$sellerEmail) {

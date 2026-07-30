@@ -92,6 +92,24 @@ function getUsuarioActual(): int {
     return (int)$user['id'];
 }
 
+function requireRole(array $roles): void {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Sesión no iniciada. Acceso denegado.']);
+        exit;
+    }
+    $rol = $_SESSION['admin_user_rol'] ?? '';
+    if (!in_array($rol, $roles)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Acceso denegado. Rol no autorizado.']);
+        exit;
+    }
+}
+
+
 function getClientIp(): string {
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);

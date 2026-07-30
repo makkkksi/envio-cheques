@@ -114,6 +114,16 @@ if (!is_array($bancos) || count($bancos) === 0) {
 
 $numCheques = is_array($bancos) ? count($bancos) : 0;
 
+// Validar duplicados de número de cheque en el mismo envío
+if ($numCheques > 1 && is_array($numeros_cheque)) {
+    $numerosLimpios = array_map('trim', $numeros_cheque);
+    $numerosUnicos = array_unique($numerosLimpios);
+    if (count($numerosLimpios) !== count($numerosUnicos)) {
+        $duplicados = array_diff_assoc($numerosLimpios, $numerosUnicos);
+        $errors[] = 'Se detectaron números de cheque duplicados: ' . implode(', ', array_unique($duplicados)) . '. Cada cheque debe tener un número único.';
+    }
+}
+
 if (!empty($errors)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Faltan campos requeridos', 'errors' => $errors]);
@@ -178,18 +188,22 @@ try {
     $estadoInicial = 'PENDIENTE_ENVIO';
 
     // Obtener e identificar el vendedor (ignorar POST, usar solo identidad validada)
-    $vendedor_id = $usuario_id;
-    $vendedor_nombre = 'Sin Asignar';
+    $vendedor_id = $_SESSION['vendedor_auth']['vendedor_id'] ?? $usuario_id;
+    $vendedor_nombre = null;
 
-    if (isset($_SESSION['vendedor_auth']['nombre'])) {
+    if (!empty($_SESSION['vendedor_auth']['nombre']) && $_SESSION['vendedor_auth']['nombre'] !== 'Sin Asignar') {
         $vendedor_nombre = $_SESSION['vendedor_auth']['nombre'];
-    } elseif ($vendedor_id) {
+    } elseif ($usuario_id) {
         $stmtUsr = $pdo->prepare('SELECT nombre FROM usuarios WHERE id = :id');
-        $stmtUsr->execute([':id' => $vendedor_id]);
+        $stmtUsr->execute([':id' => $usuario_id]);
         $usrRow = $stmtUsr->fetch();
         if ($usrRow && !empty($usrRow['nombre'])) {
             $vendedor_nombre = $usrRow['nombre'];
         }
+    }
+
+    if (!$vendedor_nombre || $vendedor_nombre === 'Sin Asignar') {
+        $vendedor_nombre = ($vendedor_id !== null && $vendedor_id !== '') ? "Vendedor ID {$vendedor_id}" : "Vendedor Terreno";
     }
 
     // Normalizar lista de facturas a insertar

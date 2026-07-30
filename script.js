@@ -215,8 +215,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pendiente Envío', class: 'pendiente_envio' },
         'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'en_transito' },
         'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado (Sntg)', class: 'entregado_santiago' },
-        'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Tesoreria', class: 'recibido_tesoreria' },
-        'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado', class: 'depositado' },
+        'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>En Cola C.Corrientes', class: 'recibido_tesoreria' },
+        'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviado a C.Corrientes', class: 'depositado' },
         'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'rechazado' }
     };
 
@@ -1094,27 +1094,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             indicatorBox.innerHTML = '<span class="status-dot dot-neutral"></span><span id="lblStatusValidacionTexto">Seleccione la(s) factura(s) a pagar</span>';
             if (btnSubmit) btnSubmit.disabled = true;
         } else if (Math.abs(diff) < 0.01) {
-            // Calce perfecto (🟢)
-            indicatorBox.innerHTML = `<span class="status-dot dot-green"></span><span id="lblStatusValidacionTexto" style="color: #15803D;">🟢 Calce Perfecto: Montos Coinciden ($${totalCheques.toLocaleString('es-CL')})</span>`;
+            // Calce perfecto
+            indicatorBox.innerHTML = `<span class="status-dot dot-green"></span><span id="lblStatusValidacionTexto" style="color: #15803D;">Cheques cuadran con la factura ($${totalCheques.toLocaleString('es-CL')})</span>`;
             if (btnSubmit) {
                 btnSubmit.disabled = false;
                 btnSubmit.style.opacity = '1';
             }
             if (btnAgregarChequeEl) btnAgregarChequeEl.style.boxShadow = 'none';
         } else if (diff < 0) {
-            // Faltan fondos en cheques (🔴)
+            // Faltan fondos en cheques
             const faltante = Math.abs(diff);
-            indicatorBox.innerHTML = `<span class="status-dot dot-red"></span><span id="lblStatusValidacionTexto" style="color: #B91C1C;">🔴 Descalce: Monto faltante: $${faltante.toLocaleString('es-CL')}</span>`;
+            indicatorBox.innerHTML = `<span class="status-dot dot-red"></span><span id="lblStatusValidacionTexto" style="color: #B91C1C;">Falta $${faltante.toLocaleString('es-CL')} para cubrir la factura. Agregar otro cheque.</span>`;
             if (btnSubmit) {
                 btnSubmit.disabled = false;
             }
-            // Destacar botón de agregar cheque (Ley de Von Restorff)
+            // Destacar botón de agregar cheque
             if (btnAgregarChequeEl) {
                 btnAgregarChequeEl.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.4)';
             }
         } else {
-            // Cheques superan el monto (🟡)
-            indicatorBox.innerHTML = `<span class="status-dot dot-yellow"></span><span id="lblStatusValidacionTexto" style="color: #B45309;">🟡 Exceso: $${diff.toLocaleString('es-CL')} por sobre la factura</span>`;
+            // Cheques superan el monto
+            indicatorBox.innerHTML = `<span class="status-dot dot-yellow"></span><span id="lblStatusValidacionTexto" style="color: #B45309;">Los cheques superan la factura en $${diff.toLocaleString('es-CL')}. Revise los montos.</span>`;
             if (btnSubmit) {
                 btnSubmit.disabled = false;
             }
@@ -1184,7 +1184,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <div class="form-group">
                     <label>N° Cheque</label>
-                    <input type="text" name="numero_cheque[]" inputmode="numeric" pattern="[0-9]*" placeholder="N° de serie" required>
+                    <input type="text" name="numero_cheque[]" id="numeroCheque_${chequeId}" inputmode="numeric" pattern="[0-9]*" placeholder="N° de serie" required oninput="verificarDuplicadosCheques(this)">
+                    <span class="msg-duplicado" style="display:none; font-size:0.78rem; color:#dc2626; font-weight:600; margin-top:4px;">Número duplicado</span>
                 </div>
             </div>
 
@@ -1246,6 +1247,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     agregarCheque();
     btnAgregarCheque.addEventListener('click', agregarCheque);
+
+    // Verificación de duplicados de número de cheque en tiempo real
+    window.verificarDuplicadosCheques = function(inputEl) {
+        const todos = document.querySelectorAll('input[name="numero_cheque[]"]');
+        const valores = Array.from(todos).map(i => i.value.trim()).filter(v => v !== '');
+        todos.forEach(input => {
+            const msgEl = input.parentElement.querySelector('.msg-duplicado');
+            const esDuplicado = input.value.trim() !== '' && valores.filter(v => v === input.value.trim()).length > 1;
+            if (esDuplicado) {
+                input.style.borderColor = '#dc2626';
+                input.style.background = '#fef2f2';
+                if (msgEl) msgEl.style.display = 'block';
+            } else {
+                input.style.borderColor = '';
+                input.style.background = '';
+                if (msgEl) msgEl.style.display = 'none';
+            }
+        });
+        // Bloquear submit si hay duplicados
+        const hayDuplicados = valores.length !== new Set(valores).size;
+        const btnSubmit = document.getElementById('btnSubmitForm');
+        if (hayDuplicados && btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.title = 'Corrija los números de cheque duplicados antes de enviar';
+        } else if (btnSubmit) {
+            btnSubmit.removeAttribute('title');
+            actualizarBarraValidacionTiempoReal();
+        }
+    };
 
     // ==========================================
     // ENVÍO DEL FORMULARIO — FETCH REAL A LA API

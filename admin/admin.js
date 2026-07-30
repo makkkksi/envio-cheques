@@ -274,8 +274,8 @@ const ESTADOS_MAP = {
     'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Por Enviar', class: 'badge-PENDIENTE_ENVIO' },
     'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'badge-EN_TRANSITO' },
     'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado Stgo', class: 'badge-ENTREGADO_SANTIAGO' },
-    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Recibido Fisicamente', class: 'badge-RECIBIDO_TESORERIA' },
-    'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Depositado', class: 'badge-DEPOSITADO' },
+    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>En Cola C.Corrientes', class: 'badge-RECIBIDO_TESORERIA' },
+    'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviado a C.Corrientes', class: 'badge-DEPOSITADO' },
     'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'badge-RECHAZADO' }
 };
 
@@ -295,6 +295,22 @@ function initSplitView() {
             segmentedTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             estadoActualFilter = tab.dataset.estado;
+
+            const splitView = document.getElementById('splitViewContainer');
+            const filterRow = document.getElementById('filterRowAdmin');
+            const panelCC = document.getElementById('panelGestionCC');
+
+            if (estadoActualFilter === 'GESTION_CC') {
+                if (splitView) splitView.style.display = 'none';
+                if (filterRow) filterRow.style.display = 'none';
+                if (panelCC) panelCC.style.display = 'block';
+                cargarDatosGestionCC();
+                return;
+            } else {
+                if (splitView) splitView.style.display = 'flex';
+                if (filterRow) filterRow.style.display = 'flex';
+                if (panelCC) panelCC.style.display = 'none';
+            }
 
             if (selectFiltroBandeja) {
                 if (estadoActualFilter === 'BANDEJA_TRABAJO') {
@@ -669,8 +685,14 @@ function renderSidePanelDetail(data) {
     if (cheques.length === 0) {
         boxCheques.innerHTML = '<span style="font-size: 0.8rem; color: var(--color-text-muted);">No hay cheques registrados.</span>';
     } else {
-        boxCheques.innerHTML = cheques.map(chq => `
-            <div class="cheque-inspection-card">
+        // Botón editar datos (solo estados no finales)
+        const estadoFinal = ['DEPOSITADO', 'RECHAZADO'].includes(cob.estado);
+        const btnEditar = !estadoFinal
+            ? `<button type="button" onclick="activarModoEdicion(${cob.id})" style="font-size:0.78rem; padding:4px 10px; border-radius:5px; border:1px solid #e2e8f0; background:#f8fafc; color:#475569; cursor:pointer; margin-bottom:10px;">Corregir datos de cheques</button>`
+            : '';
+
+        boxCheques.innerHTML = btnEditar + cheques.map(chq => `
+            <div class="cheque-inspection-card" id="chqView_${chq.id}">
                 <div class="cheque-card-img-wrapper" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
                     <div class="cheque-controls-overlay">
                         <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">🔍 Lightbox</button>
@@ -715,31 +737,30 @@ function renderStickyActionButtons(cob) {
 
     let ctaHtml = '';
 
-    // REGLA ESTRICTA TESLER:
-    // Si está en EN_TRANSITO o ENTREGADO_SANTIAGO: ÚNICAMENTE CTA Primario "✓ Marcar Recibido". Ocultar Depósito y Rechazo.
-    if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO') {
+    // Si está en EN_TRANSITO, ENTREGADO_SANTIAGO o PENDIENTE_ENVIO: Mostrar "Validar y Enviar a Cuentas Corrientes" + "Rechazar"
+    if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO' || cob.estado === 'PENDIENTE_ENVIO') {
         ctaHtml = `
-            <button type="button" class="btn-b2b btn-b2b-success" style="width: 100%;" onclick="pedirConfirmacionRecepcion(${cob.id}, '${cob.numero_factura}')">
-                Confirmar Recepción Física en Tesorería
-            </button>
-        `;
-    } 
-    // Si ya está RECIBIDO_TESORERIA: Mostrar "Registrar Depósito" y "Rechazar"
-    else if (cob.estado === 'RECIBIDO_TESORERIA') {
-        ctaHtml = `
-            <button type="button" class="btn-b2b btn-b2b-primary" onclick="abrirModalDeposito(${cob.id})">
-                Registrar Depósito
+            <button type="button" class="btn-b2b btn-b2b-success" style="flex: 1;" onclick="pedirConfirmacionRecepcion(${cob.id}, '${cob.numero_factura}')">
+                VALIDAR / MANDAR A C.CORRIENTES
             </button>
             <button type="button" class="btn-b2b btn-b2b-danger" onclick="abrirModalRechazo(${cob.id})">
                 Rechazar
             </button>
         `;
     } 
+    // Si ya está RECIBIDO_TESORERIA: Mostrar mensaje de que está en cola
+    else if (cob.estado === 'RECIBIDO_TESORERIA') {
+        ctaHtml = `
+            <span style="font-size: 0.85rem; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #bfdbfe; flex: 1; text-align: center;">
+                ✓ Validado físicamente. En cola de despacho por C. Corrientes.
+            </span>
+        `;
+    }
     // Si ya fue DEPOSITADO o RECHAZADO: Deshabilitar acciones (Estado Final Inmutable)
     else if (cob.estado === 'DEPOSITADO') {
-        ctaHtml = `<span style="font-size: 0.85rem; color: #166534; font-weight: 700;">Cobranza Depositada Exitosamente</span>`;
+        ctaHtml = `<span style="font-size: 0.85rem; color: #166534; font-weight: 700;">✓ Cobranza Despachada a Cuentas Corrientes</span>`;
     } else if (cob.estado === 'RECHAZADO') {
-        ctaHtml = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">Documento Rechazado / Protestado</span>`;
+        ctaHtml = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">✕ Documento Rechazado / Protestado</span>`;
     } else {
         ctaHtml = `<span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 600;">Esperando despacho del vendedor (${cob.estado})</span>`;
     }
@@ -757,8 +778,8 @@ function renderHorizontalStepper(cob) {
     const pasos = [
         { key: 'PENDIENTE_ENVIO', label: 'Registrado' },
         { key: 'EN_TRANSITO', label: 'En Tránsito' },
-        { key: 'RECIBIDO_TESORERIA', label: 'Recepción' },
-        { key: 'DEPOSITADO', label: 'Depositado' }
+        { key: 'RECIBIDO_TESORERIA', label: 'En Cola C.C.' },
+        { key: 'DEPOSITADO', label: 'Despachado C.C.' }
     ];
 
     let currentIdx = 0;
@@ -805,11 +826,11 @@ function pedirConfirmacionRecepcion(id, numFactura) {
         modal.className = 'modal-overlay';
         modal.innerHTML = `
             <div class="modal-box">
-                <h3>Confirmar Recepción Física</h3>
-                <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 8px;">¿Deseas confirmar la recepción física de los cheques de la <strong id="lblConfirmNumFactura" style="color: var(--color-primary);">Factura N° -</strong> en las oficinas de Tesorería?</p>
+                <h3>Validar - Enviar Cuentas Corrientes</h3>
+                <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 8px;">¿Confirmas que los cheques físicos de la <strong id="lblConfirmNumFactura" style="color: var(--color-primary);">Factura N° -</strong> fueron recibidos y están validados para ser enviados a Cuentas Corrientes?</p>
                 <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                     <button type="button" class="btn-b2b" style="background: #e2e8f0; color: #334155;" onclick="cerrarModalConfirmacionRecepcion()">Cancelar</button>
-                    <button type="button" class="btn-b2b btn-b2b-success" id="btnConfirmarRecepcionSubmit">Confirmar Recepción</button>
+                    <button type="button" class="btn-b2b btn-b2b-success" id="btnConfirmarRecepcionSubmit">Validar y Enviar</button>
                 </div>
             </div>
         `;
@@ -998,4 +1019,295 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
+}
+
+// ==========================================
+// MÓDULO GERENCIAL CUENTAS CORRIENTES (GESTION_CC)
+// ==========================================
+
+function cargarDatosGestionCC() {
+    fetch('api/get_gestion_cc.php')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                showToast(data.message || 'Error al cargar gestión C.Corr', 'error');
+                return;
+            }
+            
+            const info = data.data;
+
+            // 1. Hora de despacho
+            const inputHora = document.getElementById('inputHoraDespacho');
+            if (inputHora) {
+                inputHora.value = info.hora_despacho_diario;
+            }
+
+            // 2. Renderizar matriz de empresas
+            const tbodyAsignaciones = document.getElementById('tblAsignacionesDigitadoras');
+            if (tbodyAsignaciones) {
+                let totalPendientes = 0;
+                tbodyAsignaciones.innerHTML = info.empresas.map(emp => {
+                    totalPendientes += parseInt(emp.cheques_pendientes_hoy || 0);
+                    return `
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td style="padding: 12px; font-weight: 600; color: #0f172a;">${emp.nombre}</td>
+                            <td style="padding: 12px;">
+                                <input type="email" id="email_emp_${emp.id}" value="${emp.email_digitadora || ''}" class="select-compact" style="width: 100%; max-width: 320px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                            </td>
+                            <td style="padding: 12px; text-align: right;">
+                                <span style="font-size: 0.8rem; color: #64748b; margin-right: 12px;">${emp.cheques_pendientes_hoy || 0} pendientes hoy</span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                // 3. Métricas
+                const lblMetrics = document.getElementById('lblMétricasConsola');
+                if (lblMetrics) {
+                    lblMetrics.textContent = `${totalPendientes} cheques / cobranzas validados hoy (En estado RECIBIDO_TESORERIA)`;
+                }
+            }
+
+            // 4. Bitácora de Envíos
+            const tbodyBitacora = document.getElementById('tblBitacoraEnvios');
+            if (tbodyBitacora) {
+                if (!info.log_envios || info.log_envios.length === 0) {
+                    tbodyBitacora.innerHTML = `
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 24px; color: #64748b;">No hay registros de envíos en la bitácora.</td>
+                        </tr>
+                    `;
+                } else {
+                    tbodyBitacora.innerHTML = info.log_envios.map(log => {
+                        const esExitoso = log.estado_envio === 'ENVIADO';
+                        const badgeStyle = esExitoso 
+                            ? 'background: #dcfce7; color: #15803d; border-radius: 9999px; padding: 2px 8px; font-size: 0.8rem; font-weight: 600;' 
+                            : 'background: #fee2e2; color: #b91c1c; border-radius: 9999px; padding: 2px 8px; font-size: 0.8rem; font-weight: 600; cursor: help;';
+                        
+                        const titleError = log.error_mensaje ? `title="${log.error_mensaje}"` : '';
+
+                        return `
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="padding: 12px; color: #0f172a; font-weight: 500;">${log.fecha_envio}</td>
+                                <td style="padding: 12px; font-weight: 600;">${log.empresa || 'Consolidado'}</td>
+                                <td style="padding: 12px; color: #475569;">${log.destinatario}</td>
+                                <td style="padding: 12px; text-align: center; font-weight: 700;">${log.cantidad_cobranzas}</td>
+                                <td style="padding: 12px;"><span style="${badgeStyle}" ${titleError}>${log.estado_envio}</span></td>
+                                <td style="padding: 12px; text-align: right;">
+                                    <button type="button" class="btn-b2b btn-b2b-secondary" onclick="reenviarBitacoraCC(${log.id})" style="padding: 4px 8px; font-size: 0.8rem;">🔄 Re-enviar</button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            }
+
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Error al conectar con la API de gestión C.Corr', 'error');
+        });
+}
+
+function guardarConfiguracionGlobalCC() {
+    const inputHora = document.getElementById('inputHoraDespacho');
+    if (!inputHora || !inputHora.value) {
+        showToast('Seleccione una hora válida', 'error');
+        return;
+    }
+
+    const asignaciones = [];
+    const inputs = document.querySelectorAll('[id^="email_emp_"]');
+    inputs.forEach(inp => {
+        const id = parseInt(inp.id.replace('email_emp_', ''));
+        const email = inp.value.trim();
+        asignaciones.push({ id, email });
+    });
+
+    const payload = {
+        hora_despacho_diario: inputHora.value,
+        asignaciones_empresas: asignaciones
+    };
+
+    fetch('api/guardar_configuracion_cc.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            showToast(data.message || 'Error al guardar la configuración', 'error');
+            return;
+        }
+        showToast('Configuración guardada correctamente.', 'success');
+        cargarDatosGestionCC();
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Error al guardar configuración global', 'error');
+    });
+}
+
+function despacharResumenManualCC() {
+    if (!confirm('¿Está seguro de despachar el resumen diario consolidado ahora manualmente? Se enviará correo a las digitadoras respectivas.')) {
+        return;
+    }
+
+    fetch('api/despachar_resumen_cc.php', {
+        method: 'POST'
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            showToast(data.message || 'Error al despachar el resumen', 'error');
+            return;
+        }
+        showToast(data.message || 'Resumen despachado con éxito.', 'success');
+        cargarDatosGestionCC();
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Error al conectar con el despachador', 'error');
+    });
+}
+
+function reenviarBitacoraCC(logId) {
+    const nuevoCorreo = prompt('¿Desea reenviar a un correo alternativo? Dejar en blanco para usar el correo original registrado:');
+    if (nuevoCorreo === null) return; // Clic en cancelar
+
+    const payload = {
+        log_id: logId,
+        nuevo_correo: nuevoCorreo.trim()
+    };
+
+    fetch('api/reenviar_informe_cc.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.success) {
+            showToast(data.message || 'Error al reenviar informe', 'error');
+            return;
+        }
+        showToast(data.message || 'Informe reenviado correctamente.', 'success');
+        cargarDatosGestionCC();
+    })
+    .catch(err => {
+        console.error(err);
+        showToast('Error de red al reenviar informe', 'error');
+    });
+}
+
+
+// ============================================================
+// MODO EDICIÓN INLINE DE CHEQUES — TESORERÍA
+// ============================================================
+let _chequesEdicionCache = [];
+
+function activarModoEdicion(cobranzaId) {
+    const boxCheques = document.getElementById('boxPanelChequesList');
+    if (!boxCheques) return;
+
+    const cards = boxCheques.querySelectorAll('[id^="chqView_"]');
+    if (cards.length === 0) { showToast('No hay cheques para editar', 'error'); return; }
+
+    _chequesEdicionCache = Array.from(cards).map(card => {
+        const id = parseInt(card.id.replace('chqView_', ''));
+        const banco = card.querySelector('.cheque-banco-name')?.textContent.trim() || '';
+        const montoText = card.querySelector('.cheque-monto-value')?.textContent.replace(/[^0-9]/g, '') || '0';
+        const infoLine = card.querySelector('[style*="font-size: 0.8rem"]')?.textContent || '';
+        const numMatch = infoLine.match(/N[°º] Cheque:\s*([^\|]+)/);
+        const vencMatch = infoLine.match(/Vencimiento:\s*(.+)/);
+        return {
+            id,
+            banco,
+            numero_cheque: numMatch ? numMatch[1].trim() : '',
+            monto: parseInt(montoText) || 0,
+            fecha_vencimiento: vencMatch ? vencMatch[1].trim() : '',
+        };
+    });
+
+    const bancos = ['Banco de Chile', 'Santander', 'BCI', 'Banco Estado', 'Scotiabank', 'Itaú', 'Otro'];
+
+    const formRows = _chequesEdicionCache.map((chq, i) => `
+        <div style="border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px; background:#f8fafc;">
+            <div style="font-size:0.78rem; font-weight:700; color:#64748b; margin-bottom:8px;">Cheque #${i + 1}</div>
+            <input type="hidden" id="editChqId_${i}" value="${chq.id}">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px;">
+                <div>
+                    <label style="font-size:0.78rem; font-weight:600; color:#475569;">Banco</label>
+                    <select id="editBanco_${i}" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem;">
+                        ${bancos.map(b => `<option value="${b}" ${chq.banco === b ? 'selected' : ''}>${b}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:0.78rem; font-weight:600; color:#475569;">N° Cheque</label>
+                    <input type="text" id="editNumero_${i}" value="${chq.numero_cheque}" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem; box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <div>
+                    <label style="font-size:0.78rem; font-weight:600; color:#475569;">Monto ($)</label>
+                    <input type="number" id="editMonto_${i}" value="${chq.monto}" min="1" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.78rem; font-weight:600; color:#475569;">Vencimiento</label>
+                    <input type="date" id="editFecha_${i}" value="${chq.fecha_vencimiento}" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem; box-sizing:border-box;">
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    boxCheques.innerHTML = `
+        <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:0.82rem; color:#92400e; font-weight:600;">
+            Modo corrección activo — Corrija los datos y presione Guardar.
+        </div>
+        ${formRows}
+        <div style="display:flex; gap:10px; margin-top:8px;">
+            <button type="button" onclick="guardarEdicionTesoreria(${cobranzaId}, ${_chequesEdicionCache.length})" style="flex:1; padding:9px; border-radius:6px; background:#166534; color:#fff; border:none; font-weight:700; font-size:0.9rem; cursor:pointer;">
+                Guardar Cambios
+            </button>
+            <button type="button" onclick="seleccionarCobranza(${cobranzaId})" style="padding:9px 14px; border-radius:6px; border:1px solid #e2e8f0; background:#fff; color:#475569; cursor:pointer; font-size:0.9rem;">
+                Cancelar
+            </button>
+        </div>
+    `;
+}
+
+async function guardarEdicionTesoreria(cobranzaId, count) {
+    const cheques = [];
+    for (let i = 0; i < count; i++) {
+        cheques.push({
+            id: parseInt(document.getElementById(`editChqId_${i}`)?.value || 0),
+            banco: document.getElementById(`editBanco_${i}`)?.value?.trim(),
+            numero_cheque: document.getElementById(`editNumero_${i}`)?.value?.trim(),
+            monto: parseFloat(document.getElementById(`editMonto_${i}`)?.value || 0),
+            fecha_vencimiento: document.getElementById(`editFecha_${i}`)?.value?.trim(),
+        });
+    }
+
+    try {
+        const res = await fetch('api/editar_cobranza_tesoreria.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cobranza_id: cobranzaId, cheques })
+        });
+        const data = await res.json();
+        if (!data.success) {
+            showToast(data.message || 'Error al guardar', 'error');
+            return;
+        }
+        showToast(data.message || 'Datos actualizados correctamente.', 'success');
+        seleccionarCobranza(cobranzaId);
+    } catch (err) {
+        console.error(err);
+        showToast('Error de conexión al guardar cambios', 'error');
+    }
 }

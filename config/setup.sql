@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   password_hash VARCHAR(255) NULL,
   api_token VARCHAR(64) NULL,
   token_expires_at TIMESTAMP NULL,
-  rol ENUM('VENDEDOR', 'TESORERIA', 'ADMINISTRADOR') DEFAULT 'TESORERIA',
+  rol ENUM('VENDEDOR', 'TESORERIA', 'ADMINISTRADOR', 'SUPERVISORA_CC') DEFAULT 'TESORERIA',
   dias_alerta_personalizado INT NULL,
   activo BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -120,6 +120,31 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   KEY idx_audit_logs_action (accion)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 8. Bitácora de Envíos de Informes (Garantía de No Pérdida de Cheques)
+CREATE TABLE IF NOT EXISTS log_envios_informes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id INT NULL,
+  tipo_informe ENUM('INDIVIDUAL_TESORERIA', 'RESUMEN_DIARIO_16HRS') NOT NULL,
+  destinatario VARCHAR(150) NOT NULL,
+  copia_cc VARCHAR(150) NULL,
+  asunto VARCHAR(255) NOT NULL,
+  estado_envio ENUM('ENVIADO', 'FALLIDO') NOT NULL DEFAULT 'ENVIADO',
+  error_mensaje TEXT NULL,
+  cantidad_cobranzas INT DEFAULT 1,
+  fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_log_envios_empresa (empresa_id),
+  KEY idx_log_envios_estado (estado_envio),
+  FOREIGN KEY (empresa_id) REFERENCES empresas(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9. Configuraciones Globales del Sistema
+CREATE TABLE IF NOT EXISTS configuraciones_sistema (
+  clave VARCHAR(50) PRIMARY KEY,
+  valor VARCHAR(255) NOT NULL,
+  descripcion VARCHAR(255) NULL,
+  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Datos Semilla (Seeders)
 INSERT INTO empresas (id, nombre, nombre_bd, email_tesoreria_defecto) VALUES
 (1, 'Automarco LTDA', 'automarc_automarco', 'tesoreria@automarco.cl'),
@@ -135,7 +160,8 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO usuarios (id, nombre, email, password_hash, rol, activo) VALUES
 (1, 'Sistema', 'sistema@app.local', '$2y$12$PX7jyHQUa8WEcCP08gCZbeRGv2CH7chHo3zNJGLIFGpIa3eOKdK5q', 'ADMINISTRADOR', 1),
 (2, 'Vendedor de Prueba', 'vendedor@app.local', '$2y$12$KICHjGYdMzIcxiPU0yik7eeJ4K45m.z/DknlSRXQ3jjVx4GjBJBY', 'VENDEDOR', 1),
-(3, 'Tesorero Automarco', 'tesoreria@automarco.cl', '$2y$12$qsi4wIpGJ36qocYfN7Muvujd/GpKw36PGdkyqSmrGjW.K0MktMqzC', 'TESORERIA', 1)
+(3, 'Tesorero Automarco', 'tesoreria@automarco.cl', '$2y$12$qsi4wIpGJ36qocYfN7Muvujd/GpKw36PGdkyqSmrGjW.K0MktMqzC', 'TESORERIA', 1),
+(4, 'Supervisora Cuentas Corrientes', 'cuentascorrientes@automarco.cl', '$2y$12$qsi4wIpGJ36qocYfN7Muvujd/GpKw36PGdkyqSmrGjW.K0MktMqzC', 'SUPERVISORA_CC', 1)
 ON DUPLICATE KEY UPDATE 
   nombre=VALUES(nombre),
   email=VALUES(email),
