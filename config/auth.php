@@ -22,6 +22,7 @@ function requireAuth(PDO $pdo, array $allowedRoles = []): array {
     if (defined('APP_ENV') && APP_ENV === 'local') {
         // En local, simular usuario 1 solo si no hay token explícito ni sesión de vendedor
         if (empty($authHeader) && empty($_SESSION['vendedor_auth'])) {
+            error_log("[SECURITY WARNING] Developer auth bypass triggered in config/auth.php. Local environment mock active.");
             return [
                 'id' => 1,
                 'nombre' => 'Sistema',

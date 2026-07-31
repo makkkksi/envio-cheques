@@ -95,7 +95,7 @@ if (!empty($errors)) {
     exit;
 }
 
-$archivosFisicosSubidos = [];
+$archivosPasoActual = []; // Solo archivos subidos en ESTE paso (comprobante/firma)
 try {
     $pdo = Database::getCobranzasConnection();
 
@@ -139,13 +139,13 @@ try {
             throw new InvalidArgumentException('Se requiere la foto del comprobante de Chilexpress');
         }
         $comprobante_url = procesarSubidaArchivo($_FILES['foto_comprobante'], (int)$cobranza['empresa_id'], 'comprobantes');
-        $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $comprobante_url);
+        $archivosPasoActual[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $comprobante_url);
     } else {
         if (!isset($_FILES['foto_firma'])) {
             throw new InvalidArgumentException('Se requiere la foto de la firma de recepción de Santiago');
         }
         $comprobante_url = procesarSubidaArchivo($_FILES['foto_firma'], (int)$cobranza['empresa_id'], 'comprobantes');
-        $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $comprobante_url);
+        $archivosPasoActual[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $comprobante_url);
     }
 
     // Determinar nuevo estado
@@ -185,14 +185,21 @@ try {
 
     $pdo->commit();
 
+    // ══════════════════════════════════════════════════════════════════════
+    // POST-COMMIT: La transacción de BD ya fue confirmada exitosamente.
+    // A partir de aquí, NUNCA se deben borrar archivos ni retornar error 500.
+    // El envío de correo es una operación "best-effort" (Mailtrap sandbox / SMTP).
+    // ══════════════════════════════════════════════════════════════════════
+
     // 5. Obtener lista de cheques para la notificación de correo
     $stmtChq = $pdo->prepare('SELECT banco, numero_cheque, monto, fecha_vencimiento, foto_cheque_url, comentario FROM cheques WHERE cobranza_id = :id');
     $stmtChq->execute([':id' => $cobranza_id]);
     $cheques = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
 
-    // Agregar las fotos de los cheques a la lista de archivos para adjuntar
+    // Construir lista de adjuntos para el correo (separada de $archivosPasoActual)
+    $adjuntosCorreo = $archivosPasoActual; // El comprobante recién subido
     foreach ($cheques as $chq) {
-        $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $chq['foto_cheque_url']);
+        $adjuntosCorreo[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $chq['foto_cheque_url']);
     }
 
     // Preparar datos para MailService
@@ -209,24 +216,39 @@ try {
         'email_cliente' => $cobranza['email_cliente']
     ];
 
-    MailService::enviarNotificacion($cobranzaDataMail, $cheques, $archivosFisicosSubidos);
+    // Envío de correo aislado: si falla SMTP, se registra pero NO se borran archivos
+    $correoEnviado = false;
+    try {
+        $correoEnviado = MailService::enviarNotificacion($cobranzaDataMail, $cheques, $adjuntosCorreo);
+    } catch (Exception $mailEx) {
+        error_log('[completar_envio.php] Advertencia SMTP post-commit: ' . $mailEx->getMessage());
+    }
 
-    echo json_encode([
+    // Respuesta exitosa siempre (la BD ya está confirmada)
+    $response = [
         'success' => true,
-        'message' => 'Envío registrado y notificado con éxito',
+        'message' => 'Envío registrado con éxito',
         'nuevo_estado' => $nuevoEstado
-    ]);
+    ];
+    if (!$correoEnviado) {
+        $response['advertencia_correo'] = 'La notificación por correo no pudo enviarse. Tesorería podrá ver la cobranza desde el portal.';
+        error_log("[completar_envio.php] Cobranza #{$cobranza_id} confirmada en BD pero correo SMTP falló (sandbox/red).");
+    }
+
+    echo json_encode($response);
 
 } catch (InvalidArgumentException $e) {
+    // Error de validación PRE-COMMIT: sí borrar el comprobante recién subido
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-    foreach ($archivosFisicosSubidos as $pathFile) {
+    foreach ($archivosPasoActual as $pathFile) {
         if (file_exists($pathFile)) @unlink($pathFile);
     }
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 } catch (Exception $e) {
+    // Error de BD/sistema PRE-COMMIT: sí borrar el comprobante recién subido
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-    foreach ($archivosFisicosSubidos as $pathFile) {
+    foreach ($archivosPasoActual as $pathFile) {
         if (file_exists($pathFile)) @unlink($pathFile);
     }
     error_log('[completar_envio.php] Error: ' . $e->getMessage());

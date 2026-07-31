@@ -1151,9 +1151,19 @@ function guardarConfiguracionGlobalCC() {
     });
 }
 
-function despacharResumenManualCC() {
+let despachandoResumenManual = false;
+function despacharResumenManualCC(btnEl) {
+    if (despachandoResumenManual) return;
     if (!confirm('¿Está seguro de despachar el resumen diario consolidado ahora manualmente? Se enviará correo a las digitadoras respectivas.')) {
         return;
+    }
+
+    despachandoResumenManual = true;
+    let oldText = '⚡ Despachar Resumen Ahora';
+    if (btnEl) {
+        btnEl.disabled = true;
+        oldText = btnEl.textContent;
+        btnEl.textContent = 'Despachando...';
     }
 
     fetch('api/despachar_resumen_cc.php', {
@@ -1171,6 +1181,13 @@ function despacharResumenManualCC() {
     .catch(err => {
         console.error(err);
         showToast('Error al conectar con el despachador', 'error');
+    })
+    .finally(() => {
+        despachandoResumenManual = false;
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.textContent = oldText;
+        }
     });
 }
 

@@ -1547,18 +1547,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('btnCancelarConfirmVendedor').onclick = () => {
                     modalConfirm.style.display = 'none';
                 };
-                document.getElementById('btnEjecutarEnvioVendedor').onclick = () => {
+                document.getElementById('btnEjecutarEnvioVendedor').onclick = function() {
+                    const btn = this;
+                    btn.disabled = true;
+                    btn.textContent = 'Procesando...';
                     modalConfirm.style.display = 'none';
-                    ejecutarSubidaEnvioVendedor();
+                    ejecutarSubidaEnvioVendedor(btn);
                 };
             }
             modalConfirm.style.display = 'flex';
         }
 
-        async function ejecutarSubidaEnvioVendedor() {
+        async function ejecutarSubidaEnvioVendedor(btnVendedor) {
             const btnSubmitModal = document.getElementById('btnConfirmarEnvioSubmit');
-            btnSubmitModal.disabled = true;
-            btnSubmitModal.textContent = 'Enviando...';
+            if (btnSubmitModal) {
+                btnSubmitModal.disabled = true;
+                btnSubmitModal.textContent = 'Enviando...';
+            }
 
             try {
                 const formData = new FormData();
@@ -1569,20 +1574,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     formData.set('numero_seguimiento', document.getElementById('modalNumSeguimiento').value);
                     const inputComprobante = document.getElementById('modalFotoComprobante');
                     if (inputComprobante.files && inputComprobante.files[0]) {
-                        btnSubmitModal.textContent = 'Comprimiendo...';
+                        if (btnSubmitModal) btnSubmitModal.textContent = 'Comprimiendo...';
                         const compressed = await compressImage(inputComprobante.files[0]);
                         formData.set('foto_comprobante', compressed, compressed.name);
                     }
                 } else {
                     const inputFirma = document.getElementById('modalFotoFirma');
                     if (inputFirma.files && inputFirma.files[0]) {
-                        btnSubmitModal.textContent = 'Comprimiendo...';
+                        if (btnSubmitModal) btnSubmitModal.textContent = 'Comprimiendo...';
                         const compressed = await compressImage(inputFirma.files[0]);
                         formData.set('foto_firma', compressed, compressed.name);
                     }
                 }
 
-                btnSubmitModal.textContent = 'Subiendo...';
+                if (btnSubmitModal) btnSubmitModal.textContent = 'Subiendo...';
 
                 const response = await fetch('api/completar_envio.php', {
                     method: 'POST',
@@ -1609,8 +1614,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error(err);
                 showToast('Error de conexión al completar el envío.', 'error');
             } finally {
-                btnSubmitModal.disabled = false;
-                btnSubmitModal.textContent = 'Confirmar Envío';
+                if (btnSubmitModal) {
+                    btnSubmitModal.disabled = false;
+                    btnSubmitModal.textContent = 'Confirmar Envío';
+                }
+                if (btnVendedor) {
+                    btnVendedor.disabled = false;
+                    btnVendedor.textContent = 'Sí, Confirmar Envío';
+                }
             }
         }
     }

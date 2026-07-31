@@ -864,9 +864,19 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                 cargarDatosCC();
             });
         }
-
+        let despachandoCC = false;
         function ejecutarDespachoCC() {
+            if (despachandoCC) return;
+            const btnDespachar = document.getElementById('btnDespacharResumen');
+            
+            despachandoCC = true;
+            if (btnDespachar) {
+                btnDespachar.disabled = true;
+                btnDespachar.textContent = 'Despachando...';
+            }
+            
             cerrarConfirmarDespacho();
+            
             fetch('api/despachar_resumen_cc.php', { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
@@ -876,6 +886,17 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                     }
                     showToast(data.message || 'Resumen despachado con éxito', 'success');
                     cargarDatosCC();
+                })
+                .catch(err => {
+                    console.error(err);
+                    showToast('Error al conectar con el despachador', 'error');
+                })
+                .finally(() => {
+                    despachandoCC = false;
+                    if (btnDespachar) {
+                        btnDespachar.disabled = false;
+                        btnDespachar.textContent = '⚡ Despachar Resumen Ahora';
+                    }
                 });
         }
 

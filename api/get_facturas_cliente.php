@@ -69,13 +69,15 @@ try {
 
     // Obtener cuotas actualmente en proceso de cobranza activa (estados != RECHAZADO)
     // para no mostrarlas duplicadas al vendedor mientras se gestionan.
+    // OPTIMIZACIÓN: Filtrar solo por el RUT del cliente consultado (evita cargar todo el holding en RAM).
     $stmtEnProceso = $pdo->prepare("
         SELECT cf.codigo_empresa, cf.numero_factura, cf.saldo_cuota
         FROM cobranza_facturas cf
         INNER JOIN cobranzas c ON cf.cobranza_id = c.id
         WHERE c.estado != 'RECHAZADO'
+          AND c.rut_cliente = :rut_cliente
     ");
-    $stmtEnProceso->execute();
+    $stmtEnProceso->execute([':rut_cliente' => $clirut]);
     $enProceso = $stmtEnProceso->fetchAll(PDO::FETCH_ASSOC);
 
     // Contador de ocurrencias ocupadas por (empresa + doc + saldo)

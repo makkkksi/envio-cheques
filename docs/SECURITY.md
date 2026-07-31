@@ -298,3 +298,18 @@ El sistema se integra con una App Android legada (Eclipse) y bases de datos MySQ
    - Crear `uploads/.htaccess` para resolver **SEC-03**.
    - Implementar validación de sesión/token en `api/get_clientes.php` (**SEC-01**).
 
+---
+
+## 10. Historial de Ajustes de Auditoría de Código (Julio 2026)
+
+Durante la auditoría general de seguridad y rendimiento de Julio de 2026, se aplicaron y documentaron los siguientes ajustes de hardening:
+
+### 10.1 Protección contra Pérdida de Datos en SMTP (`api/completar_envio.php`)
+* **Medida:** Se aislaron las acciones post-commit del bloque `try-catch` principal de base de datos.
+* **Comportamiento:** Si la transacción de base de datos se confirma exitosamente (`$pdo->commit()`), cualquier falla posterior en la llamada SMTP de `MailService::enviarNotificacion` no causará la eliminación (`unlink`) de las fotos de los cheques (evitando la pérdida irreversible de archivos físicos). La llamada de correo ahora es de tipo *best-effort* y fallará con advertencias en la respuesta en lugar de códigos de error 500.
+
+### 10.2 Alerta de Bypass de Autenticación en Entorno de Desarrollo (`config/auth.php`)
+* **Medida:** Se agregó registro de seguridad explícito en el archivo de log del servidor.
+* **Comportamiento:** Cuando la aplicación se ejecuta con `APP_ENV = 'local'` y se invoca un bypass silencioso para otorgar privilegios de `ADMINISTRADOR` sin token Bearer, el sistema imprime un registro de advertencia `[SECURITY WARNING]` en el log de errores. Esto previene que una mala configuración involuntaria de `APP_ENV` en producción pase desapercibida para el departamento de TI.
+
+
