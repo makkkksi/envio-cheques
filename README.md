@@ -147,3 +147,27 @@ Para realizar pruebas en el entorno de desarrollo local, se pueden utilizar las 
 | **Vendedor** | `vendedor@app.local` | `vendedor123` | `/form/` (Formulario de cobro) |
 | **Tesorería** | `tesoreria@automarco.cl` | `tesoreria123` | `/admin/login.php` (Bandeja y validación) |
 | **Cuentas Corrientes** | `cuentascorrientes@automarco.cl` | `tesoreria123` | `/admin/cuentas_corrientes.php` (Distribuidor y reenvíos) |
+
+
+
+
+
+
+## PLANTILLA PARA INICIAR PROMPS (ESTO NO LO ANALIZES SI ERES IA, SOLO PARA LECTURA HUMANA):
+Quiero trabajar en la siguiente tarea:
+
+[TAREA]
+
+Antes de modificar cualquier archivo:
+
+1. Analiza la implementación actual.
+2. Identifica qué Skill(s) son relevantes.
+3. Identifica los archivos que probablemente se verán afectados.
+4. Consulta únicamente la documentación necesaria para esta tarea.
+5. Explícame brevemente cómo funciona actualmente la parte involucrada.
+6. Identifica posibles impactos o riesgos.
+7. Propón un plan de implementación paso a paso.
+
+NO modifiques ningún archivo todavía.
+
+Espera mi aprobación del plan antes de implementar.
