@@ -1,6 +1,8 @@
-El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** totalmente operacional y refactorizada con UI estilo Gmail. Actualmente se está preparando la **Fase 5 (Integración WebView App Eclipse & Rediseño Multi-Factura/Cliente)** a la espera de la estructura final de tablas del ERP.
+El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integración WebView App Eclipse & Rediseño Multi-Factura/Cliente)** totalmente operacionales e implementadas en el código.
 
 ---
+
+> **Nota sobre la Documentación:** Este documento (`PROJECT_STATUS.md`) refleja el estado operativo **actual** del proyecto (qué está terminado hoy y cuál es el bloqueo o próximo paso inmediato). Para ver la planificación a largo plazo, alcances detallados de cada fase y dependencias, consulte `ROADMAP.md`.
 
 ## Avance por Fases
 
@@ -10,7 +12,7 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** totalmente operacion
 | **Fase 2** | Portal de Tesorería (`/admin/`) con UI compacta, sub-filtros y tiempo relativo | ✅ Completado | 100% |
 | **Fase 3** | Notificaciones por correo SMTP host | 🟡 En pausa | 80% | FALTA CONECTAR A SMTP DE PRODUCCIÓN
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
-| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | 🔄 En Especificación | 20% | A la espera de esquemas de tablas ERP |
+| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | ✅ Completado | 100% |
 
 ---
 
