@@ -41,6 +41,15 @@ try {
     $stmtSup->execute();
     $ccEmail = $stmtSup->fetchColumn() ?: 'cuentascorrientes@automarco.cl';
 
+    // Obtener emails de digitadoras para personalizar el asunto
+    $stmtDig1 = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'email_digitadora_1'");
+    $stmtDig1->execute();
+    $emailDig1 = $stmtDig1->fetchColumn();
+
+    $stmtDig2 = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'email_digitadora_2'");
+    $stmtDig2->execute();
+    $emailDig2 = $stmtDig2->fetchColumn();
+
     // Obtener todas las cobranzas aprobadas
     $stmtCobranzas = $pdo->prepare("
         SELECT 
@@ -58,18 +67,78 @@ try {
         exit;
     }
 
-    // Agrupar por empresa
+    // Obtener empresas para el mapeo
+    $stmtEmp = $pdo->prepare("SELECT id, nombre, email_tesoreria_defecto FROM empresas");
+    $stmtEmp->execute();
+    $empresasPorNombre = [];
+    $empresasPorId = [];
+    foreach ($stmtEmp->fetchAll(PDO::FETCH_ASSOC) as $e) {
+        $empresasPorNombre[$e['nombre']] = $e;
+        $empresasPorId[$e['id']] = $e;
+    }
+
+    // Agrupar por empresa (basado en cheques)
     $agrupado = [];
     foreach ($cobranzasHoy as $c) {
-        $empId = $c['empresa_id'];
-        if (!isset($agrupado[$empId])) {
-            $agrupado[$empId] = [
-                'nombre' => $c['empresa_nombre'],
-                'email' => $c['email_tesoreria_defecto'],
-                'cobranzas' => []
-            ];
+        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = ?");
+        $stmtCheques->execute([$c['id']]);
+        $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($cheques)) {
+            // Sin cheques, usar la empresa original
+            $empId = $c['empresa_id'];
+            if (!isset($agrupado[$empId])) {
+                $agrupado[$empId] = [
+                    'nombre' => $c['empresa_nombre'],
+                    'email' => $c['email_tesoreria_defecto'],
+                    'cobranzas' => []
+                ];
+            }
+            $c_copy = $c;
+            $c_copy['cheques_filtrados'] = [];
+            $agrupado[$empId]['cobranzas'][] = $c_copy;
+        } else {
+            // Agrupar cheques por emitido_a
+            $chequesAgrupados = [];
+            foreach ($cheques as $chq) {
+                $emitido = !empty($chq['emitido_a']) ? trim($chq['emitido_a']) : $c['empresa_nombre'];
+                
+                $targetEmpId = $c['empresa_id'];
+                if (isset($empresasPorNombre[$emitido])) {
+                    $targetEmpId = $empresasPorNombre[$emitido]['id'];
+                }
+
+                if (!isset($chequesAgrupados[$targetEmpId])) {
+                    $chequesAgrupados[$targetEmpId] = [];
+                }
+                $chequesAgrupados[$targetEmpId][] = $chq;
+            }
+
+            // Insertar cobranza fragmentada
+            foreach ($chequesAgrupados as $targetEmpId => $listaCheques) {
+                if (!isset($agrupado[$targetEmpId])) {
+                    $agrupado[$targetEmpId] = [
+                        'nombre' => $empresasPorId[$targetEmpId]['nombre'],
+                        'email' => $empresasPorId[$targetEmpId]['email_tesoreria_defecto'],
+                        'cobranzas' => []
+                    ];
+                }
+                $c_copy = $c;
+                $c_copy['cheques_filtrados'] = $listaCheques;
+                $agrupado[$targetEmpId]['cobranzas'][] = $c_copy;
+            }
         }
-        $agrupado[$empId]['cobranzas'][] = $c;
+    }
+
+    // Validar que todas las empresas tengan un email destino configurado antes de enviar nada
+    foreach ($agrupado as $empId => $data) {
+        if (empty($data['email'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => "La empresa '{$data['nombre']}' no tiene un correo asignado. Ve a Configuración de Cuentas Corrientes y asigna el correo de la digitadora."
+            ]);
+            exit;
+        }
     }
 
     $resultados = [];
@@ -77,24 +146,33 @@ try {
     // Enviar un correo por cada empresa
     foreach ($agrupado as $empId => $data) {
         $destinatario = $data['email'];
-        if (empty($destinatario)) continue;
-
+        
         $totalCobranzas = count($data['cobranzas']);
-        $asunto = "[PARA DIGITADORAS] Resumen Diario Cuentas Corrientes - " . $data['nombre'] . " (" . date('d/m/Y') . ")";
+        
+        $nombreDigitadora = "DIGITADORA";
+        if ($destinatario === $emailDig1) {
+            $nombreDigitadora = "Digitadora A";
+        } elseif ($destinatario === $emailDig2) {
+            $nombreDigitadora = "Digitadora B";
+        }
+
+        $asunto = "[PARA {$nombreDigitadora}] Resumen Diario Cuentas Corrientes - " . $data['nombre'] . " (" . date('d/m/Y') . ")";
 
         // Enviar usando el layout unificado y ultra-ordenado
-        $enviado = MailService::enviarResumenDiarioDigitadora($data['nombre'], $data['cobranzas'], $destinatario, $ccEmail, $pdo);
+        $enviado = MailService::enviarResumenDiarioDigitadora($data['nombre'], $data['cobranzas'], $destinatario, $pdo);
         $estado = $enviado ? 'ENVIADO' : 'FALLIDO';
         $errorMensaje = $enviado ? null : 'Falla en el envío SMTP';
 
-        // Registrar en bitácora
+        // Registrar en bitácora con snapshot (payload_json) de lo enviado
+        $payload_json = json_encode($data['cobranzas']);
+
         $stmtLog = $pdo->prepare("
             INSERT INTO log_envios_informes 
-            (empresa_id, tipo_informe, destinatario, copia_cc, asunto, estado_envio, error_mensaje, cantidad_cobranzas)
-            VALUES (?, 'RESUMEN_DIARIO_16HRS', ?, ?, ?, ?, ?, ?)
+            (empresa_id, tipo_informe, destinatario, copia_cc, asunto, estado_envio, error_mensaje, cantidad_cobranzas, payload_json)
+            VALUES (?, 'RESUMEN_DIARIO_16HRS', ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmtLog->execute([
-            $empId, $destinatario, $ccEmail, $asunto, $estado, $errorMensaje, $totalCobranzas
+            $empId, $destinatario, $ccEmail, $asunto, $estado, $errorMensaje, $totalCobranzas, $payload_json
         ]);
 
         // Si el envío fue exitoso, actualizar estado final a DEPOSITADO e insertar historial de auditoría

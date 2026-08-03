@@ -103,3 +103,58 @@ Tras un análisis profundo del flujo actual (Vendedor -> Tesorería -> Cuentas C
 * **Problema:** Si el Cronjob (automático) se ejecuta a las 16:00:00 exactamente al mismo milisegundo en que la Supervisora de CC hace clic manual en "Despachar Resumen", o al mismo tiempo que Tesorería está aprobando un nuevo cheque, podrían duplicarse los correos, saltarse estados o procesar cheques a medias.
 * **Solución (Roadmap):**
   - Implementar **Bloqueos Transaccionales de Base de Datos (`SELECT ... FOR UPDATE`)** en las sentencias PDO durante el despacho, garantizando que un lote de cheques en estado `RECIBIDO_TESORERIA` solo pueda ser tomado por un proceso (Cron o UI) a la vez de forma atómica.
+
+---
+
+## 5. Próxima Iteración de Flujo (Flujo de Correos y Excel de Tesorería)
+
+Para completar el ciclo operativo del negocio, se ha diseñado la siguiente ampliación del flujo de notificaciones y automatización con la planilla interna:
+
+### A. Nuevos Disparadores y Destinos de Correo
+1. **Registro Vendedor:** Al guardar una cobranza desde la App, se gatillarán **dos correos independientes**:
+   - Uno a Tesorería: `[PARA TESORERIA] Registro de Cobranza...`
+   - Otro a Cuentas Corrientes: `[PARA C.CORRIENTES] [NUEVO REGISTRO] Registro de Cobranza...` (Permitiéndoles monitorear ingresos preventivamente).
+2. **Rechazo en Tesorería:** Si Tesorería decide rechazar una cobranza física, se gatillará un correo inmediato de notificación de rechazo al Vendedor:
+   - **Destinatario:** Vendedor de la cobranza.
+   - **Asunto:** `[PARA VENDEDOR] [CHEQUE RECHAZADO] Cobranza N° XXX` (Incluirá el motivo obligatorio ingresado por Tesorería).
+
+### B. Integración con Planilla Excel de Tesorería (Google Sheets API) - [COMPLETADO]
+- **Estado:** ✅ Totalmente Operativo.
+- **Detalle de Implementación:** Se implementó el servicio nativo [GoogleSheetsService.php](file:///c:/laragon/www/form/services/GoogleSheetsService.php) que utiliza autenticación OAuth2 JWT firmada localmente mediante `openssl_sign` y cURL sin requerir dependencias externas. 
+- **Acción:** Al momento de transicionar el estado a `RECIBIDO_TESORERIA` (cuando Tesorería ya completó el Banco y N° de Cheque físicos), el sistema invoca automáticamente a la API de Google Sheets y agrega los cheques validados en filas nuevas en el Excel corporativo configurado (`1dv0St5yPOwIiOLaOb3Q2SqHFkJ57l3esmHVRIrZlV2o`).
+- **Mapeo de Datos:** Las columnas ingresadas son:
+  1. *Fecha*: Vencimiento del cheque.
+  2. *Nombre girador*: Razón social de la empresa destino (`emitido_a`).
+  3. *Monto*: Monto cobrado.
+  4. *Rut cliente*: Identificación del cliente.
+  5. *nRecibo*: N° de cheque físico.
+  6. *Nombre cliente*: Razón social del cliente.
+  7. *Fecha ingreso*: Fecha y hora de validación en Tesorería.
+  8. *CTANUMERO*: Banco emisor.
+  9. *comentario*: Comentarios/notas adicionales.
+- **Tolerancia a fallos:** El disparo se ejecuta después del commit SQL de la base de datos local de manera asíncrona/segura para prevenir que un fallo o timeout de la API de Google bloquee la validación de Tesorería.
+
+### C. Diagrama Mermaid Planificado
+
+```mermaid
+graph TD
+    classDef actor fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef mail fill:#bbf,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
+    classDef db fill:#fbb,stroke:#333,stroke-width:1px;
+
+    V[Vendedor]:::actor -->|Registra Cobranza| T[Portal Tesorería]
+    V -.->|"Gatilla Correo 1"| E1["[PARA TESORERIA]<br>Nuevo Registro"]:::mail
+    V -.->|"Gatilla Correo 2 [NUEVO]"| E2["[PARA C.CORRIENTES]<br>Nuevo Registro"]:::mail
+
+    T -->|Acepta y Digita Banco/Cheque| CC[Cola C.Corrientes]
+    T -->|"Inyecta Datos [NUEVO]"| EX[(Excel Google Sheets)]:::db
+    T -.->|Gatilla Correo 3| E3["[PARA VENDEDOR]<br>Cheque Aprobado"]:::mail
+    T -.->|Gatilla Correo 4| E4["[PARA C.CORRIENTES]<br>Cobranza Validada"]:::mail
+
+    T -->|Rechaza Cobranza| R[Rechazada]
+    T -.->|"Gatilla Correo 5 [NUEVO]"| E5["[PARA VENDEDOR]<br>Cobranza Rechazada"]:::mail
+
+    CC -->|Despacha Resumen| Dig[Digitadoras A / B]:::actor
+    CC -.->|Gatilla Correo 6| E6["[PARA Digitadora A/B]<br>Resumen Diario (PDF)"]:::mail
+```
+

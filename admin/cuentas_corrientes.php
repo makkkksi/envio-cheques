@@ -333,6 +333,31 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
         .close-modal:hover {
             color: #0f172a;
         }
+
+        /* RESPONSIVE DESIGN (TABLET & MOBILE) */
+        @media (max-width: 992px) {
+            .header-cc {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 16px 20px;
+            }
+            .header-cc > div:last-child {
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+            .container-cc {
+                padding: 0 12px;
+            }
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            table {
+                min-width: 700px; /* Fuerza el scroll horizontal en pantallas pequeñas */
+            }
+        }
     </style>
 </head>
 <body>
@@ -351,7 +376,9 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                 Cerrar Sesión
             </button>
             <?php if ($rolUsuario === 'ADMINISTRADOR'): ?>
-                <!-- Links removed per requirements -->
+                <a href="index.php" style="background: rgba(37,99,235,0.2); color: #93c5fd; border: 1px solid rgba(37,99,235,0.4); padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='rgba(37,99,235,0.35)';" onmouseout="this.style.background='rgba(37,99,235,0.2)';">
+                    &#8646; Ir a Tesorería
+                </a>
             <?php endif; ?>
         </div>
     </header>
@@ -377,9 +404,9 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             </div>
         </div>
 
-        <!-- BLOQUE: CHEQUES PENDIENTES DE DESPACHO (COLA DE SALIDA) -->
+        <!-- BLOQUE: COBRANZAS PENDIENTES DE DESPACHO (COLA DE SALIDA) -->
         <div class="card-cc">
-            <h2 class="card-title">Cheques Pendientes de Despacho (Cola de Salida)</h2>
+            <h2 class="card-title">Cobranzas Pendientes de Despacho (Cola de Salida)</h2>
             
             <!-- Barra de Filtros Dinámicos -->
             <div class="filter-bar">
@@ -401,21 +428,17 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             </div>
 
             <div style="overflow-x: auto;">
-                <table>
+                <table class="table-responsive">
                     <thead>
                         <tr>
-                            <th>Empresa</th>
-                            <th>Cliente / RUT</th>
+                            <th>Empresa / Cliente</th>
                             <th>Vendedor</th>
-                            <th>Factura</th>
-                            <th>Banco</th>
-                            <th>N° Cheque</th>
-                            <th class="text-right">Monto</th>
-                            <th>Vencimiento</th>
+                            <th style="text-align: center;">Documentos</th>
+                            <th class="text-right">Monto Total</th>
                         </tr>
                     </thead>
                     <tbody id="tblChequesEnColaCC">
-                        <tr><td colspan="8" style="text-align: center; color: #94a3b8;">Cargando cola de cheques...</td></tr>
+                        <tr><td colspan="5" style="text-align: center; color: #94a3b8;">Cargando cola de cobranzas...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -453,50 +476,128 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                     </tbody>
                 </table>
             </div>
+            <div id="historialPager"></div>
         </div>
 
     </div>
 
     <!-- MODAL DE CONFIGURACIÓN -->
+    <style>
+        /* Toggle Switch */
+        .toggle-switch { position: relative; display: inline-block; width: 48px; height: 26px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; cursor: pointer; inset: 0;
+            background: #cbd5e1; border-radius: 26px;
+            transition: background 0.25s ease;
+        }
+        .toggle-slider:before {
+            content: ''; position: absolute;
+            width: 20px; height: 20px; left: 3px; bottom: 3px;
+            background: white; border-radius: 50%;
+            transition: transform 0.25s ease;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+        .toggle-switch input:checked + .toggle-slider { background: #16a34a; }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
+        .toggle-label-text { font-size: 0.85rem; font-weight: 600; color: #475569; }
+        .toggle-status { font-size: 0.78rem; font-weight: 700; transition: color 0.2s; }
+        .toggle-status.on  { color: #16a34a; }
+        .toggle-status.off { color: #94a3b8; }
+    </style>
+
     <div id="modalConfigCC" class="modal-cc">
-        <div class="modal-content-cc">
-            <span class="close-modal" onclick="cerrarModalConfigCC()">&times;</span>
-            <h2 style="margin-top: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; font-size: 1.25rem;">Configuración del Distribuidor Diario</h2>
-            <p style="font-size: 0.85rem; color: #64748b; margin-top: -6px; margin-bottom: 16px;">
-                Gestión horaria de liberación y distribución de resúmenes diarios a las respectivas digitadoras.
-            </p>
-            
-                <div style="flex-grow: 1;">
-                    <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Hora de Corte / Despacho Diario:</label>
-                    <input type="time" id="inputHoraDespachoCC" style="width: 100%; box-sizing: border-box; font-size: 1rem; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 8px;">
-                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: #475569; cursor: pointer;">
-                        <input type="checkbox" id="chkAutoDispatch" style="width: 16px; height: 16px;"> Habilitar Despacho Automático
-                    </label>
+        <div class="modal-content-cc" style="max-width: 660px;">
+            <!-- Header del modal -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
+                <div>
+                    <h2 style="margin: 0 0 4px; font-size: 1.2rem; color: #0f172a;">Configuración del Distribuidor</h2>
+                    <p style="margin: 0; font-size: 0.82rem; color: #64748b;">Gestión horaria y asignación de digitadoras por empresa.</p>
                 </div>
-                <button type="button" class="btn-action" onclick="guardarConfiguracionCC()">Guardar Hora</button>
+                <span class="close-modal" onclick="cerrarModalConfigCC()" style="float: none; font-size: 22px; line-height: 1; margin-top: 2px;">&times;</span>
             </div>
 
-            <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 0.95rem; color: #334155;">Matriz de Asignación a Digitadoras (Gestión de Reemplazos):</h3>
-            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0; margin-bottom: 12px; font-style: italic;">
-                * Estos correos recibirán automáticamente el resumen PDF/Excel al ejecutar el despacho diario.
-            </p>
-            <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: white;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Empresa</th>
-                            <th>Correo Digitadora Asignada</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tblAsignacionesDigitadorasCC">
-                        <tr><td colspan="2" style="text-align: center; color: #94a3b8;">Cargando asignaciones...</td></tr>
-                    </tbody>
-                </table>
+            <!-- Sección 1: Hora de corte -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 14px; font-size: 0.9rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.04em;">
+                    Hora de Corte / Despacho Diario
+                </h3>
+                <div style="display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 140px;">
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 6px;">Hora de envío automático</label>
+                        <select id="inputHoraDespachoCC" onchange="actualizarHoraLocal()"
+                            style="width: 100%; box-sizing: border-box; font-size: 1rem; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'JetBrains Mono', monospace; background: white; cursor: pointer;">
+                            <option value="12:00">12:00</option>
+                            <option value="13:00">13:00</option>
+                            <option value="14:00">14:00</option>
+                            <option value="15:00">15:00</option>
+                            <option value="16:00">16:00</option>
+                            <option value="17:00">17:00</option>
+                            <option value="18:00">18:00</option>
+                            <option value="19:00">19:00</option>
+                            <option value="20:00">20:00</option>
+                        </select>
+                    </div>
+                    <!-- Toggle Switch -->
+                    <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 2px;">
+                        <span class="toggle-label-text">Despacho Automático</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="chkAutoDispatch" onchange="actualizarToggleLabel()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-status off" id="lblToggleStatus">DESACTIVADO</span>
+                        </div>
+                        <span style="font-size: 0.75rem; color: #94a3b8; max-width: 160px; line-height: 1.3;">
+                            Al activar, el cron enviará el resumen a la hora configurada.
+                        </span>
+                    </div>
+                </div> <!-- Cierra el flex wrap container -->
             </div>
-            
-            <div style="margin-top: 24px; text-align: right; display: flex; justify-content: flex-end; gap: 12px;">
-                <button type="button" class="btn-action btn-success" onclick="guardarConfiguracionCC()">Aplicar Cambios</button>
-                <button type="button" class="btn-action btn-secondary" onclick="cerrarModalConfigCC()">Cerrar</button>
+
+            <!-- Sección 2: Asignación Excluyente de Digitadoras -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 0.9rem; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.04em;">
+                        Asignación Excluyente de Digitadoras
+                    </h3>
+                </div>
+                
+                <!-- Definición de Correos Globales -->
+                <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #1d4ed8; margin-bottom: 6px;">Correo Digitadora 1</label>
+                        <input type="email" id="inputDig1" placeholder="ejemplo1@automarco.cl" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 0.85rem; background: #eff6ff;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #15803d; margin-bottom: 6px;">Correo Digitadora 2</label>
+                        <input type="email" id="inputDig2" placeholder="ejemplo2@automarco.cl" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 0.85rem; background: #f0fdf4;">
+                    </div>
+                </div>
+
+                <p style="margin: 0 0 12px; font-size: 0.8rem; color: #94a3b8; font-style: italic;">
+                    Seleccione qué digitadora será responsable de los resúmenes diarios de cada empresa (Asignación Excluyente).
+                </p>
+                <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: white;">
+                    <table style="font-size: 0.85rem; width: 100%; text-align: center;">
+                        <thead>
+                            <tr style="background: #f1f5f9;">
+                                <th style="padding: 10px 14px; font-weight: 600; color: #475569; text-align: left;">Empresa</th>
+                                <th style="padding: 10px 14px; font-weight: 600; color: #1d4ed8;">Asignar a Digitadora 1</th>
+                                <th style="padding: 10px 14px; font-weight: 600; color: #15803d;">Asignar a Digitadora 2</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblAsignacionesDigitadorasCC">
+                            <tr><td colspan="3" style="color: #94a3b8; padding: 16px;">Cargando asignaciones...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Footer de acciones -->
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f1f5f9;">
+                <button type="button" class="btn-action btn-secondary" onclick="cerrarModalConfigCC()" style="padding: 9px 20px;">Cancelar</button>
+                <button type="button" class="btn-action btn-success" onclick="guardarConfiguracionCC()" style="padding: 9px 20px;">Aplicar Cambios</button>
             </div>
         </div>
     </div>
@@ -527,11 +628,11 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
 
     <!-- MODAL DETALLES LOG -->
     <div id="modalLogDetalle" class="modal-cc">
-        <div class="modal-content-cc" style="max-width: 550px;">
+        <div class="modal-content-cc" style="max-width: 800px; width: 95%;">
             <span class="close-modal" onclick="cerrarLogDetalle()">&times;</span>
-            <h2 style="margin-top:0; color:#1e3a8a; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">Detalle de Despacho</h2>
+            <h2 style="margin-top:0; color:#1e3a8a; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">Detalle de Despacho e Información de Cobranzas</h2>
             
-            <div id="logDetalleContent" style="background:#f1f5f9; padding:16px; border-radius:8px; border:1px solid #e2e8f0; margin:16px 0; font-size: 0.95rem;">
+            <div id="logDetalleContent" style="background:#f1f5f9; padding:16px; border-radius:8px; border:1px solid #e2e8f0; margin:16px 0; font-size: 0.95rem; max-height: 60vh; overflow-y: auto;">
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
@@ -540,13 +641,31 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
         </div>
     </div>
 
+    <!-- MODAL DETALLES DE UNA SOLA COBRANZA -->
+    <div id="modalDetalleCobranza" class="modal-cc">
+        <div class="modal-content-cc" style="max-width: 700px;">
+            <span class="close-modal" onclick="cerrarDetalleCobranza()">&times;</span>
+            <h2 style="margin-top:0; color:#1e3a8a; border-bottom:1px solid #e2e8f0; padding-bottom:12px;">Detalle de la Cobranza</h2>
+            
+            <div id="cobranzaDetalleContent" style="background:#f1f5f9; padding:16px; border-radius:8px; border:1px solid #e2e8f0; margin:16px 0; font-size: 0.95rem; max-height: 60vh; overflow-y: auto;">
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                <button type="button" class="btn-action btn-secondary" onclick="cerrarDetalleCobranza()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Caché de datos locales
-        let cacheChequesCola = [];
+        let cacheCobranzasCola = [];
         let cacheHistorialLog = [];
         let cacheEmpresasMatriz = [];
         let horaCorteGlobal = "16:00";
         let historyFilterSelected = 'Todos';
+        let historialCurrentPage = 1;
+        let historialTotalPages = 1;
+        let historialTotal = 0;
 
         function showToast(message, type = 'success') {
             let container = document.getElementById('toastContainer');
@@ -571,26 +690,43 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             document.getElementById('modalConfigCC').style.display = 'none';
         }
 
+        function actualizarToggleLabel() {
+            const chk = document.getElementById('chkAutoDispatch');
+            const lbl = document.getElementById('lblToggleStatus');
+            const inputHora = document.getElementById('inputHoraDespachoCC');
+            if (chk.checked) {
+                lbl.textContent = 'ACTIVADO';
+                lbl.className = 'toggle-status on';
+                inputHora.style.borderColor = '#16a34a';
+            } else {
+                lbl.textContent = 'DESACTIVADO';
+                lbl.className = 'toggle-status off';
+                inputHora.style.borderColor = '#cbd5e1';
+            }
+            actualizarTemporizadorCorte();
+        }
+
         function confirmarDespachoModal() {
-            if (cacheChequesCola.length === 0) return;
+            if (cacheCobranzasCola.length === 0) return;
             
-            // Construir matriz de destinatarios y cantidad sin montos
+            // Construir matriz de destinatarios y cantidad
             const resumenMap = {};
-            cacheChequesCola.forEach(chq => {
-                const empMatriz = cacheEmpresasMatriz.find(e => e.nombre === chq.empresa_nombre);
+            cacheCobranzasCola.forEach(cob => {
+                const empMatriz = cacheEmpresasMatriz.find(e => e.nombre === cob.empresa_nombre);
                 const email = empMatriz ? empMatriz.email_digitadora : 'No Asignada';
                 
-                if (!resumenMap[chq.empresa_nombre]) {
-                    resumenMap[chq.empresa_nombre] = { email: email, count: 0 };
+                if (!resumenMap[cob.empresa_nombre]) {
+                    resumenMap[cob.empresa_nombre] = { email: email, countCob: 0, countChq: 0 };
                 }
-                resumenMap[chq.empresa_nombre].count++;
+                resumenMap[cob.empresa_nombre].countCob++;
+                resumenMap[cob.empresa_nombre].countChq += cob.cheques ? cob.cheques.length : 0;
             });
 
             let htmlMatriz = "";
             for (const [emp, det] of Object.entries(resumenMap)) {
                 htmlMatriz += `
                     <div style="display:flex; justify-content:space-between; border-bottom:1px solid #cbd5e1; padding-bottom:4px;">
-                        <span><strong>${emp}</strong> (${det.count} cheque(s)) ➔ ${det.email}</span>
+                        <span><strong>${emp}</strong> (${det.countCob} cobranza(s) / ${det.countChq} cheque(s)) ➔ ${det.email}</span>
                     </div>
                 `;
             }
@@ -607,15 +743,80 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             const log = cacheHistorialLog.find(l => l.id == logId);
             if (!log) return;
             let html = `
-                <p><strong>Fecha y Hora:</strong> ${log.fecha_envio}</p>
-                <p><strong>Empresa Origen:</strong> ${log.empresa || 'Consolidado'}</p>
-                <p><strong>Destinatario:</strong> ${log.destinatario}</p>
-                <p><strong>Cantidad de Cobranzas:</strong> ${log.cantidad_cobranzas}</p>
-                <p><strong>Estado:</strong> ${log.estado_envio}</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 20px; border-bottom: 1px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 16px;">
+                    <div><strong>Fecha y Hora:</strong> ${log.fecha_envio}</div>
+                    <div><strong>Empresa Origen:</strong> ${log.empresa || 'Consolidado'}</div>
+                    <div><strong>Destinatario:</strong> ${log.destinatario}</div>
+                    <div><strong>Estado:</strong> ${log.estado_envio}</div>
+                </div>
             `;
             if (log.estado_envio === 'FALLIDO' && log.error_mensaje) {
-                html += `<p style="color: #dc2626;"><strong>Error:</strong> ${log.error_mensaje}</p>`;
+                html += `<p style="color: #dc2626; margin-top: 0;"><strong>Error:</strong> ${log.error_mensaje}</p>`;
             }
+
+            if (log.payload_json) {
+                try {
+                    const cobranzas = JSON.parse(log.payload_json);
+                    html += `<h3 style="color: #334155; margin-bottom: 12px; font-size: 1.1rem;">Cobranzas Enviadas (${cobranzas.length})</h3>`;
+                    
+                    cobranzas.forEach((cob, i) => {
+                        let sumMonto = 0;
+                        let chequesHtml = '';
+                        if (cob.cheques && cob.cheques.length > 0) {
+                            chequesHtml = '<ul style="margin:4px 0 0; padding-left:20px; font-size:0.85rem; color:#475569;">';
+                            cob.cheques.forEach(ch => {
+                                sumMonto += parseFloat(ch.monto_cheque);
+                                const mFmt = '$' + parseInt(ch.monto_cheque).toLocaleString('es-CL');
+                                let vFmt = 'Sin Fecha';
+                                if (ch.fecha_vencimiento) {
+                                    try {
+                                        vFmt = new Date(ch.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-CL');
+                                    } catch(e) {}
+                                }
+                                chequesHtml += `<li><strong>N° ${ch.numero_cheque}</strong> (${ch.banco}) - ${mFmt} [Venc: ${vFmt}]</li>`;
+                            });
+                            chequesHtml += '</ul>';
+                        } else {
+                            chequesHtml = '<em style="color:#94a3b8; font-size:0.85rem;">Sin cheques adjuntos</em>';
+                        }
+                        const montoFmt = '$' + parseInt(sumMonto).toLocaleString('es-CL');
+
+                        let facturasHtml = '';
+                        if (cob.facturas_multiples && cob.facturas_multiples.length > 0) {
+                            facturasHtml = '<ul style="margin:4px 0 0; padding-left:20px; font-size:0.85rem; color:#475569;">';
+                            cob.facturas_multiples.forEach(fac => {
+                                const mCub = '$' + parseInt(fac.monto_cubierto).toLocaleString('es-CL');
+                                facturasHtml += `<li><strong>${fac.numero_factura}</strong> (${fac.cuota_label}) - Cubre: ${mCub}</li>`;
+                            });
+                            facturasHtml += '</ul>';
+                        } else {
+                            facturasHtml = `<span style="font-size:0.85rem; color:#475569;">Doc: ${cob.numero_factura}</span>`;
+                        }
+
+                        html += `
+                            <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 12px; background: #fff;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                    <strong style="color:#1e3a8a;">${i + 1}. ${cob.razon_social_cliente} (RUT: ${cob.rut_cliente})</strong>
+                                    <strong style="color:#15803d;">Total: ${montoFmt}</strong>
+                                </div>
+                                <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                                    <div style="flex:1; min-width:200px;">
+                                        <strong style="font-size:0.85rem;">Facturas Abonadas:</strong><br>${facturasHtml}
+                                    </div>
+                                    <div style="flex:1; min-width:200px;">
+                                        <strong style="font-size:0.85rem;">Cheques:</strong><br>${chequesHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } catch (e) {
+                    html += `<p style="color: #64748b;"><em>Error al leer el detalle del envío o formato antiguo.</em></p>`;
+                }
+            } else {
+                html += `<p style="color: #64748b;"><em>No hay detalle exacto disponible para este envío (versión antigua). Total enviado: ${log.cantidad_cobranzas}</em></p>`;
+            }
+
             document.getElementById('logDetalleContent').innerHTML = html;
             document.getElementById('modalLogDetalle').style.display = 'flex';
         }
@@ -624,8 +825,90 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             document.getElementById('modalLogDetalle').style.display = 'none';
         }
 
+        function abrirDetalleCobranza(cobranzaId) {
+            const cob = cacheCobranzasCola.find(c => c.cobranza_id == cobranzaId);
+            if (!cob) return;
+
+            let sumMonto = 0;
+            let chequesHtml = '';
+            if (cob.cheques && cob.cheques.length > 0) {
+                chequesHtml = '<ul style="margin:4px 0 0; padding-left:20px; font-size:0.9rem; color:#334155;">';
+                cob.cheques.forEach(ch => {
+                    sumMonto += parseFloat(ch.monto_cheque);
+                    const mFmt = '$' + parseInt(ch.monto_cheque).toLocaleString('es-CL');
+                    let vFmt = 'Sin Fecha';
+                    if (ch.fecha_vencimiento) {
+                        try {
+                            vFmt = new Date(ch.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-CL');
+                        } catch(e) {}
+                    }
+                    chequesHtml += `<li><strong>N° ${ch.numero_cheque}</strong> (${ch.banco}) - ${mFmt} [Venc: ${vFmt}]</li>`;
+                });
+                chequesHtml += '</ul>';
+            } else {
+                chequesHtml = '<em style="color:#94a3b8; font-size:0.9rem;">Sin cheques adjuntos</em>';
+            }
+            const montoFmt = '$' + parseInt(sumMonto).toLocaleString('es-CL');
+
+            let facturasHtml = '';
+            if (cob.facturas_multiples && cob.facturas_multiples.length > 0) {
+                facturasHtml = '<ul style="margin:4px 0 0; padding-left:20px; font-size:0.9rem; color:#334155;">';
+                cob.facturas_multiples.forEach(fac => {
+                    const mCub = '$' + parseInt(fac.monto_cubierto).toLocaleString('es-CL');
+                    facturasHtml += `<li><strong>${fac.numero_factura}</strong> (${fac.cuota_label}) - Cubre: ${mCub}</li>`;
+                });
+                facturasHtml += '</ul>';
+            } else {
+                facturasHtml = `<span style="font-size:0.9rem; color:#334155;">Doc Principal: ${cob.numero_factura}</span>`;
+            }
+
+            let html = `
+                <div style="border-bottom: 1px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 16px;">
+                    <div style="font-size: 1.1rem; font-weight: bold; color: #1e3a8a;">${cob.razon_social_cliente}</div>
+                    <div style="color: #64748b; margin-top: 4px;">RUT: ${cob.rut_cliente} &nbsp;•&nbsp; Empresa: ${cob.empresa_nombre}</div>
+                    <div style="color: #64748b; margin-top: 2px;">Vendedor: ${cob.vendedor_nombre}</div>
+                </div>
+                
+                <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom: 20px;">
+                    <div style="flex:1; min-width:250px;">
+                        <strong style="color: #0f172a; font-size: 1.05rem;">Facturas Abonadas</strong>
+                        <div style="margin-top: 8px; background: #fff; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            ${facturasHtml}
+                        </div>
+                    </div>
+                    
+                    <div style="flex:1; min-width:250px;">
+                        <strong style="color: #0f172a; font-size: 1.05rem;">Cheques Físicos</strong>
+                        <div style="margin-top: 8px; background: #fff; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            ${chequesHtml}
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: right; font-size: 1.2rem; font-weight: bold; color: #15803d; border-top: 1px solid #cbd5e1; padding-top: 16px;">
+                    Monto Total a Rendir: ${montoFmt}
+                </div>
+            `;
+            document.getElementById('cobranzaDetalleContent').innerHTML = html;
+            document.getElementById('modalDetalleCobranza').style.display = 'flex';
+        }
+
+        function cerrarDetalleCobranza() {
+            document.getElementById('modalDetalleCobranza').style.display = 'none';
+        }
+
         function actualizarTemporizadorCorte() {
             if (!horaCorteGlobal) return;
+            
+            const timerContainer = document.getElementById('txtCutoffTimer');
+            const chkAuto = document.getElementById('chkAutoDispatch');
+            if (chkAuto && !chkAuto.checked) {
+                timerContainer.style.display = 'none';
+                return;
+            } else {
+                timerContainer.style.display = '';
+            }
+
             document.getElementById('lblCutoffHour').textContent = `${horaCorteGlobal} hrs`;
 
             const parts = horaCorteGlobal.split(':');
@@ -661,24 +944,38 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
 
                     document.getElementById('inputHoraDespachoCC').value = info.hora_despacho_diario;
                     document.getElementById('chkAutoDispatch').checked = info.despacho_automatico_activado === '1';
+                    actualizarToggleLabel();
 
-                    // Renderizar matriz de empresas en el modal
+                    const dig1 = info.email_digitadora_1 || '';
+                    const dig2 = info.email_digitadora_2 || '';
+                    document.getElementById('inputDig1').value = dig1;
+                    document.getElementById('inputDig2').value = dig2;
+
+                    // Renderizar matriz de empresas en el modal (Asignación excluyente radio buttons)
                     cacheEmpresasMatriz = info.empresas;
                     const tbodyEmp = document.getElementById('tblAsignacionesDigitadorasCC');
                     tbodyEmp.innerHTML = info.empresas.map(emp => {
+                        const emailActual = emp.email_digitadora || '';
+                        // Si el email actual coincide con dig2 (y no está vacío), seleccionamos 2, si no por defecto 1.
+                        const isDig2 = (emailActual === dig2 && dig2 !== '');
                         return `
-                            <tr>
-                                <td style="font-weight: 600; font-size: 0.85rem;">${emp.nombre}</td>
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="font-weight: 600; font-size: 0.82rem; padding: 12px 14px; color: #334155; text-align: left;">${emp.nombre}</td>
                                 <td>
-                                    <input type="email" id="email_emp_${emp.id}" value="${emp.email_digitadora || ''}" style="width: 100%; box-sizing: border-box; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+                                    <input type="radio" name="radio_emp_${emp.id}" value="1" ${!isDig2 ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #2563eb;">
+                                </td>
+                                <td>
+                                    <input type="radio" name="radio_emp_${emp.id}" value="2" ${isDig2 ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #16a34a;">
                                 </td>
                             </tr>
                         `;
                     }).join('');
 
-                    // Cachear cheques en cola y renderizar
-                    cacheChequesCola = info.cheques_en_cola || [];
+                    cacheCobranzasCola = info.cobranzas_en_cola || [];
                     cacheHistorialLog = info.log_envios || [];
+                    historialCurrentPage = info.historial_page || 1;
+                    historialTotalPages = info.historial_total_pages || 1;
+                    historialTotal = info.historial_total || 0;
                     
                     actualizarKPIStrip();
                     filtrarColaDeCheques();
@@ -690,27 +987,54 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                 });
         }
 
+        // Carga independiente del historial para paginación
+        function cargarHistorial(page) {
+            historialCurrentPage = page;
+            const tbody = document.getElementById('tblBitacoraEnviosCC');
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">Cargando historial...</td></tr>`;
+
+            fetch(`api/get_gestion_cc.php?historial_page=${page}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) {
+                        showToast(data.message || 'Error al cargar historial', 'error');
+                        return;
+                    }
+                    cacheHistorialLog = data.data.log_envios || [];
+                    historialCurrentPage = data.data.historial_page || 1;
+                    historialTotalPages = data.data.historial_total_pages || 1;
+                    historialTotal = data.data.historial_total || 0;
+                    renderHistorialTable();
+                })
+                .catch(err => {
+                    console.error(err);
+                    showToast('Error de conexión', 'error');
+                });
+        }
+
         function actualizarKPIStrip() {
-            const count = cacheChequesCola.length;
+            const countCobranzas = cacheCobranzasCola.length;
             const uniqueEmpresas = new Set();
             const uniqueClientes = new Set();
+            let countCheques = 0;
 
-            cacheChequesCola.forEach(chq => {
-                uniqueEmpresas.add(chq.empresa_nombre);
-                uniqueClientes.add(chq.rut_cliente);
+            cacheCobranzasCola.forEach(cob => {
+                uniqueEmpresas.add(cob.empresa_nombre);
+                uniqueClientes.add(cob.rut_cliente);
+                countCheques += cob.cheques ? cob.cheques.length : 0;
             });
 
-            document.getElementById('kpiCount').textContent = count;
+            document.getElementById('kpiCount').textContent = countCheques; // Or could be countCobranzas
             document.getElementById('kpiEmpresas').textContent = uniqueEmpresas.size;
-            document.getElementById('kpiDetails').textContent = `${uniqueClientes.size} Cliente(s) Afectados`;
+            document.getElementById('kpiDetails').textContent = `${uniqueClientes.size} Cliente(s) / ${countCobranzas} Cobranzas`;
 
             const btnDespachar = document.getElementById('btnDespacharResumen');
-            if (count > 0) {
+            if (countCobranzas > 0) {
                 btnDespachar.disabled = false;
                 btnDespachar.removeAttribute('title');
             } else {
                 btnDespachar.disabled = true;
-                btnDespachar.setAttribute('title', 'No hay cheques pendientes para despachar hoy');
+                btnDespachar.setAttribute('title', 'No hay cobranzas pendientes para despachar hoy');
             }
         }
 
@@ -720,56 +1044,65 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             const ordVal = document.getElementById('filterOrden').value;
 
             // Filtrado
-            let filtered = cacheChequesCola.filter(chq => {
+            let filtered = cacheCobranzasCola.filter(cob => {
                 const matchSearch = !searchVal || 
-                    chq.numero_factura.toLowerCase().includes(searchVal) ||
-                    chq.razon_social_cliente.toLowerCase().includes(searchVal) ||
-                    chq.rut_cliente.toLowerCase().includes(searchVal) ||
-                    chq.vendedor_nombre.toLowerCase().includes(searchVal) ||
-                    chq.numero_cheque.toLowerCase().includes(searchVal);
+                    (cob.numero_factura && cob.numero_factura.toLowerCase().includes(searchVal)) ||
+                    cob.razon_social_cliente.toLowerCase().includes(searchVal) ||
+                    cob.rut_cliente.toLowerCase().includes(searchVal) ||
+                    cob.vendedor_nombre.toLowerCase().includes(searchVal) ||
+                    (cob.cheques && cob.cheques.some(ch => ch.numero_cheque.toLowerCase().includes(searchVal)));
                 
-                const matchEmpresa = !empVal || chq.empresa_nombre === empVal;
+                const matchEmpresa = !empVal || cob.empresa_nombre === empVal;
 
                 return matchSearch && matchEmpresa;
             });
 
-            // Ordenamiento
+            // Ordenamiento (Basado en la fecha de la cobranza o monto total)
             filtered.sort((a, b) => {
-                if (ordVal === 'venc_asc') {
-                    return new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento);
-                } else if (ordVal === 'venc_desc') {
-                    return new Date(b.fecha_vencimiento) - new Date(a.fecha_vencimiento);
-                } else if (ordVal === 'monto_desc') {
-                    return parseFloat(b.monto_cheque) - parseFloat(a.monto_cheque);
+                let sumA = a.cheques ? a.cheques.reduce((sum, ch) => sum + parseFloat(ch.monto_cheque), 0) : 0;
+                let sumB = b.cheques ? b.cheques.reduce((sum, ch) => sum + parseFloat(ch.monto_cheque), 0) : 0;
+
+                if (ordVal === 'monto_desc') {
+                    return sumB - sumA;
                 } else if (ordVal === 'monto_asc') {
-                    return parseFloat(a.monto_cheque) - parseFloat(b.monto_cheque);
+                    return sumA - sumB;
                 } else if (ordVal === 'empresa') {
                     return a.empresa_nombre.localeCompare(b.empresa_nombre);
                 }
-                return 0;
+                // Si es fecha, usamos el updated_at de la cobranza
+                return new Date(a.updated_at) - new Date(b.updated_at);
             });
 
             // Renderizado
             const tbodyChq = document.getElementById('tblChequesEnColaCC');
             if (filtered.length === 0) {
-                tbodyChq.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 20px;">No hay cheques en cola que coincidan con los filtros.</td></tr>`;
+                tbodyChq.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 20px;">No hay cobranzas en cola que coincidan con los filtros.</td></tr>`;
             } else {
-                tbodyChq.innerHTML = filtered.map(chq => {
-                    const montoFmt = '$' + parseInt(chq.monto_cheque).toLocaleString('es-CL');
-                    const fechaFmt = new Date(chq.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-CL');
+                tbodyChq.innerHTML = filtered.map((cob, index) => {
+                    let sumMonto = 0;
+                    if (cob.cheques && cob.cheques.length > 0) {
+                        cob.cheques.forEach(ch => {
+                            sumMonto += parseFloat(ch.monto_cheque);
+                        });
+                    }
+
+                    const montoFmt = '$' + parseInt(sumMonto).toLocaleString('es-CL');
+                    const numDocs = cob.facturas_multiples ? cob.facturas_multiples.length : 1;
+
                     return `
                         <tr>
-                            <td style="font-weight: 600;">${chq.empresa_nombre}</td>
                             <td>
-                                <div style="font-weight: 600;">${chq.razon_social_cliente}</div>
-                                <div style="font-size: 0.8rem; color: #64748b;">${chq.rut_cliente}</div>
+                                <div style="font-weight: 600; color: #1e3a8a; margin-bottom:4px;">${cob.empresa_nombre}</div>
+                                <div style="font-weight: 600;">${cob.razon_social_cliente}</div>
+                                <div style="font-size: 0.8rem; color: #64748b;">RUT: ${cob.rut_cliente}</div>
                             </td>
-                            <td>${chq.vendedor_nombre}</td>
-                            <td>${chq.numero_factura}</td>
-                            <td>${chq.banco}</td>
-                            <td style="font-weight: 600;">${chq.numero_cheque}</td>
-                            <td class="text-right font-mono monto-destacado">${montoFmt}</td>
-                            <td>${fechaFmt}</td>
+                            <td style="vertical-align:middle;">${cob.vendedor_nombre}</td>
+                            <td style="vertical-align:middle; text-align:center;">
+                                <button type="button" class="btn-action" style="background:#e2e8f0; color:#334155; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem;" onclick="abrirDetalleCobranza(${cob.cobranza_id})">
+                                    Ver Detalle (${numDocs} doc)
+                                </button>
+                            </td>
+                            <td class="text-right font-mono monto-destacado" style="vertical-align:middle;">${montoFmt}</td>
                         </tr>
                     `;
                 }).join('');
@@ -777,16 +1110,15 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
         }
 
         function renderHistorialTable() {
-            // Contadores
-            const total = cacheHistorialLog.length;
+            // Filtrado solo para los contadores del tab (usa todos en la página actual)
             const exitosos = cacheHistorialLog.filter(l => l.estado_envio === 'ENVIADO').length;
             const fallidos = cacheHistorialLog.filter(l => l.estado_envio === 'FALLIDO').length;
 
-            document.getElementById('cntHistTodos').textContent = total;
+            document.getElementById('cntHistTodos').textContent = historialTotal;
             document.getElementById('cntHistExitosos').textContent = exitosos;
             document.getElementById('cntHistFallidos').textContent = fallidos;
 
-            // Filtrado
+            // Filtrado local en la página
             let filtered = cacheHistorialLog;
             if (historyFilterSelected === 'Enviados') {
                 filtered = cacheHistorialLog.filter(l => l.estado_envio === 'ENVIADO');
@@ -798,29 +1130,92 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             if (filtered.length === 0) {
                 tbodyBit.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No hay registros de envíos para esta categoría.</td></tr>`;
             } else {
-                tbodyBit.innerHTML = filtered.map(log => {
-                    const esExitoso = log.estado_envio === 'ENVIADO';
-                    const badgeStyle = esExitoso 
-                        ? 'background: #dcfce7; color: #15803d; border-radius: 9999px; padding: 3px 10px; font-size: 0.8rem; font-weight: 700;' 
-                        : 'background: #fee2e2; color: #b91c1c; border-radius: 9999px; padding: 3px 10px; font-size: 0.8rem; font-weight: 700;';
-                    
-                    return `
+                // Agrupar por día
+                const grupos = {};
+                filtered.forEach(log => {
+                    const fecha = log.fecha_envio.split(' ')[0]; // 'YYYY-MM-DD'
+                    const [y, m, d] = fecha.split('-');
+                    const fechaLabel = `${d}/${m}/${y}`;
+                    if (!grupos[fechaLabel]) grupos[fechaLabel] = [];
+                    grupos[fechaLabel].push(log);
+                });
+
+                let html = '';
+                for (const [dia, logs] of Object.entries(grupos)) {
+                    // Fila separadora por día
+                    html += `
                         <tr>
-                            <td style="font-weight: 500;">${log.fecha_envio}</td>
-                            <td>
-                                <div style="font-weight: 600;">${log.empresa || 'Consolidado'}</div>
-                                <div style="font-size: 0.8rem; color:#64748b;">Para: ${log.destinatario}</div>
-                            </td>
-                            <td style="text-align: center; font-weight: 700;">${log.cantidad_cobranzas}</td>
-                            <td><span style="${badgeStyle}">${log.estado_envio}</span></td>
-                            <td style="text-align: right;">
-                                <button type="button" class="btn-action btn-secondary" onclick="abrirLogDetalle(${log.id})" style="padding: 5px 10px; font-size: 0.8rem; margin-right: 4px;">Ver Info</button>
-                                <button type="button" class="btn-action btn-secondary" onclick="reenviarBitacoraCC(${log.id})" style="padding: 5px 10px; font-size: 0.8rem;">Re-enviar</button>
+                            <td colspan="5" style="background: #e2e8f0; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; color: #475569; letter-spacing: 0.05em;">
+                                📅 ${dia}
                             </td>
                         </tr>
                     `;
-                }).join('');
+                    logs.forEach(log => {
+                        const esExitoso = log.estado_envio === 'ENVIADO';
+                        const badgeStyle = esExitoso 
+                            ? 'background: #dcfce7; color: #15803d; border-radius: 9999px; padding: 3px 10px; font-size: 0.8rem; font-weight: 700;' 
+                            : 'background: #fee2e2; color: #b91c1c; border-radius: 9999px; padding: 3px 10px; font-size: 0.8rem; font-weight: 700;';
+                        const hora = log.fecha_envio.split(' ')[1] || '';
+
+                        html += `
+                            <tr>
+                                <td style="font-weight: 500;">${hora}</td>
+                                <td>
+                                    <div style="font-weight: 600;">${log.empresa || 'Consolidado'}</div>
+                                    <div style="font-size: 0.8rem; color:#64748b;">Para: ${log.destinatario}</div>
+                                </td>
+                                <td style="text-align: center; font-weight: 700;">${log.cantidad_cobranzas}</td>
+                                <td><span style="${badgeStyle}">${log.estado_envio}</span></td>
+                                <td style="text-align: right;">
+                                    <button type="button" class="btn-action btn-secondary" onclick="abrirLogDetalle(${log.id})" style="padding: 5px 10px; font-size: 0.8rem; margin-right: 4px;">Ver Info</button>
+                                    <button type="button" class="btn-action btn-secondary" onclick="reenviarBitacoraCC(${log.id})" style="padding: 5px 10px; font-size: 0.8rem;">Re-enviar</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                tbodyBit.innerHTML = html;
             }
+
+            // Renderizar controles de paginación
+            const pagerEl = document.getElementById('historialPager');
+            if (!pagerEl) return;
+
+            if (historialTotalPages <= 1) {
+                pagerEl.innerHTML = '';
+                return;
+            }
+
+            let pagerHtml = `<div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:16px;">`;
+            pagerHtml += `
+                <button class="btn-action btn-secondary" style="padding:5px 12px; font-size:0.85rem;" 
+                    ${historialCurrentPage <= 1 ? 'disabled' : ''} 
+                    onclick="cargarHistorial(${historialCurrentPage - 1})">
+                    &larr; Anterior
+                </button>
+            `;
+
+            // Mostrar máximo 5 páginas centradas en la actual
+            const startPage = Math.max(1, historialCurrentPage - 2);
+            const endPage = Math.min(historialTotalPages, startPage + 4);
+            for (let p = startPage; p <= endPage; p++) {
+                const active = p === historialCurrentPage;
+                pagerHtml += `
+                    <button class="btn-action" style="padding:5px 12px; font-size:0.85rem; ${active ? 'background:#1e3a8a; color:#fff;' : 'background:#e2e8f0; color:#334155;'}" 
+                        onclick="cargarHistorial(${p})">${p}</button>
+                `;
+            }
+
+            pagerHtml += `
+                <button class="btn-action btn-secondary" style="padding:5px 12px; font-size:0.85rem;" 
+                    ${historialCurrentPage >= historialTotalPages ? 'disabled' : ''} 
+                    onclick="cargarHistorial(${historialCurrentPage + 1})">
+                    Siguiente &rarr;
+                </button>
+            `;
+            pagerHtml += `<span style="color:#64748b; font-size:0.85rem;">Página ${historialCurrentPage} de ${historialTotalPages} (${historialTotal} registros)</span>`;
+            pagerHtml += `</div>`;
+            pagerEl.innerHTML = pagerHtml;
         }
 
         function filtrarHistorialCC(filterType) {
@@ -834,15 +1229,40 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
             renderHistorialTable();
         }
 
+        function actualizarHoraLocal() {
+            // Solo actualiza el display del temporizador sin guardar ni cerrar el modal
+            const inputHora = document.getElementById('inputHoraDespachoCC');
+            horaCorteGlobal = inputHora.value;
+            actualizarTemporizadorCorte();
+        }
+
         function guardarConfiguracionCC() {
             const inputHora = document.getElementById('inputHoraDespachoCC');
+            const emailDig1 = document.getElementById('inputDig1').value.trim();
+            const emailDig2 = document.getElementById('inputDig2').value.trim();
+
+            if (!emailDig1 || !emailDig2) {
+                showToast('Ambos correos de digitadoras son requeridos.', 'error');
+                return;
+            }
+
             const asignaciones = [];
-            document.querySelectorAll('[id^="email_emp_"]').forEach(inp => {
+            cacheEmpresasMatriz.forEach(emp => {
+                const radioChecked = document.querySelector(`input[name="radio_emp_${emp.id}"]:checked`);
+                let finalEmail = emailDig1; // Por defecto digitadora 1
+                if (radioChecked && radioChecked.value === '2') {
+                    finalEmail = emailDig2;
+                }
                 asignaciones.push({
-                    id: parseInt(inp.id.replace('email_emp_', '')),
-                    email: inp.value.trim()
+                    id: emp.id,
+                    email: finalEmail
                 });
             });
+
+            if (asignaciones.length === 0) {
+                showToast('No hay empresas cargadas para asignar.', 'error');
+                return;
+            }
 
             fetch('api/guardar_configuracion_cc.php', {
                 method: 'POST',
@@ -850,6 +1270,8 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC'])) {
                 body: JSON.stringify({
                     hora_despacho_diario: inputHora.value,
                     despacho_automatico_activado: document.getElementById('chkAutoDispatch').checked ? '1' : '0',
+                    email_digitadora_1: emailDig1,
+                    email_digitadora_2: emailDig2,
                     asignaciones_empresas: asignaciones
                 })
             })

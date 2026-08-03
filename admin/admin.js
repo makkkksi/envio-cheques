@@ -8,6 +8,7 @@
 let estadoActualFilter = 'BANDEJA_TRABAJO';
 let cobranzaSeleccionadaId = null;
 let cobranzasCache = [];
+window.chequesActivos = [];
 
 const EMPRESAS_NOMBRES = {
     'EMP01': 'Automarco LTDA',
@@ -274,8 +275,8 @@ const ESTADOS_MAP = {
     'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Por Enviar', class: 'badge-PENDIENTE_ENVIO' },
     'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'badge-EN_TRANSITO' },
     'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado Stgo', class: 'badge-ENTREGADO_SANTIAGO' },
-    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>En Cola C.Corrientes', class: 'badge-RECIBIDO_TESORERIA' },
-    'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviado a C.Corrientes', class: 'badge-DEPOSITADO' },
+    'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviado a C.Corrientes', class: 'badge-RECIBIDO_TESORERIA' },
+    'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviados a Optimus', class: 'badge-DEPOSITADO' },
     'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'badge-RECHAZADO' }
 };
 
@@ -394,6 +395,7 @@ function setElText(id, val) {
 function actualizarTabCounters(metrics) {
     if (!metrics) return;
     setElText('cntBandeja', metrics.bandeja_trabajo || 0);
+    setElText('cntRecibidos', metrics.recibidos || 0);
     setElText('cntDepositados', metrics.depositados || 0);
     setElText('cntRechazados', metrics.rechazados || 0);
     setElText('cntPendientes', metrics.pendientes_envio || 0);
@@ -518,6 +520,7 @@ function seleccionarCobranza(id) {
                 showToast(data.message || 'Error al cargar el detalle', 'error');
                 return;
             }
+            window.chequesActivos = data.data.cheques || [];
             renderSidePanelDetail(data.data);
         })
         .catch(err => {
@@ -561,24 +564,58 @@ function renderSidePanelDetail(data) {
             const totalFacturasFmt = totalFacturasSuma.toLocaleString('es-CL');
             const facturasString = facturas.map(f => `${f.codigo_empresa} Factura #${f.numero_factura}`).join(', ');
 
-            let htmlFacturas = facturas.map(f => {
-                const montoCubiertoNum = parseFloat(f.monto_cubierto || f.saldo_cuota || 0);
-                const saldoCuotaNum = parseFloat(f.saldo_cuota || 0);
-                const tieneDescuento = (saldoCuotaNum > 0 && Math.abs(montoCubiertoNum - saldoCuotaNum) > 0.01);
-                
-                return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px 14px; border-radius: 8px;">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <span class="badge-empresa ${f.codigo_empresa}" style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${EMPRESAS_NOMBRES[f.codigo_empresa] || f.codigo_empresa}</span>
-                                <strong style="font-size: 0.9rem; color: #0F172A;">Factura N° ${f.numero_factura} ${f.cuota_label ? `<span style="color: #475569; font-weight: normal; font-size: 0.82rem; margin-left: 4px;">(Cuota ${f.cuota_label})</span>` : ''}</strong>
+            // Agrupar facturas por número y empresa
+            const facturasAgrupadas = {};
+            facturas.forEach(f => {
+                const key = `${f.codigo_empresa}_${f.numero_factura}`;
+                if (!facturasAgrupadas[key]) {
+                    facturasAgrupadas[key] = {
+                        codigo_empresa: f.codigo_empresa,
+                        numero_factura: f.numero_factura,
+                        total_monto: 0,
+                        cuotas: []
+                    };
+                }
+                facturasAgrupadas[key].cuotas.push(f);
+                facturasAgrupadas[key].total_monto += parseFloat(f.monto_cubierto || f.saldo_cuota || 0);
+            });
+
+            let htmlFacturas = Object.values(facturasAgrupadas).map(g => {
+                let cuotasHtml = '';
+                // Si hay cuotas (o incluso 1 si tiene label específico)
+                if (g.cuotas.length > 0) {
+                    cuotasHtml = `<div style="margin-top: 8px; border-left: 2px solid #CBD5E1; padding-left: 10px; margin-left: 4px; display: flex; flex-direction: column; gap: 4px;">`;
+                    g.cuotas.forEach(c => {
+                        const mCub = parseFloat(c.monto_cubierto || c.saldo_cuota || 0);
+                        const sCuota = parseFloat(c.saldo_cuota || 0);
+                        const tieneDesc = (sCuota > 0 && Math.abs(mCub - sCuota) > 0.01);
+                        const lbl = c.cuota_label ? `Cuota ${c.cuota_label}` : 'Única';
+                        
+                        cuotasHtml += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.6); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
+                                <div>
+                                    <strong style="color: #475569;">${lbl}</strong>
+                                    ${tieneDesc ? `<span style="font-size: 0.7rem; color: #94A3B8; margin-left: 6px;">(Saldo ERP: $${sCuota.toLocaleString('es-CL')})</span>` : ''}
+                                </div>
+                                <strong style="color: #166534;">$${mCub.toLocaleString('es-CL')} <span style="font-weight: normal; font-size: 0.7rem;">Cubierto</span></strong>
                             </div>
-                            ${tieneDescuento ? `<div style="font-size: 0.75rem; color: #64748B; margin-top: 2px;">Saldo ERP: $${saldoCuotaNum.toLocaleString('es-CL')}</div>` : ''}
+                        `;
+                    });
+                    cuotasHtml += `</div>`;
+                }
+
+                return `
+                    <div style="display: flex; flex-direction: column; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px 14px; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span class="badge-empresa ${g.codigo_empresa}" style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${EMPRESAS_NOMBRES[g.codigo_empresa] || g.codigo_empresa}</span>
+                                <strong style="font-size: 0.95rem; color: #0F172A;">Factura N° ${g.numero_factura}</strong>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="font-size: 0.95rem; font-weight: 800; color: #1E3A8A;">$${g.total_monto.toLocaleString('es-CL')}</span>
+                            </div>
                         </div>
-                        <div style="text-align: right;">
-                            <span style="font-size: 0.92rem; font-weight: 700; color: #1E3A8A;">$${montoCubiertoNum.toLocaleString('es-CL')}</span>
-                            <span style="display: block; font-size: 0.7rem; color: #166534; font-weight: 600;">Cubierto</span>
-                        </div>
+                        ${cuotasHtml}
                     </div>
                 `;
             }).join('');
@@ -640,8 +677,8 @@ function renderSidePanelDetail(data) {
             if (panelSec1) panelSec1.prepend(boxDiscrepancia);
         }
 
-        // Buscar comentario de vendedor para justificación
-        const comentarioVendedor = cheques.find(c => c.comentario && c.comentario.trim() !== '')?.comentario || null;
+        // Buscar justificación de descuadre o fallback a comentario del vendedor
+        const justificacionDescuadre = cob.justificacion_descuadre || cheques.find(c => c.comentario && c.comentario.trim() !== '')?.comentario || null;
 
         boxDiscrepancia.style.display = 'block';
         boxDiscrepancyHtml = `
@@ -651,7 +688,7 @@ function renderSidePanelDetail(data) {
             </div>
             <div class="discrepancy-callout-body">
                 <div>El total registrado en cheques (<strong>$${montoChequesVal.toLocaleString('es-CL')}</strong>) no coincide con el monto de la factura ERP (<strong>$${montoFacturaVal.toLocaleString('es-CL')}</strong>).</div>
-                ${comentarioVendedor ? `<div style="margin-top: 6px; font-style: italic; background: rgba(255,255,255,0.6); padding: 6px 10px; border-radius: 4px;"><strong>Justificación Vendedor:</strong> "${comentarioVendedor}"</div>` : '<div style="margin-top: 4px; opacity: 0.85;">Sin comentario de justificación registrado por el vendedor.</div>'}
+                ${justificacionDescuadre ? `<div style="margin-top: 6px; font-style: italic; background: rgba(255,255,255,0.6); padding: 6px 10px; border-radius: 4px;"><strong>Justificación Vendedor:</strong> "${justificacionDescuadre}"</div>` : '<div style="margin-top: 4px; opacity: 0.85; color: #dc2626; font-weight: 600;">Sin justificación registrada por el vendedor.</div>'}
             </div>
         `;
         boxDiscrepancia.innerHTML = boxDiscrepancyHtml;
@@ -698,15 +735,15 @@ function renderSidePanelDetail(data) {
                         <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">🔍 Lightbox</button>
                         <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}'); setTimeout(() => rotarImagenLightbox(), 100)">🔄 Rotar</button>
                     </div>
-                    <img class="cheque-card-img" src="../${chq.foto_cheque_url}" alt="Foto Cheque ${chq.numero_cheque}">
+                    <img class="cheque-card-img" src="../${chq.foto_cheque_url}" alt="Foto Cheque ${chq.numero_cheque || 'Pendiente'}">
                 </div>
                 <div class="cheque-card-meta">
                     <div class="cheque-card-meta-row">
-                        <span class="cheque-banco-name">${chq.banco}</span>
+                        <span class="cheque-banco-name">${chq.banco || 'Banco por Confirmar'}</span>
                         <span class="cheque-monto-value">$${parseFloat(chq.monto).toLocaleString('es-CL')}</span>
                     </div>
                     <div style="font-size: 0.8rem; color: var(--color-text-secondary);">
-                        N° Cheque: <strong>${chq.numero_cheque}</strong> | Vencimiento: <strong>${chq.fecha_vencimiento}</strong>
+                        N° Cheque: <strong>${chq.numero_cheque || 'Pendiente'}</strong> | Vencimiento: <strong>${chq.fecha_vencimiento}</strong>
                     </div>
                     ${chq.comentario ? `
                         <div class="quote-comment">
@@ -778,8 +815,8 @@ function renderHorizontalStepper(cob) {
     const pasos = [
         { key: 'PENDIENTE_ENVIO', label: 'Registrado' },
         { key: 'EN_TRANSITO', label: 'En Tránsito' },
-        { key: 'RECIBIDO_TESORERIA', label: 'En Cola C.C.' },
-        { key: 'DEPOSITADO', label: 'Despachado C.C.' }
+        { key: 'RECIBIDO_TESORERIA', label: 'Enviado a C.C.' },
+        { key: 'DEPOSITADO', label: 'Enviados a Optimus' }
     ];
 
     let currentIdx = 0;
@@ -816,32 +853,120 @@ function renderHorizontalStepper(cob) {
     return html;
 }
 
-// Modal Confirmación Recepción Física
-let confirmacionRecepcionId = null;
+// Modal Confirmación Recepción Física y Completar Cheques
 function pedirConfirmacionRecepcion(id, numFactura) {
-    let modal = document.getElementById('modalConfirmacionRecepcion');
+    let modal = document.getElementById('modalCompletarCheques');
     if (!modal) {
         modal = document.createElement('div');
-        modal.id = 'modalConfirmacionRecepcion';
+        modal.id = 'modalCompletarCheques';
         modal.className = 'modal-overlay';
-        modal.innerHTML = `
-            <div class="modal-box">
-                <h3>Validar - Enviar Cuentas Corrientes</h3>
-                <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 8px;">¿Confirmas que los cheques físicos de la <strong id="lblConfirmNumFactura" style="color: var(--color-primary);">Factura N° -</strong> fueron recibidos y están validados para ser enviados a Cuentas Corrientes?</p>
-                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                    <button type="button" class="btn-b2b" style="background: #e2e8f0; color: #334155;" onclick="cerrarModalConfirmacionRecepcion()">Cancelar</button>
-                    <button type="button" class="btn-b2b btn-b2b-success" id="btnConfirmarRecepcionSubmit">Validar y Enviar</button>
-                </div>
-            </div>
-        `;
         document.body.appendChild(modal);
     }
 
-    document.getElementById('lblConfirmNumFactura').textContent = `Factura N° ${numFactura}`;
-    const btnSubmit = document.getElementById('btnConfirmarRecepcionSubmit');
-    btnSubmit.onclick = () => {
-        ejecutarCambioEstado(id, 'RECIBIDO_TESORERIA');
-        cerrarModalConfirmacionRecepcion();
+    const bancosList = ['Banco de Chile', 'Banco Santander', 'Banco BCI', 'Banco Estado', 'Scotiabank', 'Itaú', 'Banco Security', 'Banco BICE', 'Banco Internacional', 'Banco Consorcio', 'Banco Falabella', 'Banco Ripley', 'Otro'];
+    
+    // Generar campos de cheques dinámicamente
+    let chequesHtml = '';
+    window.chequesActivos.forEach((chq, index) => {
+        const bancoOpciones = bancosList.map(b => `<option value="${b}" ${chq.banco === b ? 'selected' : ''}>${b}</option>`).join('');
+        const numeroChequeVal = chq.numero_cheque ? chq.numero_cheque : '';
+
+        chequesHtml += `
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #f8fafc; display: flex; gap: 16px; align-items: flex-start;">
+                <div style="width: 120px; flex-shrink: 0;">
+                    <img src="../${chq.foto_cheque_url}" style="width: 100%; border-radius: 4px; border: 1px solid #cbd5e1; cursor: pointer;" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
+                </div>
+                <div style="flex: 1; display: grid; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                        <div style="flex: 1;">
+                            <label style="display: block; font-size: 0.8rem; margin-bottom: 4px;">Monto ($) *</label>
+                            <input type="number" class="input-monto-tesoreria" data-id="${chq.id}" value="${parseFloat(chq.monto) || ''}" min="1" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px;" required>
+                        </div>
+                        <div style="font-size: 0.85rem; padding-bottom: 6px;">
+                            | Vence: ${chq.fecha_vencimiento}
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 4px;">Banco *</label>
+                        <select class="input-banco-tesoreria" data-id="${chq.id}" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px;" required>
+                            <option value="">Seleccione Banco...</option>
+                            ${bancoOpciones}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 4px;">Emitido a *</label>
+                        <select class="input-emitido-tesoreria" data-id="${chq.id}" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px;" required>
+                            <option value="">Seleccione Empresa...</option>
+                            <option value="Automarco LTDA" ${chq.emitido_a === 'Automarco LTDA' ? 'selected' : ''}>Automarco LTDA</option>
+                            <option value="HD Automarco S.A." ${chq.emitido_a === 'HD Automarco S.A.' ? 'selected' : ''}>HD Automarco S.A.</option>
+                            <option value="Autotec S.A." ${chq.emitido_a === 'Autotec S.A.' ? 'selected' : ''}>Autotec S.A.</option>
+                            <option value="Gabtec S.A." ${chq.emitido_a === 'Gabtec S.A.' ? 'selected' : ''}>Gabtec S.A.</option>
+                            <option value="Otro" ${chq.emitido_a === 'Otro' ? 'selected' : ''}>Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 4px;">N° Cheque *</label>
+                        <input type="text" class="input-numero-tesoreria" data-id="${chq.id}" value="${numeroChequeVal}" placeholder="Ej: 987654321" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px;" required>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    modal.innerHTML = `
+        <div class="modal-box" style="max-width: 600px; width: 90%; max-height: 90vh; display: flex; flex-direction: column;">
+            <h3>Validar - Completar Información de Cheques</h3>
+            <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 8px;">Por favor, digite el Banco y N° de Cheque para cada documento de la <strong style="color: var(--color-primary);">Factura N° ${numFactura}</strong>.</p>
+            <form id="formCompletarCheques" style="flex: 1; overflow-y: auto; margin-top: 16px; padding-right: 8px;">
+                ${chequesHtml}
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; position: sticky; bottom: 0; background: white; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                    <button type="button" class="btn-b2b" style="background: #e2e8f0; color: #334155;" onclick="cerrarModalCompletarCheques()">Cancelar</button>
+                    <button type="submit" class="btn-b2b btn-b2b-success" id="btnConfirmarRecepcionSubmit">Validar y Enviar a C.C.</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    document.getElementById('formCompletarCheques').onsubmit = (e) => {
+        e.preventDefault();
+        
+        // Recopilar datos
+        const bancosInputs = document.querySelectorAll('.input-banco-tesoreria');
+        const numerosInputs = document.querySelectorAll('.input-numero-tesoreria');
+        const montosInputs = document.querySelectorAll('.input-monto-tesoreria');
+        const emitidoInputs = document.querySelectorAll('.input-emitido-tesoreria');
+        
+        let chequesData = [];
+        let valid = true;
+        
+        for (let i = 0; i < bancosInputs.length; i++) {
+            const chqId = bancosInputs[i].getAttribute('data-id');
+            const banco = bancosInputs[i].value.trim();
+            const num = numerosInputs[i].value.trim();
+            const monto = parseFloat(montosInputs[i].value);
+            const emitido_a = emitidoInputs[i].value.trim();
+            
+            if (!banco || !num || isNaN(monto) || monto <= 0 || !emitido_a) {
+                showToast('Debe completar Banco, Emitido a, N° de Cheque y Monto válido para todos los documentos.', 'error');
+                valid = false;
+                break;
+            }
+            
+            chequesData.push({ id: chqId, banco: banco, numero_cheque: num, monto: monto, emitido_a: emitido_a });
+        }
+        
+        if (!valid) return;
+        
+        if (!confirm('¿Desea mandar esta información final para que Tesorería la confirme y proceda a validar los cheques?')) {
+            return;
+        }
+        
+        const extraData = {
+            cheques_completados: JSON.stringify(chequesData)
+        };
+        
+        ejecutarCambioEstado(id, 'RECIBIDO_TESORERIA', extraData);
+        cerrarModalCompletarCheques();
     };
 
     modal.style.display = 'flex';
@@ -849,7 +974,11 @@ function pedirConfirmacionRecepcion(id, numFactura) {
 }
 
 function cerrarModalConfirmacionRecepcion() {
-    const modal = document.getElementById('modalConfirmacionRecepcion');
+    cerrarModalCompletarCheques();
+}
+
+function cerrarModalCompletarCheques() {
+    const modal = document.getElementById('modalCompletarCheques');
     if (modal) modal.style.display = 'none';
     document.body.classList.remove('modal-open');
 }
@@ -990,8 +1119,8 @@ function ejecutarCambioEstado(id, nuevoEstado, extraData = {}) {
         }
         showToast(data.message || 'Estado actualizado con éxito', 'success');
         
-        // Si la cobranza pasó a DEPOSITADO o RECHAZADO, trasladar al usuario a esa pestaña automáticamente
-        if (nuevoEstado === 'DEPOSITADO' || nuevoEstado === 'RECHAZADO') {
+        // Si la cobranza pasó a DEPOSITADO, RECHAZADO, o RECIBIDO_TESORERIA, trasladar al usuario a esa pestaña automáticamente
+        if (nuevoEstado === 'DEPOSITADO' || nuevoEstado === 'RECHAZADO' || nuevoEstado === 'RECIBIDO_TESORERIA') {
             const targetTabState = nuevoEstado;
             const targetTabEl = document.querySelector(`.segmented-tab[data-estado="${targetTabState}"]`);
             if (targetTabEl) {
@@ -1222,7 +1351,6 @@ function reenviarBitacoraCC(logId) {
     });
 }
 
-
 // ============================================================
 // MODO EDICIÓN INLINE DE CHEQUES — TESORERÍA
 // ============================================================
@@ -1232,26 +1360,24 @@ function activarModoEdicion(cobranzaId) {
     const boxCheques = document.getElementById('boxPanelChequesList');
     if (!boxCheques) return;
 
-    const cards = boxCheques.querySelectorAll('[id^="chqView_"]');
-    if (cards.length === 0) { showToast('No hay cheques para editar', 'error'); return; }
+    if (!window.chequesActivos || window.chequesActivos.length === 0) { 
+        showToast('No hay cheques para editar', 'error'); 
+        return; 
+    }
 
-    _chequesEdicionCache = Array.from(cards).map(card => {
-        const id = parseInt(card.id.replace('chqView_', ''));
-        const banco = card.querySelector('.cheque-banco-name')?.textContent.trim() || '';
-        const montoText = card.querySelector('.cheque-monto-value')?.textContent.replace(/[^0-9]/g, '') || '0';
-        const infoLine = card.querySelector('[style*="font-size: 0.8rem"]')?.textContent || '';
-        const numMatch = infoLine.match(/N[°º] Cheque:\s*([^\|]+)/);
-        const vencMatch = infoLine.match(/Vencimiento:\s*(.+)/);
+    _chequesEdicionCache = window.chequesActivos.map(chq => {
         return {
-            id,
-            banco,
-            numero_cheque: numMatch ? numMatch[1].trim() : '',
-            monto: parseInt(montoText) || 0,
-            fecha_vencimiento: vencMatch ? vencMatch[1].trim() : '',
+            id: chq.id,
+            banco: chq.banco || '',
+            numero_cheque: chq.numero_cheque || '',
+            monto: parseFloat(chq.monto) || 0,
+            emitido_a: chq.emitido_a || '',
+            fecha_vencimiento: chq.fecha_vencimiento || '',
         };
     });
 
-    const bancos = ['Banco de Chile', 'Santander', 'BCI', 'Banco Estado', 'Scotiabank', 'Itaú', 'Otro'];
+    const bancos = ['Banco de Chile', 'Banco Santander', 'Banco BCI', 'Banco Estado', 'Scotiabank', 'Itaú', 'Banco Security', 'Banco BICE', 'Banco Internacional', 'Banco Consorcio', 'Banco Falabella', 'Banco Ripley', 'Otro'];
+    const empresas = ['Automarco LTDA', 'HD Automarco S.A.', 'Autotec S.A.', 'Gabtec S.A.', 'Otro'];
 
     const formRows = _chequesEdicionCache.map((chq, i) => `
         <div style="border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px; background:#f8fafc;">
@@ -1261,12 +1387,22 @@ function activarModoEdicion(cobranzaId) {
                 <div>
                     <label style="font-size:0.78rem; font-weight:600; color:#475569;">Banco</label>
                     <select id="editBanco_${i}" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem;">
+                        <option value="">Seleccione Banco...</option>
                         ${bancos.map(b => `<option value="${b}" ${chq.banco === b ? 'selected' : ''}>${b}</option>`).join('')}
                     </select>
                 </div>
                 <div>
                     <label style="font-size:0.78rem; font-weight:600; color:#475569;">N° Cheque</label>
-                    <input type="text" id="editNumero_${i}" value="${chq.numero_cheque}" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem; box-sizing:border-box;">
+                    <input type="text" id="editNumero_${i}" value="${chq.numero_cheque}" placeholder="Ej: 987654321" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem; box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr; margin-bottom:6px;">
+                <div>
+                    <label style="font-size:0.78rem; font-weight:600; color:#475569;">Emitido a</label>
+                    <select id="editEmitido_${i}" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:5px; font-size:0.85rem;">
+                        <option value="">Seleccione Empresa...</option>
+                        ${empresas.map(e => `<option value="${e}" ${chq.emitido_a === e ? 'selected' : ''}>${e}</option>`).join('')}
+                    </select>
                 </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
@@ -1306,6 +1442,7 @@ async function guardarEdicionTesoreria(cobranzaId, count) {
             banco: document.getElementById(`editBanco_${i}`)?.value?.trim(),
             numero_cheque: document.getElementById(`editNumero_${i}`)?.value?.trim(),
             monto: parseFloat(document.getElementById(`editMonto_${i}`)?.value || 0),
+            emitido_a: document.getElementById(`editEmitido_${i}`)?.value?.trim(),
             fecha_vencimiento: document.getElementById(`editFecha_${i}`)?.value?.trim(),
         });
     }

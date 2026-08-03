@@ -121,6 +121,7 @@ CREATE TABLE cobranzas (
   tipo_entrega         ENUM('CHILEXPRESS','PRESENCIAL_SANTIAGO') NULL,
   numero_seguimiento   VARCHAR(100),                    -- OT Chilexpress (si aplica)
   comprobante_url      VARCHAR(255),                    -- ruta relativa a uploads/
+  justificacion_descuadre TEXT NULL,
   estado               ENUM('PENDIENTE_ENVIO','EN_TRANSITO','ENTREGADO_SANTIAGO',
                             'RECIBIDO_TESORERIA','DEPOSITADO','RECHAZADO') DEFAULT 'PENDIENTE_ENVIO',
   created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -133,6 +134,7 @@ CREATE TABLE cobranzas (
 |-------|-------------|
 | `comprobante_url` | Ruta relativa: `uploads/{empresa_id}/{YYYY-MM}/comprobantes/archivo.jpg` |
 | `numero_seguimiento` | Aplica solo cuando `tipo_entrega = 'CHILEXPRESS'` |
+| `justificacion_descuadre` | Razón dada por el vendedor si los montos no coinciden |
 | `estado` | Inicia en `PENDIENTE_ENVIO`. El vendedor solo puede avanzar al estado de envío mediante `completar_envio.php`; Tesorería gestiona los estados posteriores. |
 
 **Flujo de entrega:** al registrar la cobranza, `tipo_entrega` permanece `NULL` y el estado es `PENDIENTE_ENVIO`. Al completar el envío, `CHILEXPRESS` cambia a `EN_TRANSITO` y `PRESENCIAL_SANTIAGO` a `ENTREGADO_SANTIAGO`.
@@ -147,8 +149,8 @@ Detalle de cada cheque dentro de una cobranza. Relación 1:N con `cobranzas`.
 CREATE TABLE cheques (
   id                       INT AUTO_INCREMENT PRIMARY KEY,
   cobranza_id              INT NOT NULL,
-  banco                    VARCHAR(100) NOT NULL,
-  numero_cheque            VARCHAR(50) NOT NULL,
+  banco                    VARCHAR(100) NULL,
+  numero_cheque            VARCHAR(50) NULL,
   monto                    DECIMAL(12,0) NOT NULL,
   fecha_vencimiento        DATE NOT NULL,
   foto_cheque_url          VARCHAR(255) NOT NULL,       -- ruta relativa a uploads/
@@ -162,7 +164,8 @@ CREATE TABLE cheques (
 
 | Campo | Quién lo escribe | Cuándo |
 |-------|-----------------|--------|
-| `banco` … `comentario` | Vendedor | Al registrar la cobranza |
+| `monto`, `fecha_vencimiento`, `foto_cheque_url`, `comentario` | Vendedor | Al registrar la cobranza |
+| `banco`, `numero_cheque` | Tesorería | Al validar (RECIBIDO_TESORERIA) |
 | `numero_papeleta_deposito` | Tesorería | Al marcar como `DEPOSITADO` |
 | `fecha_deposito_real` | Tesorería | Al marcar como `DEPOSITADO` |
 

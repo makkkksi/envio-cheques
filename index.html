@@ -353,10 +353,12 @@
                 total de la factura (<strong id="modalMontoFacturaTxt">$0</strong>).
             </p>
             <p id="modalAdvertenciaText2"
-                style="font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; color: var(--color-text-muted);">
-                Le sugerimos justificar esta diferencia en el campo de comentarios de los cheques antes de proceder.
-                ¿Desea enviar de todas formas?
+                style="font-size: 0.9rem; line-height: 1.5; margin-bottom: 15px; color: var(--color-text-muted);">
+                Debe justificar obligatoriamente esta diferencia para poder proceder:
             </p>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <textarea id="txtJustificacionDescuadre" name="justificacion_descuadre" class="textarea-comentario" rows="3" placeholder="Ej: Pago parcial, retención, etc..." style="width: 100%; resize: vertical;" required></textarea>
+            </div>
             <div class="modal-buttons" style="display: flex; gap: 10px;">
                 <button type="button" id="btnCancelarAdvertencia" class="btn-cancelar"
                     style="flex: 1; background: #44475a; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600;">Cerrar

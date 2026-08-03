@@ -19,6 +19,14 @@ try {
     $despacho_automatico_activado = $stmtAutoConfig->fetchColumn();
     if ($despacho_automatico_activado === false) $despacho_automatico_activado = '1';
 
+    $stmtDig1 = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'email_digitadora_1'");
+    $stmtDig1->execute();
+    $email_digitadora_1 = $stmtDig1->fetchColumn() ?: '';
+
+    $stmtDig2 = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'email_digitadora_2'");
+    $stmtDig2->execute();
+    $email_digitadora_2 = $stmtDig2->fetchColumn() ?: '';
+
     // 2. Obtener matriz de empresas y sus digitadoras asignadas + cheques pendientes de hoy
     $stmtEmpresas = $pdo->prepare("
         SELECT 
@@ -37,7 +45,17 @@ try {
     $stmtEmpresas->execute();
     $empresas = $stmtEmpresas->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. Obtener el historial de la bitácora (últimos 50 envíos)
+    // 3. Obtener el historial de la bitácora paginado (10 por página)
+    $historialPage = max(1, (int)($_GET['historial_page'] ?? 1));
+    $historialLimit = 10;
+    $historialOffset = ($historialPage - 1) * $historialLimit;
+
+    // Contar total de registros para paginación
+    $stmtCount = $pdo->prepare("SELECT COUNT(*) FROM log_envios_informes");
+    $stmtCount->execute();
+    $totalHistorial = (int)$stmtCount->fetchColumn();
+    $totalPages = (int)ceil($totalHistorial / $historialLimit);
+
     $stmtLog = $pdo->prepare("
         SELECT 
             l.id,
@@ -46,17 +64,20 @@ try {
             l.cantidad_cobranzas,
             l.estado_envio,
             l.error_mensaje,
-            l.fecha_envio
+            l.fecha_envio,
+            l.payload_json
         FROM log_envios_informes l
         LEFT JOIN empresas e ON l.empresa_id = e.id
         ORDER BY l.fecha_envio DESC
-        LIMIT 50
+        LIMIT :limit OFFSET :offset
     ");
+    $stmtLog->bindValue(':limit', $historialLimit, PDO::PARAM_INT);
+    $stmtLog->bindValue(':offset', $historialOffset, PDO::PARAM_INT);
     $stmtLog->execute();
     $log_envios = $stmtLog->fetchAll(PDO::FETCH_ASSOC);
 
-    // 4. Obtener listado de cheques en cola (pendientes de liberación)
-    $stmtChequesEnCola = $pdo->prepare("
+    // 4. Obtener listado de cobranzas en cola (pendientes de liberación)
+    $stmtCobranzasCola = $pdo->prepare("
         SELECT 
             c.id as cobranza_id,
             c.rut_cliente,
@@ -64,27 +85,42 @@ try {
             c.vendedor_nombre,
             c.numero_factura,
             e.nombre as empresa_nombre,
-            ch.numero_cheque,
-            ch.banco,
-            ch.monto as monto_cheque,
-            ch.fecha_vencimiento
+            c.updated_at
         FROM cobranzas c
         JOIN empresas e ON c.empresa_id = e.id
-        JOIN cheques ch ON ch.cobranza_id = c.id
         WHERE c.estado = 'RECIBIDO_TESORERIA'
         ORDER BY c.updated_at ASC
     ");
-    $stmtChequesEnCola->execute();
-    $cheques_en_cola = $stmtChequesEnCola->fetchAll(PDO::FETCH_ASSOC);
+    $stmtCobranzasCola->execute();
+    $cobranzas_en_cola = $stmtCobranzasCola->fetchAll(PDO::FETCH_ASSOC);
+
+    // Adjuntar cheques y facturas a cada cobranza
+    foreach ($cobranzas_en_cola as &$cob) {
+        $cobId = $cob['cobranza_id'];
+        
+        $stmtChq = $pdo->prepare("SELECT numero_cheque, banco, monto as monto_cheque, fecha_vencimiento FROM cheques WHERE cobranza_id = ?");
+        $stmtChq->execute([$cobId]);
+        $cob['cheques'] = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtFac = $pdo->prepare("SELECT numero_factura, cuota_label, monto_cubierto FROM cobranza_facturas WHERE cobranza_id = ?");
+        $stmtFac->execute([$cobId]);
+        $cob['facturas_multiples'] = $stmtFac->fetchAll(PDO::FETCH_ASSOC);
+    }
+    unset($cob);
 
     echo json_encode([
         'success' => true,
         'data' => [
             'hora_despacho_diario' => $hora_despacho_diario,
             'despacho_automatico_activado' => $despacho_automatico_activado,
+            'email_digitadora_1' => $email_digitadora_1,
+            'email_digitadora_2' => $email_digitadora_2,
             'empresas' => $empresas,
             'log_envios' => $log_envios,
-            'cheques_en_cola' => $cheques_en_cola
+            'historial_page' => $historialPage,
+            'historial_total_pages' => $totalPages,
+            'historial_total' => $totalHistorial,
+            'cobranzas_en_cola' => $cobranzas_en_cola
         ],
         'message' => 'Datos obtenidos correctamente'
     ]);

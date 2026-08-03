@@ -103,7 +103,7 @@ try {
     //    En producción: vendedor_id = :uid siempre.
     //    En local (bypass): si uid es el usuario 1 (Sistema), se acepta cualquier cobranza.
     $sql = '
-        SELECT c.*, e.nombre AS empresa_nombre 
+        SELECT c.*, e.nombre AS empresa_nombre, e.email_tesoreria_defecto 
         FROM cobranzas c 
         JOIN empresas e ON c.empresa_id = e.id
         WHERE c.id = :id
@@ -213,6 +213,7 @@ try {
         'tipo_entrega' => $tipo_entrega,
         'numero_seguimiento' => $numero_seguimiento,
         'email_tesoreria' => $cobranza['email_tesoreria'],
+        'email_tesoreria_defecto' => $cobranza['email_tesoreria_defecto'] ?? null,
         'email_cliente' => $cobranza['email_cliente']
     ];
 

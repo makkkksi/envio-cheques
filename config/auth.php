@@ -63,6 +63,25 @@ function requireAuth(PDO $pdo, array $allowedRoles = []): array {
         return $user;
     }
 
+    // 1.5. Intentar auth por Sesión de Administrador/Tesorería (Portal Web)
+    if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+        $user = [
+            'id' => $_SESSION['admin_user_id'] ?? 1,
+            'nombre' => $_SESSION['admin_user_nombre'] ?? 'Admin',
+            'email' => '',
+            'rol' => $_SESSION['admin_user_rol'] ?? 'ADMINISTRADOR',
+            'activo' => 1
+        ];
+
+        if (!empty($allowedRoles) && !in_array($user['rol'], $allowedRoles)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado. Los administradores/tesorería no tienen el rol requerido.']);
+            exit;
+        }
+
+        return $user;
+    }
+
     // 2. Intentar auth por Sesión de Vendedor (WebView)
     if (isset($_SESSION['vendedor_auth']) && !empty($_SESSION['vendedor_auth']['vendedor_id'])) {
         $user = [

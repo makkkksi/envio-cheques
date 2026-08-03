@@ -28,7 +28,7 @@ try {
     $pdo = Database::getCobranzasConnection();
     
     // RBAC estricto en el servidor
-    $user = requireAuth($pdo, ['ADMINISTRADOR', 'TESORERIA']);
+    $user = requireAuth($pdo, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC']);
     $usuario_id = $user['id'];
 
     $cobranza_id = filter_input(INPUT_POST, 'cobranza_id', FILTER_VALIDATE_INT);
@@ -62,6 +62,16 @@ try {
         exit;
     }
 
+    if ($nuevo_estado === 'RECIBIDO_TESORERIA') {
+        $chequesCompletadosJson = $_POST['cheques_completados'] ?? '[]';
+        $chequesCompletados = json_decode($chequesCompletadosJson, true);
+        if (!is_array($chequesCompletados) || empty($chequesCompletados)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Debe completar la información de banco y N° de cheque para los documentos']);
+            exit;
+        }
+    }
+
     // Consultar estado actual
     $stmtCob = $pdo->prepare("SELECT id, estado FROM cobranzas WHERE id = :id");
     $stmtCob->execute([':id' => $cobranza_id]);
@@ -84,6 +94,23 @@ try {
         ':nuevo_estado' => $nuevo_estado,
         ':id'           => $cobranza_id
     ]);
+
+    // 1.5. Si el estado es RECIBIDO_TESORERIA, actualizar banco y número de cheques
+    if ($nuevo_estado === 'RECIBIDO_TESORERIA') {
+        $stmtUpdChq = $pdo->prepare("UPDATE cheques SET banco = :banco, numero_cheque = :numero_cheque, monto = :monto, emitido_a = :emitido_a WHERE id = :id AND cobranza_id = :cob_id");
+        foreach ($chequesCompletados as $chq) {
+            if (isset($chq['id'], $chq['banco'], $chq['numero_cheque'], $chq['monto'], $chq['emitido_a'])) {
+                $stmtUpdChq->execute([
+                    ':banco' => $chq['banco'],
+                    ':numero_cheque' => $chq['numero_cheque'],
+                    ':monto' => $chq['monto'],
+                    ':emitido_a' => $chq['emitido_a'],
+                    ':id' => $chq['id'],
+                    ':cob_id' => $cobranza_id
+                ]);
+            }
+        }
+    }
 
     // 2. Si el estado es DEPOSITADO, actualizar datos de depósito en la tabla cheques
     if ($nuevo_estado === 'DEPOSITADO') {
@@ -127,6 +154,43 @@ try {
     if ($nuevo_estado === 'RECIBIDO_TESORERIA') {
         require_once __DIR__ . '/../../services/MailService.php';
         MailService::notificarValidacionTesorería($pdo, $cobranza_id);
+
+        // 6. Inyectar cheques validados a Google Sheets de Tesorería (después del commit, no bloqueante)
+        try {
+            require_once __DIR__ . '/../../services/GoogleSheetsService.php';
+            
+            $stmtCobData = $pdo->prepare("SELECT rut_cliente, razon_social_cliente FROM cobranzas WHERE id = :id");
+            $stmtCobData->execute([':id' => $cobranza_id]);
+            $cobData = $stmtCobData->fetch(PDO::FETCH_ASSOC);
+
+            $stmtChequesData = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :id");
+            $stmtChequesData->execute([':id' => $cobranza_id]);
+            $chequesCompletos = $stmtChequesData->fetchAll(PDO::FETCH_ASSOC);
+
+            $filasExcel = [];
+            foreach ($chequesCompletos as $chq) {
+                $filasExcel[] = [
+                    $chq['fecha_vencimiento'] ?? '',                             // Fecha (de vencimiento)
+                    $chq['emitido_a'] ?? '',                                      // Nombre girador
+                    (float)($chq['monto'] ?? 0),                                 // Monto
+                    $cobData['rut_cliente'] ?? '',                              // Rut cliente
+                    $chq['numero_cheque'] ?? '',                                 // nRecibo
+                    $cobData['razon_social_cliente'] ?? '',                     // Nombre cliente
+                    date('d/m/Y H:i'),                                          // Fecha ingreso
+                    $chq['banco'] ?? '',                                        // CTANUMERO
+                    $chq['comentario'] ?? ''                                    // comentario
+                ];
+            }
+
+            if (!empty($filasExcel)) {
+                GoogleSheetsService::appendRows($filasExcel);
+            }
+        } catch (Exception $eSheets) {
+            error_log('[GoogleSheets] Error al registrar cheques en Sheets: ' . $eSheets->getMessage());
+        }
+    } elseif ($nuevo_estado === 'RECHAZADO') {
+        require_once __DIR__ . '/../../services/MailService.php';
+        MailService::notificarRechazoTesoreria($pdo, $cobranza_id, $comentario);
     }
 
     echo json_encode([

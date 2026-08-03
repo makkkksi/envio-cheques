@@ -41,12 +41,12 @@ try {
     $metricsRaw = $stmtMetrics->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $metrics = [
-        'bandeja_trabajo'    => (int)($metricsRaw['EN_TRANSITO'] ?? 0) + (int)($metricsRaw['ENTREGADO_SANTIAGO'] ?? 0) + (int)($metricsRaw['RECIBIDO_TESORERIA'] ?? 0),
+        'bandeja_trabajo'    => (int)($metricsRaw['EN_TRANSITO'] ?? 0) + (int)($metricsRaw['ENTREGADO_SANTIAGO'] ?? 0),
         'pendientes_envio'   => (int)($metricsRaw['PENDIENTE_ENVIO'] ?? 0),
         'en_transito'        => (int)($metricsRaw['EN_TRANSITO'] ?? 0) + (int)($metricsRaw['ENTREGADO_SANTIAGO'] ?? 0),
+        'rechazados'         => (int)($metricsRaw['RECHAZADO'] ?? 0),
         'recibidos'          => (int)($metricsRaw['RECIBIDO_TESORERIA'] ?? 0),
         'depositados'        => (int)($metricsRaw['DEPOSITADO'] ?? 0),
-        'rechazados'         => (int)($metricsRaw['RECHAZADO'] ?? 0),
         'total'              => array_sum($metricsRaw)
     ];
 
@@ -72,15 +72,13 @@ try {
 
     $params = [];
 
-    if ($estado === 'BANDEJA_TRABAJO') {
-        $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO', 'RECIBIDO_TESORERIA')";
-    } elseif ($estado === 'EN_TRANSITO') {
-        $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO')";
-    } elseif ($estado === 'ENVIADOS') {
-        $sql .= " AND c.estado != 'PENDIENTE_ENVIO'";
-    } elseif ($estado !== 'TODOS') {
-        $sql .= " AND c.estado = :estado";
-        $params[':estado'] = $estado;
+    if ($estado !== 'TODOS') {
+        if ($estado === 'BANDEJA_TRABAJO') {
+            $sql .= " AND c.estado IN ('EN_TRANSITO', 'ENTREGADO_SANTIAGO')";
+        } else {
+            $sql .= " AND c.estado = :estado";
+            $params[':estado'] = $estado;
+        }
     }
 
     if ($empresa_id !== null) {

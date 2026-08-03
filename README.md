@@ -148,6 +148,8 @@ Para realizar pruebas en el entorno de desarrollo local, se pueden utilizar las 
 | **Tesorería** | `tesoreria@automarco.cl` | `tesoreria123` | `/admin/login.php` (Bandeja y validación) |
 | **Cuentas Corrientes** | `cuentascorrientes@automarco.cl` | `tesoreria123` | `/admin/cuentas_corrientes.php` (Distribuidor y reenvíos) |
 
+> **Nota para Administradores**: El rol `ADMINISTRADOR` (`admin@automarco.cl` o `sistema@app.local`) tiene acceso a ambos portales administrativos. Al iniciar sesión, verá un botón en el encabezado (&#8646; Ir a C.Corrientes / &#8646; Ir a Tesorería) que le permite navegar fácilmente entre la vista de Tesorería y la de Cuentas Corrientes.
+
 
 
 
@@ -171,3 +173,6 @@ Antes de modificar cualquier archivo:
 NO modifiques ningún archivo todavía.
 
 Espera mi aprobación del plan antes de implementar.
+
+
+

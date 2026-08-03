@@ -20,23 +20,41 @@ try {
 
     // 1. Guardar hora_despacho_diario
     if (isset($input['hora_despacho_diario']) && preg_match('/^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/', $input['hora_despacho_diario'])) {
+        $valorHora = $input['hora_despacho_diario'];
         $stmtHora = $pdo->prepare("
             INSERT INTO configuraciones_sistema (clave, valor) 
-            VALUES ('hora_despacho_diario', :valor)
-            ON DUPLICATE KEY UPDATE valor = :valor
+            VALUES ('hora_despacho_diario', :valor1)
+            ON DUPLICATE KEY UPDATE valor = :valor2
         ");
-        $stmtHora->bindParam(':valor', $input['hora_despacho_diario']);
-        $stmtHora->execute();
+        $stmtHora->execute([':valor1' => $valorHora, ':valor2' => $valorHora]);
     }
 
     if (isset($input['despacho_automatico_activado'])) {
+        $valorAuto = $input['despacho_automatico_activado'] ? '1' : '0';
         $stmtAuto = $pdo->prepare("
             INSERT INTO configuraciones_sistema (clave, valor) 
-            VALUES ('despacho_automatico_activado', :valor)
-            ON DUPLICATE KEY UPDATE valor = :valor
+            VALUES ('despacho_automatico_activado', :valor1)
+            ON DUPLICATE KEY UPDATE valor = :valor2
         ");
-        $stmtAuto->bindParam(':valor', $input['despacho_automatico_activado']);
-        $stmtAuto->execute();
+        $stmtAuto->execute([':valor1' => $valorAuto, ':valor2' => $valorAuto]);
+    }
+
+    if (isset($input['email_digitadora_1'])) {
+        $stmtDig1 = $pdo->prepare("
+            INSERT INTO configuraciones_sistema (clave, valor) 
+            VALUES ('email_digitadora_1', :valor1)
+            ON DUPLICATE KEY UPDATE valor = :valor2
+        ");
+        $stmtDig1->execute([':valor1' => $input['email_digitadora_1'], ':valor2' => $input['email_digitadora_1']]);
+    }
+
+    if (isset($input['email_digitadora_2'])) {
+        $stmtDig2 = $pdo->prepare("
+            INSERT INTO configuraciones_sistema (clave, valor) 
+            VALUES ('email_digitadora_2', :valor1)
+            ON DUPLICATE KEY UPDATE valor = :valor2
+        ");
+        $stmtDig2->execute([':valor1' => $input['email_digitadora_2'], ':valor2' => $input['email_digitadora_2']]);
     }
 
     // 2. Actualizar correos asignados por empresa
@@ -47,10 +65,13 @@ try {
             WHERE id = :id
         ");
         foreach ($input['asignaciones_empresas'] as $asignacion) {
-            if (isset($asignacion['id']) && isset($asignacion['email']) && filter_var($asignacion['email'], FILTER_VALIDATE_EMAIL)) {
-                $stmtEmpresa->bindParam(':email', $asignacion['email']);
-                $stmtEmpresa->bindParam(':id', $asignacion['id'], PDO::PARAM_INT);
-                $stmtEmpresa->execute();
+            if (isset($asignacion['id']) && isset($asignacion['email'])) {
+                $email = trim($asignacion['email']);
+                if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $stmtEmpresa->bindParam(':email', $email);
+                    $stmtEmpresa->bindParam(':id', $asignacion['id'], PDO::PARAM_INT);
+                    $stmtEmpresa->execute();
+                }
             }
         }
     }

@@ -55,6 +55,11 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA'])) {
             </div>
             <div class="user-badge" style="display: flex; align-items: center; gap: 12px;">
                 <span>Usuario: <?php echo htmlspecialchars($_SESSION['admin_user_nombre'] ?? 'Tesorería'); ?></span>
+                <?php if ($rolUsuario === 'ADMINISTRADOR'): ?>
+                <a href="cuentas_corrientes.php" style="background: rgba(37,99,235,0.2); color: #93c5fd; border: 1px solid rgba(37,99,235,0.4); padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='rgba(37,99,235,0.35)';" onmouseout="this.style.background='rgba(37,99,235,0.2)';">
+                    &#8646; Ir a C.Corrientes
+                </a>
+                <?php endif; ?>
                 <button type="button" onclick="abrirModalLogout()" style="background: rgba(255,255,255,0.08); color: #94a3b8; border: 1px solid rgba(255,255,255,0.12); padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(220,38,38,0.15)';this.style.color='#fca5a5';" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='#94a3b8';">
                     Cerrar Sesión
                 </button>
@@ -75,9 +80,13 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA'])) {
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
                             Bandeja de Entrada <span class="tab-count" id="cntBandeja">0</span>
                         </button>
+                        <button type="button" class="segmented-tab" data-estado="RECIBIDO_TESORERIA">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            Enviados a C.Corrientes <span class="tab-count" id="cntRecibidos">0</span>
+                        </button>
                         <button type="button" class="segmented-tab" data-estado="DEPOSITADO">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-                            Enviados a C.Corrientes <span class="tab-count" id="cntDepositados">0</span>
+                            Enviados a Optimus <span class="tab-count" id="cntDepositados">0</span>
                         </button>
                         <button type="button" class="segmented-tab" data-estado="RECHAZADO">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
@@ -103,7 +112,7 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA'])) {
                         <select id="selectFiltroBandeja" class="select-compact">
                             <option value="TODOS_BANDEJA">Ver Todos (Bandeja)</option>
                             <option value="EN_TRANSITO">En Tránsito</option>
-                            <option value="RECIBIDO_TESORERIA">Enviado a C.Corrientes</option>
+                            <option value="ENTREGADO_SANTIAGO">Entregado Stgo</option>
                         </select>
 
                         <select id="selectEmpresaAdmin" class="select-compact">

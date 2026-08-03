@@ -6,6 +6,7 @@
  */
 
 require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/PdfGenerator.php';
 
 class MailService
 {
@@ -156,12 +157,19 @@ class MailService
                 }
             }
 
+            // DOBLE NOTIFICACIÓN INICIAL: Enviar también a Cuentas Corrientes ([NUEVO REGISTRO])
+            $emailCuentasCorrientes = $cobranza['email_tesoreria_defecto'] ?: (defined('MAIL_FROM') ? MAIL_FROM : 'cuentascorrientes@automarco.cl');
+            if (!empty($emailCuentasCorrientes) && $emailCuentasCorrientes !== $emailTesorería) {
+                $asuntoCC = "[PARA C.CORRIENTES] [NUEVO REGISTRO] Cobranza Factura N° {$nFactura} ({$empresa})";
+                self::sendSmtp($emailCuentasCorrientes, $asuntoCC, $html, $rutasAdjuntos);
+            }
+
             // El envío a clientes está deshabilitado por completo por motivos de seguridad
             $exitoCliente = true;
             error_log("[MailService] Envío de correo a cliente omitido de manera segura (deshabilitado por política).");
 
             // Retornar true en desarrollo/sandbox para que las limitaciones de envío de Mailtrap no bloqueen la UX
-            return self::sendSmtp($emailTesorería, $asunto, $html, $rutasAdjuntos);
+            return true;
         } catch (Exception $e) {
             error_log('[MailService] Error al enviar notificación: ' . $e->getMessage());
             return false;
@@ -181,11 +189,12 @@ class MailService
         }
 
         try {
-            // 1. Obtener la cobranza
+            // 1. Obtener la cobranza con JOIN a usuarios para traer vendedor_email
             $stmt = $pdo->prepare("
-                SELECT c.*, e.nombre AS empresa_nombre, e.email_tesoreria_defecto
+                SELECT c.*, e.nombre AS empresa_nombre, e.email_tesoreria_defecto, u.email AS vendedor_email
                 FROM cobranzas c
                 INNER JOIN empresas e ON c.empresa_id = e.id
+                LEFT JOIN usuarios u ON c.vendedor_id = u.id
                 WHERE c.id = :id
             ");
             $stmt->execute([':id' => $cobranzaId]);
@@ -193,10 +202,14 @@ class MailService
 
             if (!$cobranza) return false;
 
-            // 2. Obtener cheques
-            $stmtChq = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :id");
-            $stmtChq->execute([':id' => $cobranzaId]);
-            $cheques = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
+            // Obtener cheques (usar cheques_filtrados si existe, para soportar la fragmentación por empresa)
+            if (isset($cobranza['cheques_filtrados'])) {
+                $cheques = $cobranza['cheques_filtrados'];
+            } else {
+                $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = ?");
+                $stmtCheques->execute([$cobranzaId]);
+                $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
+            }
 
             // 3. Obtener facturas/cuotas
             $stmtFac = $pdo->prepare("SELECT * FROM cobranza_facturas WHERE cobranza_id = :id");
@@ -311,107 +324,105 @@ class MailService
     }
 
     /**
+     * Envía correo de notificación al Vendedor notificando el rechazo de la cobranza por parte de Tesorería.
+     */
+    public static function notificarRechazoTesoreria(PDO $pdo, int $cobranzaId, string $motivoRechazo): bool
+    {
+        if (!defined('MAIL_HOST') || empty(MAIL_HOST)) {
+            error_log('[MailService] MAIL_HOST no configurado. Omitiendo envío de correo de rechazo.');
+            return false;
+        }
+
+        try {
+            $stmt = $pdo->prepare("
+                SELECT c.*, e.nombre AS empresa_nombre, u.email AS vendedor_email
+                FROM cobranzas c
+                INNER JOIN empresas e ON c.empresa_id = e.id
+                LEFT JOIN usuarios u ON c.vendedor_id = u.id
+                WHERE c.id = :id
+            ");
+            $stmt->execute([':id' => $cobranzaId]);
+            $cobranza = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$cobranza) return false;
+
+            $vendedorEmail = $cobranza['vendedor_email'] ?? '';
+            if (empty($vendedorEmail)) {
+                error_log("[MailService] No se encontró email para el vendedor ID {$cobranza['vendedor_id']}. Omitiendo correo de rechazo.");
+                return false;
+            }
+
+            $vendedorNombre = htmlspecialchars($cobranza['vendedor_nombre'] ?? 'Vendedor');
+            $razonSocial = htmlspecialchars($cobranza['razon_social_cliente'] ?? '');
+            $rut = htmlspecialchars($cobranza['rut_cliente'] ?? '');
+            $nFactura = htmlspecialchars($cobranza['numero_factura'] ?? '');
+            $motivoHtml = nl2br(htmlspecialchars($motivoRechazo));
+
+            $asunto = "[PARA VENDEDOR] [RECHAZADO] Cobranza N° {$cobranzaId} - {$razonSocial}";
+
+            $html = "
+            <div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #334155; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;\">
+                <div style=\"background-color: #991b1b; padding: 20px; text-align: center; color: #ffffff;\">
+                    <h2 style=\"margin: 0; font-size: 1.35rem;\">⚠️ Cobranza Rechazada por Tesorería</h2>
+                    <p style=\"margin: 4px 0 0 0; color: #fecaca; font-size: 0.875rem;\">Módulo de Gestión de Cheques</p>
+                </div>
+                <div style=\"padding: 24px;\">
+                    <p style=\"margin-top: 0;\">Hola <strong>{$vendedorNombre}</strong>,</p>
+                    <p>Te informamos que la cobranza <strong>N° {$cobranzaId}</strong> correspondientes al cliente <strong>{$razonSocial}</strong> (RUT: {$rut}) ha sido <span style=\"color: #dc2626; font-weight: 700;\">RECHAZADA</span> por Tesorería.</p>
+                    
+                    <div style=\"background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0; border-radius: 0 6px 6px 0;\">
+                        <p style=\"margin: 0 0 6px 0; color: #991b1b; font-weight: 700; font-size: 0.95rem;\">Motivo del Rechazo:</p>
+                        <p style=\"margin: 0; color: #7f1d1d; font-size: 0.9rem;\">{$motivoHtml}</p>
+                    </div>
+
+                    <p style=\"font-size: 0.9rem; color: #64748b;\">Por favor, revisa la documentación físicamente entregada o regulariza los cheques con el cliente antes de volver a ingresar la cobranza al sistema.</p>
+                </div>
+                <div style=\"background-color: #f8fafc; padding: 16px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 0.775rem; color: #94a3b8;\">
+                    Notificación automática enviada por el Sistema de Cobranzas del Holding.
+                </div>
+            </div>";
+
+            return self::sendSmtp($vendedorEmail, $asunto, $html);
+        } catch (Exception $e) {
+            error_log('[MailService] Error en notificarRechazoTesoreria: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Envía el consolidado de cobranzas diario a la digitadora correspondiente de la empresa.
      * Genera un diseño limpio, sin imágenes y optimizado para la lectura rápida.
      */
-    public static function enviarResumenDiarioDigitadora(string $empresaNombre, array $cobranzas, string $destinatario, string $ccEmail, PDO $pdo): bool
+    public static function enviarResumenDiarioDigitadora(string $empresaNombre, array $cobranzas, string $destinatario, PDO $pdo): bool
     {
         try {
             $totalCobranzas = count($cobranzas);
             $asunto = "[PARA DIGITADORAS] Resumen Diario Cuentas Corrientes - " . $empresaNombre . " (" . date('d/m/Y') . ")";
 
-            // Cabecera principal estilo corporativo
             $html = "
             <div style=\"font-family: 'Segoe UI', Arial, sans-serif; max-width: 750px; margin: 0 auto; color: #1e293b; line-height: 1.5; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background-color: #ffffff;\">
                 <div style=\"background-color: #0f172a; padding: 24px; color: #ffffff;\">
                     <h2 style=\"margin: 0; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.025em;\">Resumen Diario de Cobranzas</h2>
-                    <p style=\"margin: 4px 0 0 0; color: #94a3b8; font-size: 0.875rem;\">Empresa: <strong>" . htmlspecialchars($empresaNombre) . "</strong> &nbsp;•&nbsp; Fecha: " . date('d/m/Y') . "</p>
+                    <p style=\"margin: 4px 0 0 0; color: #94a3b8; font-size: 0.875rem;\">Empresa: <strong>" . htmlspecialchars($empresaNombre ?? '') . "</strong> &nbsp;•&nbsp; Fecha: " . date('d/m/Y') . "</p>
                 </div>
                 <div style=\"padding: 24px;\">
-                    <p style=\"margin-top: 0; font-size: 0.95rem; color: #475569;\">Estimada Digitadora, a continuación se detallan las <strong>{$totalCobranzas} cobranzas</strong> validadas por Tesorería para su correcto registro en Optimus ERP:</p>
-            ";
-
-            foreach ($cobranzas as $cobranza) {
-                // Obtener cheques de esta cobranza (Datos ya corregidos y saneados por Tesorería si aplica)
-                $stmtChq = $pdo->prepare("SELECT numero_cheque, banco, monto AS monto_cheque, fecha_vencimiento, comentario FROM cheques WHERE cobranza_id = ?");
-                $stmtChq->execute([$cobranza['id']]);
-                $cheques = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
-
-                $html .= "
-                <div style=\"border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 20px; padding: 16px; background-color: #f8fafc;\">
-                    <div style=\"border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;\">
-                        <span style=\"font-size: 0.75rem; font-weight: 700; color: #2563eb; text-transform: uppercase;\">Cobranza N° " . $cobranza['id'] . "</span>
-                        <h3 style=\"margin: 4px 0; font-size: 1.05rem; color: #0f172a;\">" . htmlspecialchars($cobranza['razon_social_cliente']) . "</h3>
-                        <span style=\"font-size: 0.85rem; color: #64748b;\">RUT: <strong>" . htmlspecialchars($cobranza['rut_cliente']) . "</strong> &nbsp;•&nbsp; Factura/Doc: <strong>" . htmlspecialchars($cobranza['numero_factura']) . "</strong></span>
-                        <div style=\"font-size: 0.8rem; color: #64748b; margin-top: 2px;\">Vendedor: " . htmlspecialchars($cobranza['vendedor_nombre']) . "</div>
-                    </div>
-                ";
-
-                if ($cheques) {
-                    $html .= "
-                    <table style=\"width: 100%; border-collapse: collapse; font-size: 0.85rem;\">
-                        <thead>
-                            <tr style=\"background-color: #e2e8f0; color: #334155; text-align: left;\">
-                                <th style=\"padding: 8px 10px; border-bottom: 1px solid #cbd5e1;\">Banco</th>
-                                <th style=\"padding: 8px 10px; border-bottom: 1px solid #cbd5e1;\">N° Cheque</th>
-                                <th style=\"padding: 8px 10px; border-bottom: 1px solid #cbd5e1; text-align: center;\">Vencimiento</th>
-                                <th style=\"padding: 8px 10px; border-bottom: 1px solid #cbd5e1; text-align: right;\">Monto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                    ";
-
-                    $totalLote = 0;
-                    foreach ($cheques as $chq) {
-                        $montoVal = (float)$chq['monto_cheque'];
-                        $totalLote += $montoVal;
-                        $montoFmt = '$' . number_format($montoVal, 0, ',', '.');
-                        $fechaFmt = date('d/m/Y', strtotime($chq['fecha_vencimiento']));
-                        
-                        $html .= "
-                            <tr style=\"background-color: #ffffff; border-bottom: 1px solid #f1f5f9;\">
-                                <td style=\"padding: 8px 10px; color: #0f172a;\">" . htmlspecialchars($chq['banco']) . "</td>
-                                <td style=\"padding: 8px 10px; font-weight: 600; font-family: monospace; color: #0f172a;\">" . htmlspecialchars($chq['numero_cheque']) . "</td>
-                                <td style=\"padding: 8px 10px; text-align: center; color: #475569;\">" . $fechaFmt . "</td>
-                                <td style=\"padding: 8px 10px; text-align: right; font-weight: 700; font-family: monospace; color: #166534;\">" . $montoFmt . "</td>
-                            </tr>
-                        ";
-                        
-                        if (!empty($chq['comentario'])) {
-                            $html .= "
-                            <tr style=\"background-color: #fdfefe;\">
-                                <td colspan=\"4\" style=\"padding: 4px 10px 8px 10px; font-size: 0.78rem; color: #64748b; font-style: italic; border-bottom: 1px solid #f1f5f9;\">
-                                    Nota cheque: \"" . htmlspecialchars($chq['comentario']) . "\"
-                                </td>
-                            </tr>
-                            ";
-                        }
-                    }
-
-                    $html .= "
-                            <tr style=\"background-color: #f1f5f9; font-weight: 700;\">
-                                <td colspan=\"3\" style=\"padding: 8px 10px; text-align: right; color: #475569;\">Total Cobranza:</td>
-                                <td style=\"padding: 8px 10px; text-align: right; font-family: monospace; color: #0f172a;\">$" . number_format($totalLote, 0, ',', '.') . "</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    ";
-                } else {
-                    $html .= "<p style=\"font-size: 0.85rem; color: #dc2626; margin: 0;\">No se encontraron cheques adjuntos en esta cobranza.</p>";
-                }
-
-                $html .= "</div>";
-            }
-
-            $html .= "
-                </div>
-                <div style=\"background-color: #f8fafc; padding: 16px; text-align: center; border-top: 1px solid #e2e8f0; font-size: 0.775rem; color: #94a3b8;\">
-                    Este es un informe diario generado automáticamente por el Módulo de Finanzas & Cobranzas.
+                    <p style=\"margin-top: 0; font-size: 0.95rem; color: #475569;\">Estimada Digitadora, a continuación se adjunta en formato <strong>PDF</strong> el detalle de las <strong>{$totalCobranzas} cobranzas</strong> validadas por Tesorería para su correcto registro en Optimus ERP.</p>
+                    <p style=\"margin-top: 15px; font-size: 0.85rem; color: #64748b;\">Por favor, revise el documento adjunto para ver el desglose completo de facturas, cuotas y cheques asociados.</p>
                 </div>
             </div>
             ";
 
-            return self::sendSmtp($destinatario, $asunto, $html, [], $ccEmail);
+            // Generar PDF
+            $pdfPath = PdfGenerator::generateResumenDiario($empresaNombre, $cobranzas, $pdo);
+
+            $enviado = self::sendSmtp($destinatario, $asunto, $html, [$pdfPath]);
+            
+            // Limpiar PDF temporal
+            if (file_exists($pdfPath)) {
+                @unlink($pdfPath);
+            }
+            
+            return $enviado;
         } catch (Exception $e) {
             error_log('[MailService] Error al enviar resumen a digitadoras: ' . $e->getMessage());
             return false;
@@ -419,105 +430,87 @@ class MailService
     }
 
     /**
-     * Envía un correo electrónico utilizando sockets SMTP puros para máxima portabilidad sin dependencias.
+     * Envía un correo electrónico utilizando PHPMailer.
      */
     public static function sendSmtp(string $to, string $subject, string $htmlBody, array $attachments = [], string $cc = ''): bool
     {
-        $host = MAIL_HOST;
-        $port = MAIL_PORT;
-        $username = MAIL_USER;
-        $password = MAIL_PASS;
-        $from = MAIL_FROM;
+        // En lugar de SMTP, usaremos la API REST oficial de Mailtrap para evadir los bloqueos
+        // de puerto SMTP (2525, 587, 25) del proveedor de internet (VTR/Movistar/etc).
+        $apiToken = '59d6abcfec4d13c3feaf28be955752be';
+        $inboxId  = '4833384'; // Usando el ID que aparece en la imagen proporcionada
 
-        if (empty($host) || empty($username) || empty($password)) {
-            error_log("[MailService] SMTP credentials not completely configured in config/app.php");
-            return false;
-        }
+        $fromEmail = defined('MAIL_FROM') ? MAIL_FROM : 'hello@demomailtrap.co';
 
-        $socket = @fsockopen($host, $port, $errno, $errstr, 15);
-        if (!$socket) {
-            error_log("[MailService] Failed to connect to SMTP server: $errstr ($errno)");
-            return false;
-        }
-
-        $read = function($socket, $expectedResponse) {
-            $serverReply = '';
-            while ($line = fgets($socket, 515)) {
-                $serverReply .= $line;
-                if (substr($line, 3, 1) === ' ') {
-                    break;
-                }
-            }
-            $ok = str_starts_with($serverReply, (string)$expectedResponse);
-            if (!$ok) {
-                error_log("[MailService] SMTP Error. Expected: $expectedResponse, Received: " . trim($serverReply));
-            }
-            return $ok;
-        };
-
-        if (!$read($socket, 220)) return false;
-
-        fwrite($socket, "EHLO localhost\r\n");
-        if (!$read($socket, 250)) return false;
-
-        fwrite($socket, "AUTH LOGIN\r\n");
-        if (!$read($socket, 334)) return false;
-
-        fwrite($socket, base64_encode($username) . "\r\n");
-        if (!$read($socket, 334)) return false;
-
-        fwrite($socket, base64_encode($password) . "\r\n");
-        if (!$read($socket, 235)) return false;
-
-        fwrite($socket, "MAIL FROM:<$from>\r\n");
-        if (!$read($socket, 250)) return false;
-
-        fwrite($socket, "RCPT TO:<$to>\r\n");
-        if (!$read($socket, 250)) return false;
+        $destinatarios = [
+            ["email" => $to, "name" => "Destinatario"]
+        ];
         
+        $payload = [
+            "from" => [
+                "email" => $fromEmail,
+                "name"  => "Módulo de Cobranzas"
+            ],
+            "to"       => $destinatarios,
+            "subject"  => $subject,
+            "html"     => $htmlBody,
+            "text"     => strip_tags(str_replace(['<br>', '<br/>', '</p>'], "\n", $htmlBody)),
+            "category" => "Cobranza PWA"
+        ];
+
         if (!empty($cc)) {
-            fwrite($socket, "RCPT TO:<$cc>\r\n");
-            if (!$read($socket, 250)) return false;
+            $payload["cc"] = [["email" => $cc, "name" => "Copia"]];
         }
 
-        fwrite($socket, "DATA\r\n");
-        if (!$read($socket, 354)) return false;
-
-        $boundary = "PHP-mixed-" . md5(uniqid(time(), true));
-        $headers = "From: $from\r\n" .
-                   "To: $to\r\n" .
-                   (!empty($cc) ? "Cc: $cc\r\n" : "") .
-                   "Subject: $subject\r\n" .
-                   "MIME-Version: 1.0\r\n" .
-                   "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n\r\n";
-
-        $message = "--$boundary\r\n" .
-                   "Content-Type: text/html; charset=\"UTF-8\"\r\n" .
-                   "Content-Transfer-Encoding: 7bit\r\n\r\n" .
-                   $htmlBody . "\r\n\r\n";
-
-        foreach ($attachments as $filePath) {
-            if (file_exists($filePath)) {
-                $fileName = basename($filePath);
-                $fileContent = chunk_split(base64_encode(file_get_contents($filePath)));
-                $mimeType = mime_content_type($filePath) ?: 'application/octet-stream';
-                
-                $message .= "--$boundary\r\n" .
-                            "Content-Type: $mimeType; name=\"$fileName\"\r\n" .
-                            "Content-Transfer-Encoding: base64\r\n" .
-                            "Content-Disposition: attachment; filename=\"$fileName\"\r\n\r\n" .
-                            $fileContent . "\r\n\r\n";
+        // Procesar adjuntos para la API
+        $adjuntosApi = [];
+        foreach ($attachments as $adjunto) {
+            if (file_exists($adjunto)) {
+                $fileContent = file_get_contents($adjunto);
+                $adjuntosApi[] = [
+                    'content'     => base64_encode($fileContent),
+                    'filename'    => basename($adjunto),
+                    'type'        => mime_content_type($adjunto) ?: 'application/octet-stream',
+                    'disposition' => 'attachment'
+                ];
             }
         }
+        
+        if (!empty($adjuntosApi)) {
+            $payload["attachments"] = $adjuntosApi;
+        }
 
-        $message .= "--$boundary--\r\n";
+        $url = "https://sandbox.api.mailtrap.io/api/send/{$inboxId}";
+        
+        $options = [
+            'http' => [
+                'header'  => "Authorization: Bearer {$apiToken}\r\nContent-Type: application/json\r\n",
+                'method'  => 'POST',
+                'content' => json_encode($payload),
+                'ignore_errors' => true // Permite leer el body de la respuesta aunque sea error HTTP
+            ]
+        ];
+        
+        // Habilitar temporalmente bypass de SSL si hay problemas de certificados en Windows
+        $options['ssl'] = [
+            'verify_peer' => false,
+            'verify_peer_name' => false
+        ];
+        
+        $context  = stream_context_create($options);
+        $result = @file_get_contents($url, false, $context);
+        
+        if ($result === false) {
+            error_log('[MailService] Falló file_get_contents para conectar a Mailtrap API');
+            return false;
+        }
 
-        fwrite($socket, $headers . $message . "\r\n.\r\n");
-        if (!$read($socket, 250)) return false;
+        $responseData = json_decode($result, true);
 
-        fwrite($socket, "QUIT\r\n");
-        fclose($socket);
-
-        return true;
+        if (isset($responseData['success']) && $responseData['success'] === true) {
+            return true;
+        } else {
+            error_log('[MailService] Error en respuesta Mailtrap API: ' . $result);
+            return false;
+        }
     }
 }

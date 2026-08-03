@@ -12,7 +12,7 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 | **Fase 2** | Portal de Tesorería (`/admin/`) con UI compacta, sub-filtros y tiempo relativo | ✅ Completado | 100% |
 | **Fase 3** | Notificaciones por correo SMTP host | 🟡 En pausa | 80% | FALTA CONECTAR A SMTP DE PRODUCCIÓN
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
-| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | ✅ Completado | 100% |
+| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | x inco,pleto| 0% |
 
 ---
 
@@ -33,9 +33,16 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 - [x] `admin/api/cambiar_estado.php` — Cambio de estado transaccional y auditado con RBAC estricto.
 - [x] `services/MailService.php` — Implementación de cliente SMTP por sockets robusto con adjuntos de cheques.
 - [x] `docs/ANDROID_INTEGRATION.md` — Documentación y especificación técnica de la App Android (Eclipse) y flujo Vendedor ➔ Cliente ➔ Multi-Factura.
+- [x] Actualización de Reglas de Negocio (Cheques & Descuadre): Traslado de digitación de Banco/Cheque hacia Tesorería (`modalCompletarCheques`) y requerimiento obligatorio de texto de justificación (`justificacion_descuadre`) en caso de diferencias de montos.
+- [x] `admin/api/editar_cheques.php` — API para corrección y modificación manual de cheques por parte de Tesorería.
+- [x] Fragmentación Dinámica de Despachos — El botón "Despachar Resumen" ahora divide las cobranzas según el campo `emitido_a` de cada cheque y distribuye correos distintos a múltiples digitadoras simultáneamente con asuntos categorizados.
+- [x] Refactorización Visual de Facturas (`admin.js`) — Agrupación estética de facturas múltiples con cuotas en el detalle del portal de Tesorería.
+- [x] `services/GoogleSheetsService.php` — Integración ultra-liviana con la API v4 de Google Sheets (autenticación JWT nativa con `openssl_sign` y cURL sin Composer) que inserta automáticamente cada cheque validado al Excel corporativo de Tesorería.
+- [x] Re-validación Backend de Saldos (`SEC-04`): Implementado escudo protector en `api/guardar_cobranza.php` que consulta `bd_automarco.tbl_cobranza` antes de guardar, bloqueando cualquier manipulación o sobrepago fraudulento de saldos desde el navegador.
+- [x] Flujo Extendido de Notificaciones por Correo: Doble notificación inicial automática (Tesorería + Cuentas Corrientes) en el registro de cobranza y notificación directa al Vendedor con motivo de rechazo cuando Tesorería rechaza una cobranza.
 
 ## Próximo trabajo inmediato
 
-1. Recepción de estructura de tablas de Clientes / Cobranzas de ERP por parte del usuario.
-2. Adaptación del backend para soportar la selección por cliente y marcado múltiple de facturas (Multi-Empresa).
-3. Adaptación final del panel de auditoría de Tesorería (`/admin/`).
+1. Probar el flujo completo en ambiente de pruebas (Tesorería completando cheques).
+2. Revisión de despliegue en servidor.
+3. Finalizar conexiones de envío SMTP si se requiere pase a producción.

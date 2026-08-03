@@ -88,20 +88,19 @@ if (!$cobranza_id) {
 }
 
 $cheque_ids = $_POST['cheque_id'] ?? [];
-$bancos = $_POST['banco'] ?? [];
-$numeros_cheque = $_POST['numero_cheque'] ?? [];
 $montos_cheque = $_POST['monto_cheque'] ?? [];
 $fechas_vencimiento = $_POST['fecha_vencimiento'] ?? [];
 $comentarios_cheque = $_POST['comentario_cheque'] ?? [];
 $eliminados_ids = $_POST['eliminados_ids'] ?? []; // Array con IDs de cheques a eliminar
+$justificacion_descuadre = trim($_POST['justificacion_descuadre'] ?? '');
 
-if (!is_array($bancos) || count($bancos) === 0) {
+if (!is_array($montos_cheque) || count($montos_cheque) === 0) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Se requiere al menos un cheque en la cobranza']);
     exit;
 }
 
-$numCheques = count($bancos);
+$numCheques = count($montos_cheque);
 $fotos_cheque = $_FILES['foto_cheque'] ?? null;
 
 $archivosFisicosSubidos = [];
@@ -168,14 +167,12 @@ try {
     // 3. Procesar Actualizaciones e Inserciones
     for ($i = 0; $i < $numCheques; $i++) {
         $chqId = $cheque_ids[$i] ?? '';
-        $banco = trim($bancos[$i] ?? '');
-        $numChq = trim($numeros_cheque[$i] ?? '');
         $monto = (float)($montos_cheque[$i] ?? 0);
         $fechaVec = trim($fechas_vencimiento[$i] ?? '');
         $comentario = trim($comentarios_cheque[$i] ?? '');
         $comentarioVal = ($comentario !== '') ? $comentario : null;
 
-        if (empty($banco) || empty($numChq) || $monto <= 0 || empty($fechaVec)) {
+        if ($monto <= 0 || empty($fechaVec)) {
             throw new InvalidArgumentException("Campos incompletos en el cheque N° " . ($i + 1));
         }
 
@@ -215,13 +212,11 @@ try {
             $stmtIns = $pdo->prepare('INSERT INTO cheques (
                 cobranza_id, banco, numero_cheque, monto, fecha_vencimiento, foto_cheque_url, comentario
             ) VALUES (
-                :cobranza_id, :banco, :numero_cheque, :monto, :fecha_vencimiento, :foto_cheque_url, :comentario
+                :cobranza_id, NULL, NULL, :monto, :fecha_vencimiento, :foto_cheque_url, :comentario
             )');
 
             $stmtIns->execute([
                 ':cobranza_id' => $cobranza_id,
-                ':banco' => $banco,
-                ':numero_cheque' => $numChq,
                 ':monto' => $monto,
                 ':fecha_vencimiento' => $fechaVec,
                 ':foto_cheque_url' => $fotoChequeUrl,
@@ -250,13 +245,11 @@ try {
                 }
 
                 $stmtUpd = $pdo->prepare('UPDATE cheques SET
-                    banco = :banco, numero_cheque = :numero_cheque, monto = :monto,
+                    monto = :monto,
                     fecha_vencimiento = :fecha_vencimiento, foto_cheque_url = :foto_cheque_url, comentario = :comentario
                     WHERE id = :id AND cobranza_id = :cobranza_id');
 
                 $stmtUpd->execute([
-                    ':banco' => $banco,
-                    ':numero_cheque' => $numChq,
                     ':monto' => $monto,
                     ':fecha_vencimiento' => $fechaVec,
                     ':foto_cheque_url' => $fotoChequeUrl,
@@ -267,13 +260,11 @@ try {
             } else {
                 // Actualizar datos sin cambiar la foto
                 $stmtUpd = $pdo->prepare('UPDATE cheques SET
-                    banco = :banco, numero_cheque = :numero_cheque, monto = :monto,
+                    monto = :monto,
                     fecha_vencimiento = :fecha_vencimiento, comentario = :comentario
                     WHERE id = :id AND cobranza_id = :cobranza_id');
 
                 $stmtUpd->execute([
-                    ':banco' => $banco,
-                    ':numero_cheque' => $numChq,
                     ':monto' => $monto,
                     ':fecha_vencimiento' => $fechaVec,
                     ':comentario' => $comentarioVal,
@@ -282,6 +273,15 @@ try {
                 ]);
             }
         }
+    }
+
+    // 3.5. Actualizar justificación de descuadre si fue enviada
+    if ($justificacion_descuadre !== '') {
+        $stmtUpdCobranza = $pdo->prepare('UPDATE cobranzas SET justificacion_descuadre = :just_desc WHERE id = :id');
+        $stmtUpdCobranza->execute([
+            ':just_desc' => $justificacion_descuadre,
+            ':id' => $cobranza_id
+        ]);
     }
 
     // 4. Registrar evento en historial

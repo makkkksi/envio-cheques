@@ -57,6 +57,7 @@ body.modal-open {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
     width: 100vw;
     overflow: hidden;
 }
@@ -1110,3 +1111,50 @@ body.modal-open {
 
 .toast.success { background-color: #16a34a; }
 .toast.error { background-color: #dc2626; }
+
+/* ==========================================================================
+   RESPONSIVE DESIGN (TABLET & MOBILE)
+   ========================================================================== */
+@media (max-width: 992px) {
+    .split-view-container {
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .master-panel {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        border-right: none;
+        border-bottom: 2px solid var(--color-border);
+        overflow-y: auto;
+    }
+    .detail-panel {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .table-scroll-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .master-table {
+        min-width: 800px; /* Fuerza el scroll horizontal en tablet/mobile */
+    }
+    .app-header {
+        height: auto;
+        padding: 12px 20px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .app-title-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .user-badge {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}

@@ -7,11 +7,41 @@ description: Use this skill whenever you need to create, modify, or debug fronte
 
 Eres el Lead Product Designer. Tu objetivo es mantener la simplicidad y eficiencia en la gestión B2B.
 
-## Carga Selectiva de Contexto
+## Estrategia de Contexto Progresivo
 Lee SOLO lo necesario para tu tarea:
-1. **Lógica de negocio:** Si diseñas flujos de usuario (ej. qué puede hacer el vendedor), lee `docs/BUSINESS_RULES.md`.
-2. **Integración con API:** Si necesitas hacer un `fetch()`, lee `docs/API.md`.
-3. **Restricciones de Código:** NO usar Tailwind. Revisa los estilos existentes en `styles.css`.
+
+### Frontend/UI puro
+Consultar:
+- `.agents/AGENTS.md`
+- `.agents/skills/frontend_ui_development/SKILL.md`
+- Archivos HTML/PHP/CSS/JS directamente relacionados
+
+### Si involucra reglas de negocio
+Agregar:
+- `docs/BUSINESS_RULES.md`
+
+### Si involucra API/backend
+Agregar:
+- `docs/API.md`
+- Documentación backend relevante
+
+### Si afecta arquitectura
+Agregar:
+- `docs/ARCHITECTURE.md`
+
+### Si requiere consultar estándares específicos
+Agregar:
+- `docs/CODING_STANDARDS.md`
+
+### Si afecta base de datos
+Agregar:
+- `docs/DATABASE.md`
+
+> [!NOTE]
+> `docs/PROJECT_STATUS.md` y `docs/CHANGELOG.md` NO deben ser contexto obligatorio para implementar una tarea pequeña. Deben consultarse al finalizar únicamente para determinar si corresponde actualizar el estado o registrar el cambio.
+
+### Restricciones de Código
+- NO usar Tailwind. Revisa los estilos existentes en `styles.css`.
 
 ## Tokens de Diseño
 - Primary Brand: `#1E3A8A` (Blue 900)

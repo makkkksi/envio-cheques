@@ -178,15 +178,52 @@ Fase 5 ██████████ 100% — WebView App Eclipse, Smart Client
 
 ---
 
+## Fase 7 — Integración Google Sheets + Flujo de Correos Extendido
+
+**Objetivo:** Automatizar la inyección de cheques validados al Excel corporativo de Tesorería (Google Sheets) y completar el mapa de notificaciones por correo del sistema.
+
+**Estado:** ⏳ Pendiente de prerequisitos manuales del usuario.
+
+**Entregables:**
+
+| Tarea | Estado | Descripción |
+|---|---|---|
+| **Prerequisito:** Service Account de Google Cloud | ⏳ | El usuario debe crear la cuenta, habilitar la API de Sheets, descargar el JSON de credenciales y compartir el Sheet. |
+| `services/GoogleSheetsService.php` | 🔲 | Clase PHP pura (~120 líneas) que autentica vía JWT (`openssl_sign` + `curl`) y llama al endpoint `values:append` de Sheets API v4. Sin Composer ni SDK. |
+| `config/google_credentials.json` | 🔲 | Archivo JSON de credenciales de Service Account (provisto por el usuario, excluido de Git). |
+| Modificación de `admin/api/cambiar_estado.php` | 🔲 | Al transicionar a `RECIBIDO_TESORERIA`, inyectar cada cheque como fila nueva al Google Sheet. |
+| Correo de rechazo al Vendedor | 🔲 | Método `MailService::notificarRechazoTesorería()` + disparo en `cambiar_estado.php` cuando estado = `RECHAZADO`. |
+| Correo de registro a C.Corrientes | 🔲 | Modificar `MailService::enviarNotificacion()` para enviar copia a C.Corrientes al registrar una cobranza. |
+
+**Columnas del Excel (Mapeo planificado):**
+
+| Columna Excel | Fuente en BD |
+|---|---|
+| Fecha | `cheques.fecha_vencimiento` |
+| Nombre girador | `cheques.emitido_a` |
+| Monto | `cheques.monto` |
+| Rut cliente | `cobranzas.rut_cliente` |
+| nRecibo | `cheques.numero_cheque` |
+| Nombre cliente | `cobranzas.razon_social_cliente` |
+| Fecha ingreso | `NOW()` (momento de validación) |
+| CTANUMERO | `cheques.banco` |
+| comentario | `cheques.comentario` |
+
+**Dependencias:** Service Account de Google Cloud configurada + Sheet compartido con el correo de la cuenta de servicio.
+
+**Para implementar:** Abrir un chat nuevo y decir: *"Implementa la Fase 7 del ROADMAP (Google Sheets). Aquí está el JSON de credenciales y el Spreadsheet ID: ..."*
+
+---
+
 ## Decisiones Diferidas (No en Roadmap Actual)
 
 Estas funcionalidades fueron identificadas pero excluidas del alcance actual:
 
 | Funcionalidad | Motivo de exclusión |
 |---------------|---------------------|
-| Exportación a Excel/PDF de cobranzas | Requiere decisión sobre librería (PhpSpreadsheet) |
 | Agrupación visual de OTs Chilexpress | Baja prioridad para MVP |
 | App Android nativa de fotografía | Ya se usa `capture="environment"` en WebView |
 | Firma digital electrónica | Complejidad legal (Ley 19.799 Chile) |
 | Integración bancaria para depósitos | Fuera del alcance, se hace manualmente |
+
 

@@ -73,6 +73,7 @@ try {
             banco = :banco,
             numero_cheque = :numero_cheque,
             monto = :monto,
+            emitido_a = :emitido_a,
             fecha_vencimiento = :fecha_vencimiento,
             comentario = :comentario
         WHERE id = :id AND cobranza_id = :cobranza_id
@@ -86,6 +87,7 @@ try {
         $banco = trim($chq['banco'] ?? '');
         $numero_cheque = trim($chq['numero_cheque'] ?? '');
         $monto = (float)($chq['monto'] ?? 0);
+        $emitido_a = trim($chq['emitido_a'] ?? '');
         $fecha_vencimiento = trim($chq['fecha_vencimiento'] ?? '');
         $comentario = trim($chq['comentario'] ?? '') ?: null;
 
@@ -100,6 +102,7 @@ try {
             ':banco'            => $banco,
             ':numero_cheque'    => $numero_cheque,
             ':monto'            => $monto,
+            ':emitido_a'        => $emitido_a,
             ':fecha_vencimiento'=> $fecha_vencimiento,
             ':comentario'       => $comentario,
             ':id'               => $cheque_id,

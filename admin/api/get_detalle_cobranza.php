@@ -50,6 +50,7 @@ try {
                 c.numero_seguimiento,
                 c.comprobante_url,
                 c.estado,
+                c.justificacion_descuadre,
                 c.created_at,
                 COALESCE(u.nombre, NULLIF(c.vendedor_nombre, ''), 'Vendedor no especificado (Registro del Sistema)') AS vendedor_nombre
             FROM cobranzas c
@@ -78,7 +79,7 @@ try {
                                     created_at
                                 FROM cobranza_facturas 
                                 WHERE cobranza_id = :id
-                                ORDER BY id ASC");
+                                ORDER BY CAST(numero_factura AS UNSIGNED) ASC, cuota_label ASC, id ASC");
     $stmtFacturas->execute([':id' => $id]);
     $facturas = $stmtFacturas->fetchAll(PDO::FETCH_ASSOC);
 

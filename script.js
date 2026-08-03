@@ -215,8 +215,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         'PENDIENTE_ENVIO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Pendiente Envío', class: 'pendiente_envio' },
         'EN_TRANSITO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>En Tránsito', class: 'en_transito' },
         'ENTREGADO_SANTIAGO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>Entregado (Sntg)', class: 'entregado_santiago' },
-        'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>En Cola C.Corrientes', class: 'recibido_tesoreria' },
-        'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviado a C.Corrientes', class: 'depositado' },
+        'RECIBIDO_TESORERIA': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviado a C.Corrientes', class: 'recibido_tesoreria' },
+        'DEPOSITADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>Enviados a Optimus', class: 'depositado' },
         'RECHAZADO': { label: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Rechazado', class: 'rechazado' }
     };
 
@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <li>
                                     <div class="cheque-li-info">
                                         <div class="cheque-li-main">
-                                            <span>${c.banco} - N° ${c.numero_cheque}</span>
+                                            <span>${c.banco || 'Banco por confirmar'} - N° ${c.numero_cheque || 'Pendiente'}</span>
                                             <strong>$${parseFloat(c.monto || 0).toLocaleString('es-CL')}</strong>
                                         </div>
                                         ${c.comentario ? `<p class="cheque-comentario">${c.comentario}</p>` : ''}
@@ -1129,13 +1129,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // REGISTRO Y SUMA DINÁMICA DE CHEQUES
     // ==========================================
     function agregarCheque() {
-        let ultimoBanco = '';
-        const ultimoCard = contenedorCheques.lastElementChild;
-        if (ultimoCard) {
-            const selectBanco = ultimoCard.querySelector('select[name="banco[]"]');
-            if (selectBanco) ultimoBanco = selectBanco.value;
-        }
-
         contadorCheques++;
         const chequeId = contadorCheques;
 
@@ -1170,27 +1163,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             <div class="grid-2">
                 <div class="form-group">
-                    <label>Banco Emisor</label>
-                    <select name="banco[]" required>
-                        <option value="">-- Seleccionar --</option>
-                        <option value="Banco de Chile">Banco de Chile</option>
-                        <option value="Santander">Santander</option>
-                        <option value="BCI">BCI</option>
-                        <option value="Estado">Banco Estado</option>
-                        <option value="Scotiabank">Scotiabank</option>
-                        <option value="Itaú">Itaú</option>
-                        <option value="Otro">Otro</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>N° Cheque</label>
-                    <input type="text" name="numero_cheque[]" id="numeroCheque_${chequeId}" inputmode="numeric" pattern="[0-9]*" placeholder="N° de serie" required oninput="verificarDuplicadosCheques(this)">
-                    <span class="msg-duplicado" style="display:none; font-size:0.78rem; color:#dc2626; font-weight:600; margin-top:4px;">Número duplicado</span>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <div class="form-group">
                     <label>Monto ($)</label>
                     <input type="text" inputmode="numeric" class="input-monto-cheque" placeholder="0" required>
                     <input type="hidden" name="monto_cheque[]" class="hidden-monto-cheque">
@@ -1208,11 +1180,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
 
         contenedorCheques.appendChild(card);
-
-        if (ultimoBanco) {
-            const selectBancoNuevo = card.querySelector('select[name="banco[]"]');
-            if (selectBancoNuevo) selectBancoNuevo.value = ultimoBanco;
-        }
 
         configurarPreviewConBorrado(`fotoCheque_${chequeId}`, `imgCheque_${chequeId}`, `boxPreviewCheque_${chequeId}`);
 
@@ -1309,15 +1276,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (totalChequesVal !== totalFacturaVal) {
                 titleEl.textContent = 'Diferencia en Montos';
                 text1El.innerHTML = `El monto total de los cheques (<strong>$${totalChequesVal.toLocaleString('es-CL')}</strong>) no coincide con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
-                text2El.textContent = 'Le sugerimos justificar esta diferencia en el campo de comentarios de los cheques antes de proceder. ¿Desea enviar de todas formas?';
+                text2El.textContent = 'Debe justificar obligatoriamente esta diferencia para poder proceder:';
                 btnCancelEl.textContent = 'Cerrar y Revisar';
                 btnConfirmEl.textContent = 'Enviar Igualmente';
+                document.getElementById('txtJustificacionDescuadre').parentElement.style.display = 'block';
             } else {
                 titleEl.textContent = 'Confirmar Registro';
                 text1El.innerHTML = `El monto total de los cheques coincide perfectamente con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
                 text2El.textContent = '¿Está seguro de registrar esta cobranza?';
                 btnCancelEl.textContent = 'Cancelar';
                 btnConfirmEl.textContent = 'Confirmar Registro';
+                document.getElementById('txtJustificacionDescuadre').parentElement.style.display = 'none';
             }
 
             document.getElementById('modalAdvertenciaMontos').style.display = 'flex';
@@ -1377,17 +1346,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // ── Cheques: campos de texto ──
-            const bancos = formCobranza.querySelectorAll('select[name="banco[]"]');
-            const numsCheque = formCobranza.querySelectorAll('input[name="numero_cheque[]"]');
             const montosCheque = formCobranza.querySelectorAll('input.hidden-monto-cheque');
             const fechas = formCobranza.querySelectorAll('input[name="fecha_vencimiento[]"]');
             const comentarios = formCobranza.querySelectorAll('textarea[name="comentario_cheque[]"]');
 
-            bancos.forEach(el => formData.append('banco[]', el.value));
-            numsCheque.forEach(el => formData.append('numero_cheque[]', el.value));
             montosCheque.forEach(el => formData.append('monto_cheque[]', el.value));
             fechas.forEach(el => formData.append('fecha_vencimiento[]', el.value));
             comentarios.forEach(el => formData.append('comentario_cheque[]', el.value));
+            
+            const justificacion = document.getElementById('txtJustificacionDescuadre');
+            if (justificacion && justificacion.parentElement.style.display !== 'none') {
+                formData.set('justificacion_descuadre', justificacion.value);
+            }
 
             // ── Fotos de cheques (comprimidas) ──
             const inputsFotoCheque = formCobranza.querySelectorAll('input[name="foto_cheque[]"]');
@@ -1642,6 +1612,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (btnEnviarIgualmente) {
             btnEnviarIgualmente.addEventListener('click', () => {
+                const titleEl = document.getElementById('modalAdvertenciaTitle');
+                const txtJustificacion = document.getElementById('txtJustificacionDescuadre');
+                const requiresJustification = titleEl.textContent === 'Diferencia en Montos';
+                
+                if (requiresJustification && (!txtJustificacion || txtJustificacion.value.trim() === '')) {
+                    showToast('Debe ingresar la justificación para proceder.', 'error');
+                    if (txtJustificacion) txtJustificacion.focus();
+                    return;
+                }
+                
                 modalAdvertenciaMontos.style.display = 'none';
                 if (formularioConfirmando) {
                     formularioConfirmando.dataset.bypassDiscrepancia = 'true';
@@ -1701,26 +1681,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div id="boxPreviewChequeEdicion_${idx}" class="preview-wrapper" style="display: ${displayPreview};">
                     <img id="imgChequeEdicion_${idx}" src="${imgUrl}" class="preview-img" alt="Vista previa cheque">
                     <button type="button" class="btn-quitar-foto" onclick="quitarImagen('fotoChequeEdicion_${idx}', 'imgChequeEdicion_${idx}', 'boxPreviewChequeEdicion_${idx}')">Quitar Foto</button>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Banco Emisor</label>
-                    <select name="banco[]" required>
-                        <option value="">-- Seleccionar --</option>
-                        <option value="Banco de Chile" ${data && data.banco === 'Banco de Chile' ? 'selected' : ''}>Banco de Chile</option>
-                        <option value="Santander" ${data && data.banco === 'Santander' ? 'selected' : ''}>Santander</option>
-                        <option value="BCI" ${data && data.banco === 'BCI' ? 'selected' : ''}>BCI</option>
-                        <option value="Estado" ${data && data.banco === 'Estado' ? 'selected' : ''}>Banco Estado</option>
-                        <option value="Scotiabank" ${data && data.banco === 'Scotiabank' ? 'selected' : ''}>Scotiabank</option>
-                        <option value="Itaú" ${data && data.banco === 'Itaú' ? 'selected' : ''}>Itaú</option>
-                        <option value="Otro" ${data && data.banco === 'Otro' ? 'selected' : ''}>Otro</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>N° Cheque</label>
-                    <input type="text" name="numero_cheque[]" value="${data ? data.numero_cheque : ''}" inputmode="numeric" pattern="[0-9]*" placeholder="N° de serie" required>
                 </div>
             </div>
 
@@ -1816,24 +1776,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (btnAgregarChequeEdicion) {
         btnAgregarChequeEdicion.addEventListener('click', () => {
-            let ultimoBanco = '';
-            const ultimoCard = contenedorEditarCheques.lastElementChild;
-            if (ultimoCard) {
-                const selectBanco = ultimoCard.querySelector('select[name="banco[]"]');
-                if (selectBanco) ultimoBanco = selectBanco.value;
-            }
-
             contadorChequesEdicion++;
             const row = crearChequeRowEdicion(contadorChequesEdicion);
             contenedorEditarCheques.appendChild(row);
 
             // Configurar preview dinámico después de que el elemento existe en el DOM
             configurarPreviewConBorrado(`fotoChequeEdicion_${contadorChequesEdicion}`, `imgChequeEdicion_${contadorChequesEdicion}`, `boxPreviewChequeEdicion_${contadorChequesEdicion}`);
-
-            if (ultimoBanco) {
-                const selectBancoNuevo = row.querySelector('select[name="banco[]"]');
-                if (selectBancoNuevo) selectBancoNuevo.value = ultimoBanco;
-            }
         });
     }
 
@@ -1881,15 +1829,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (totalChequesVal !== totalFacturaVal) {
                     titleEl.textContent = 'Diferencia en Montos';
                     text1El.innerHTML = `El monto total de los cheques (<strong>$${totalChequesVal.toLocaleString('es-CL')}</strong>) no coincide con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
-                    text2El.textContent = 'Le sugerimos justificar esta diferencia en el campo de comentarios de los cheques antes de proceder. ¿Desea guardar los cambios de todas formas?';
+                    text2El.textContent = 'Debe justificar obligatoriamente esta diferencia para poder proceder:';
                     btnCancelEl.textContent = 'Cerrar y Revisar';
                     btnConfirmEl.textContent = 'Guardar Igualmente';
+                    document.getElementById('txtJustificacionDescuadre').parentElement.style.display = 'block';
                 } else {
                     titleEl.textContent = 'Confirmar Cambios';
                     text1El.innerHTML = `El monto total de los cheques coincide perfectamente con el monto total de la factura (<strong>$${totalFacturaVal.toLocaleString('es-CL')}</strong>).`;
                     text2El.textContent = '¿Está seguro de guardar estos cambios?';
                     btnCancelEl.textContent = 'Cancelar';
                     btnConfirmEl.textContent = 'Confirmar Cambios';
+                    document.getElementById('txtJustificacionDescuadre').parentElement.style.display = 'none';
                 }
 
                 document.getElementById('modalAdvertenciaMontos').style.display = 'flex';
@@ -1915,16 +1865,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 for (let i = 0; i < cards.length; i++) {
                     const card = cards[i];
                     const idVal = card.querySelector('input[name="cheque_id[]"]').value;
-                    const bancoVal = card.querySelector('select[name="banco[]"]').value;
-                    const numVal = card.querySelector('input[name="numero_cheque[]"]').value;
                     const montoVal = card.querySelector('.hidden-monto-cheque-edicion').value;
                     const fechaVal = card.querySelector('input[name="fecha_vencimiento[]"]').value;
                     const comentarioVal = card.querySelector('textarea[name="comentario_cheque[]"]').value;
                     const fileInput = card.querySelector('input[type="file"]');
 
                     formData.append('cheque_id[]', idVal);
-                    formData.append('banco[]', bancoVal);
-                    formData.append('numero_cheque[]', numVal);
                     formData.append('monto_cheque[]', montoVal);
                     formData.append('fecha_vencimiento[]', fechaVal);
                     formData.append('comentario_cheque[]', comentarioVal);
@@ -1938,6 +1884,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Enviar placeholder vacío si no hay archivo nuevo para mantener alineación del array de fotos en PHP
                         formData.append('foto_cheque[]', new Blob(), '');
                     }
+                }
+                
+                const justificacion = document.getElementById('txtJustificacionDescuadre');
+                if (justificacion && justificacion.parentElement.style.display !== 'none') {
+                    formData.set('justificacion_descuadre', justificacion.value);
                 }
 
                 btnSubmitEdicion.textContent = 'Guardando cambios...';
