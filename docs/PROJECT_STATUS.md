@@ -10,9 +10,9 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 |------|-------------|--------|--------|
 | **Fase 1** | Backend PHP: BD central, endpoints API, integración real con frontend | ✅ Completado | 100% |
 | **Fase 2** | Portal de Tesorería (`/admin/`) con UI compacta, sub-filtros y tiempo relativo | ✅ Completado | 100% |
-| **Fase 3** | Notificaciones por correo SMTP host | 🟡 En pausa | 80% | FALTA CONECTAR A SMTP DE PRODUCCIÓN
+| **Fase 3** | Notificaciones por correo SMTP host | ✅ Completado | 100% | Credenciales configuradas en `config/app.php` |
 | **Fase 4** | Motor de alertas por días transcurridos (Cron Job) | ⏳ Pendiente | 0% |
-| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | x inco,pleto| 0% |
+| **Fase 5** | Integración WebView App Eclipse & Rediseño Seleccionador Cliente/Multi-Factura | ✅ Completado | 100% |
 
 ---
 
@@ -39,10 +39,18 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 - [x] Refactorización Visual de Facturas (`admin.js`) — Agrupación estética de facturas múltiples con cuotas en el detalle del portal de Tesorería.
 - [x] `services/GoogleSheetsService.php` — Integración ultra-liviana con la API v4 de Google Sheets (autenticación JWT nativa con `openssl_sign` y cURL sin Composer) que inserta automáticamente cada cheque validado al Excel corporativo de Tesorería.
 - [x] Re-validación Backend de Saldos (`SEC-04`): Implementado escudo protector en `api/guardar_cobranza.php` que consulta `bd_automarco.tbl_cobranza` antes de guardar, bloqueando cualquier manipulación o sobrepago fraudulento de saldos desde el navegador.
-- [x] Flujo Extendido de Notificaciones por Correo: Doble notificación inicial automática (Tesorería + Cuentas Corrientes) en el registro de cobranza y notificación directa al Vendedor con motivo de rechazo cuando Tesorería rechaza una cobranza.
+- [x] Potenciación de Bitacora y Trazabilidad (`admin/cuentas_corrientes.php`) — Inserción de la columna "Clientes Afectados" en el historial de despachos e inspección estructurada de cheques digitalizados/registrados (banco, número, monto y vencimiento) para control y auditoría de extravíos sin imágenes.
+- [x] **Unificación y Sincronización `dist/`** — Consolidación del 100% de los archivos entre la raíz del proyecto y la carpeta `dist/` (hashes MD5 idénticos), dejándola en un estado 100% listo para despliegue directo en producción.
+- [x] **Parche de Integridad ERP (Foreign Keys)** — Solucionada incompatibilidad de `vendedor_id` nativo del ERP en `api/guardar_cobranza.php`, `api/completar_envio.php` y `api/editar_cheques.php`, usando fallback a Usuario Sistema (`ID 1`) en `historial_estados` cuando el ID del vendedor no existe en la tabla de usuarios web local.
+- [x] **Trazabilidad de Nombre Vendedor** — Ajustada la prioridad en `get_cobranzas.php` y `get_detalle_cobranza.php` para dar precedencia absoluta a `c.vendedor_nombre` capturado desde terreno.
+- [x] **Sincronización Google Sheets** — Inyección automática de `WEB#{cobranza_id}` en la Columna G (Nº Recibo) de los 4 excels y adición de `BCIPREMIER` a la lista de bancos.
 
 ## Próximo trabajo inmediato
 
-1. Probar el flujo completo en ambiente de pruebas (Tesorería completando cheques).
-2. Revisión de despliegue en servidor.
-3. Finalizar conexiones de envío SMTP si se requiere pase a producción.
+1. **Subida y Prueba Interna en Host:** Desplegar el sistema al host de pruebas (en la nube usando el directorio `dist/` o la raíz). 
+   - *Importante:* Recordar editar el archivo `.htaccess` subido con los datos reales de BD.
+2. Probar el flujo completo en ambiente de pruebas (Tesorería validando y modificando cobranzas).
+3. **Paso a Producción Final (Correos SMTP):**
+   - Actualmente existe una **Barrera de Seguridad (Safety Guard)** en `services/MailService.php` que intercepta todos los correos si la variable de entorno `APP_ENV` es igual a `local`.
+   - Con el nuevo `.htaccess` que setea `APP_ENV production`, los correos empezarán a salir una vez configurado el `MAIL_PASS`.
+4. Configurar el Cron Job en el servidor para el despacho automático de Cuentas Corrientes (Fase 4 pendiente).

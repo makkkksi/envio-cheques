@@ -1,0 +1,39 @@
+# Ocultar listado de directorios y firmas del servidor
+Options -Indexes
+ServerSignature Off
+
+# Protección de carpetas críticas
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Bloquear el acceso a la carpeta config, docs y cron
+    RewriteRule ^(config|docs|cron)(/|$) - [F,L]
+    
+    # Redirigir el tráfico a HTTPS (Descomentar en producción final si tienes SSL)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Impedir lectura de archivos sensibles (como env, sql, md, etc)
+<FilesMatch "(?i)\.(env|sql|md|log|ini|sh)$">
+    Require all denied
+</FilesMatch>
+
+# ========================================================
+# VARIABLES DE ENTORNO PARA PRODUCCIÓN
+# (Ajusta estos valores con los datos reales de tu hosting)
+# ========================================================
+# Entorno: 'production' o 'local'
+SetEnv APP_ENV production
+
+# Base de datos
+SetEnv DB_HOST localhost
+SetEnv DB_USER usuario_cpanel
+SetEnv DB_PASS contrasena_fuerte
+SetEnv DB_NAME_CENTRAL nombre_bd_central
+
+# Correo (si usas SMTP externo, sino mantén los default de app.php)
+# SetEnv MAIL_HOST mail.tu-dominio.com
+# SetEnv MAIL_PORT 587
+# SetEnv MAIL_USER envios@tu-dominio.com
+# SetEnv MAIL_PASS tu_clave_de_correo

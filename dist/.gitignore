@@ -1,0 +1,22 @@
+# Ignorar las fotos/archivos subidos por los usuarios
+uploads/*
+!uploads/.gitkeep
+
+# Ignorar archivos del sistema operativo / editores
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Si tienes un archivo con credenciales de BD o API Keys
+config/env.php
+config/app.php
+*.json
+
+# Archivos de pruebas y scratch locales
+scratch/
+scratch_test.*
+query.php
+install_fpdf.php
+
+
+.android/

@@ -45,6 +45,7 @@ CREATE TABLE empresas (
   nombre                  VARCHAR(100) NOT NULL,
   nombre_bd               VARCHAR(100) NOT NULL UNIQUE,  -- nombre real en MySQL
   email_tesoreria_defecto VARCHAR(150) NOT NULL,
+  google_sheet_id         VARCHAR(150) NULL,
   dias_maximos_envio      INT DEFAULT 3,
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -56,6 +57,7 @@ CREATE TABLE empresas (
 | `nombre` | VARCHAR(100) | Nombre comercial mostrado en la UI |
 | `nombre_bd` | VARCHAR(100) UNIQUE | Nombre exacto de la BD ERP en MySQL |
 | `email_tesoreria_defecto` | VARCHAR(150) | Email al que se notifica al guardar cobranza |
+| `google_sheet_id` | VARCHAR(150) NULL | ID del documento de Google Sheets para Tesorería |
 | `dias_maximos_envio` | INT | Días tolerados en tránsito antes de alerta |
 
 **Datos semilla:**

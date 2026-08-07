@@ -6,14 +6,21 @@ uploads/*
 .DS_Store
 Thumbs.db
 .vscode/
+.idea/
 
-# Si tienes un archivo con credenciales de BD o API Keys
+# Credenciales sensibles, API keys y JSONs
 config/env.php
-config/app.php
 *.json
+*.pem
+*.key
+
+# Ignorar carpeta Android nativa
+android/
+.android/
 
 # Archivos de pruebas y scratch locales
 scratch/
 scratch_test.*
 query.php
 install_fpdf.php
+enviar_mailtrap.php

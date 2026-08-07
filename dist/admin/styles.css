@@ -1,0 +1,1160 @@
+/* ==========================================================================
+   PORTAL DE TESORERÍA - ARQUITECTURA UX/UI AI_RULES_UX.md
+   Split-Screen (50% / 50%) + Ley de Tesler + Stepper + WCAG 2.1 AA
+   ========================================================================== */
+
+:root {
+    --color-primary: #1e3a8a;
+    --color-primary-hover: #1e40af;
+    --color-secondary: #64748b;
+    --color-bg: #f8fafc;
+    --color-surface: #ffffff;
+    --color-border: #e2e8f0;
+    --color-border-subtle: #f1f5f9;
+    --color-text: #0f172a;          /* WCAG 2.1 AA Compliant */
+    --color-text-secondary: #475569;
+    --color-text-muted: #64748b;
+
+    /* Badges de Estado (Design Tokens AI_RULES_UX.md) */
+    --status-pendiente-bg: #fef3c7;   --status-pendiente-color: #92400e;
+    --status-transito-bg: #e0f2fe;    --status-transito-color: #0369a1;
+    --status-recibido-bg: #dbeafe;    --status-recibido-color: #1e40af;
+    --status-depositado-bg: #dcfce7;  --status-depositado-color: #166534;
+    --status-rechazado-bg: #fee2e2;   --status-rechazado-color: #991b1b;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.45;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* SCROLL LOCK PARA MODALES / LIGHTBOX */
+body.modal-open {
+    overflow: hidden !important;
+    height: 100vh !important;
+}
+
+/* APP VIEWPORT CONTAINER */
+.app-viewport {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* 1. HEADER SUPERIOR DELGADO Y LIMPIO */
+.app-header {
+    height: 52px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.app-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.app-logo-badge {
+    background: var(--color-primary);
+    color: white;
+    font-weight: 700;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    letter-spacing: 0.5px;
+}
+
+.app-header h1 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.user-badge {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    background: var(--color-bg);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    font-weight: 500;
+}
+
+/* 2. BARRA DE CONTROL SEGMENTADO Y FILTROS */
+.control-toolbar {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.segmented-tabs {
+    display: flex;
+    background: var(--color-bg);
+    padding: 3px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    width: fit-content;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+
+.segmented-tab {
+    background: transparent;
+    border: none;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.segmented-tab:hover {
+    color: var(--color-text);
+}
+
+.segmented-tab.active {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.tab-count {
+    background: var(--color-border);
+    color: var(--color-text-secondary);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.segmented-tab.active .tab-count {
+    background: #e2e8f0;
+    color: var(--color-primary);
+}
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.search-field {
+    position: relative;
+    flex: 1;
+    max-width: 240px;
+}
+
+.search-field input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 34px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.search-field input:focus {
+    border-color: var(--color-primary);
+}
+
+.search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+.select-compact {
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    outline: none;
+    cursor: pointer;
+}
+
+.select-compact:focus {
+    border-color: var(--color-primary);
+}
+
+/* 3. SPLIT SCREEN LAYOUT CONTAINER (50% / 50%) */
+.split-view-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+/* LADO IZQUIERDO: TABLA MAESTRA (50% ANCHO EXACTO) */
+.master-panel {
+    flex: 50;
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+    overflow: hidden;
+}
+
+.table-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.master-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.master-table th {
+    position: sticky;
+    top: 0;
+    background: #f8fafc;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-secondary);
+    border-bottom: 1px solid var(--color-border);
+    z-index: 10;
+    white-space: nowrap;
+}
+
+.master-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-size: 0.85rem;
+    vertical-align: middle;
+}
+
+.master-table tbody tr {
+    cursor: pointer;
+    transition: background 0.1s ease;
+    position: relative;
+}
+
+.master-table tbody tr:hover {
+    background: #f1f5f9;
+}
+
+.master-table tbody tr.active-row {
+    background: #eff6ff;
+}
+
+.master-table tbody tr.active-row td:first-child {
+    box-shadow: inset 4px 0 0 var(--color-primary);
+}
+
+/* BADGES DE ESTADO (AI_RULES_UX.md) */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.badge-PENDIENTE_ENVIO {
+    background: var(--status-pendiente-bg);
+    color: var(--status-pendiente-color);
+}
+
+.badge-EN_TRANSITO, .badge-ENTREGADO_SANTIAGO {
+    background: var(--status-transito-bg);
+    color: var(--status-transito-color);
+}
+
+.badge-RECIBIDO_TESORERIA {
+    background: var(--status-recibido-bg);
+    color: var(--status-recibido-color);
+}
+
+.badge-DEPOSITADO {
+    background: var(--status-depositado-bg);
+    color: var(--status-depositado-color);
+}
+
+.badge-RECHAZADO {
+    background: var(--status-rechazado-bg);
+    color: var(--status-rechazado-color);
+}
+
+/* LADO DERECHO: DRAWER INSPECTOR (50% ANCHO EXACTO) */
+.detail-panel {
+    flex: 50;
+    width: 50%;
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* EMPTY STATE */
+.empty-detail-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px;
+    text-align: center;
+    color: var(--color-text-muted);
+}
+
+.empty-detail-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+/* DETAIL CONTENT STACK */
+.detail-header-bar {
+    height: 52px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+    flex-shrink: 0;
+}
+
+.detail-header-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detail-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+
+.detail-close-btn:hover {
+    background: var(--color-border);
+    color: var(--color-text);
+}
+
+.detail-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* SECCIONES DEL DRAWER */
+.panel-section {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    padding: 14px;
+}
+
+.panel-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-secondary);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.kv-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.kv-item p {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.kv-item strong {
+    font-size: 0.88rem;
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+/* CALLOUT DE ALERTA POR DISCREPANCIA (EFECTO VON RESTORFF) */
+.discrepancy-callout {
+    background-color: var(--status-pendiente-bg);
+    border: 1px solid var(--status-pendiente-color);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    color: var(--status-pendiente-color);
+}
+
+.discrepancy-callout-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 0.88rem;
+    margin-bottom: 4px;
+}
+
+.discrepancy-callout-body {
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+/* FILTRO DE ALTO CONTRASTE Y ROTACIÓN DE FOTOS DE CHEQUE */
+.high-contrast-image {
+    filter: contrast(1.85) brightness(1.1) grayscale(0.3) !important;
+}
+
+.image-tool-btn {
+    background: rgba(15, 23, 42, 0.85);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.image-tool-btn:hover {
+    background: rgba(15, 23, 42, 1);
+}
+
+/* Fallback de Vendedor Neutro (Ley de Tesler) */
+.seller-badge-muted {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px dashed #cbd5e1;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Stepper de Trazabilidad Compacto (Ley de Zeigarnik) */
+.stepper-progress-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-sm);
+    margin: 16px 0;
+}
+
+.stepper-node {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stepper-node.completed {
+    color: #166534;
+}
+
+.stepper-node.active {
+    color: #0369a1;
+    font-weight: 700;
+}
+
+.stepper-arrow {
+    color: #cbd5e1;
+    font-size: 0.8rem;
+}
+
+/* Botón CTA Sticky Bottom (Ley de Fitts) */
+.admin-detail-footer {
+    position: sticky;
+    bottom: 0;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 20;
+    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+}
+
+/* Visor de Cheque con Controles Flotantes (Canvas de Inspección Documental Compacto) */
+.cheque-card-img-wrapper {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    height: 200px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.cheque-card-img {
+    max-height: 180px;
+    width: auto;
+    object-fit: contain;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+    border-radius: 4px;
+    transition: transform 0.2s ease;
+}
+
+/* Grid Compacta de Información General de Factura y Cliente (Ley de Proximidad) */
+.detail-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.detail-info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-info-item .label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.detail-info-item .value {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.cheque-card-img-wrapper:hover .cheque-card-img {
+    transform: scale(1.025);
+}
+
+.cheque-controls-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 5;
+}
+
+.cheque-card-img-wrapper:hover .cheque-controls-overlay {
+    opacity: 1;
+}
+
+.btn-cheque-control {
+    background: rgba(15, 23, 42, 0.85);
+    color: #ffffff;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s ease;
+}
+
+.btn-cheque-control:hover {
+    background: rgba(15, 23, 42, 1);
+}
+
+/* Badge de Diferencia/Discrepancia en Tabla Maestros */
+.badge-mismatch {
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+/* TARJETAS DE INSPECCIÓN DE CHEQUES (PROPORCIÓN 16:9 + LEY DE PROXIMIDAD) */
+.cheque-inspection-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    margin-bottom: 12px;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cheque-inspection-card:last-child {
+    margin-bottom: 0;
+}
+
+/* CANVAS NEUTRO DE INSPECCIÓN DOCUMENTAL (elimina efecto pillarbox oscuro) */
+.cheque-16by9-box {
+    width: 100%;
+    min-height: 180px;
+    max-height: 280px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    transition: box-shadow 0.2s ease;
+}
+
+.cheque-16by9-box:hover {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10);
+}
+
+.cheque-16by9-box img {
+    max-width: 100%;
+    max-height: 256px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+    transition: transform 0.2s ease;
+}
+
+.cheque-16by9-box:hover img {
+    transform: scale(1.025);
+}
+
+.cheque-16by9-hover {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    backdrop-filter: blur(2px);
+}
+
+.cheque-16by9-box:hover .cheque-16by9-hover {
+    opacity: 1;
+}
+
+/* Controles flotantes sobre imagen de cheque */
+.cheque-card-badge-zoom {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 5;
+}
+
+.cheque-16by9-box:hover .cheque-card-badge-zoom {
+    opacity: 1;
+}
+
+.cheque-card-badge-zoom button {
+    background: rgba(15, 23, 42, 0.85);
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+}
+
+.cheque-card-badge-zoom button:hover {
+    background: rgba(15, 23, 42, 1);
+}
+
+.cheque-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cheque-card-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cheque-banco-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--color-primary);
+}
+
+.cheque-monto-value {
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: #166534;
+}
+
+.quote-comment {
+    font-size: 0.78rem;
+    background: #f1f5f9;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    margin-top: 4px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/* VERTICAL STEPPER DE TRAZABILIDAD (LEY DE ZEIGARNIK) */
+.stepper-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-left: 4px;
+}
+
+.stepper-step {
+    display: flex;
+    gap: 12px;
+    position: relative;
+}
+
+.stepper-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stepper-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.stepper-step.completed .stepper-circle {
+    background: #16a34a;
+    color: white;
+}
+
+.stepper-step.active .stepper-circle {
+    background: var(--color-primary);
+    color: white;
+}
+
+.stepper-line {
+    width: 2px;
+    flex: 1;
+    background: #e2e8f0;
+    margin-top: 4px;
+}
+
+.stepper-step:last-child .stepper-line {
+    display: none;
+}
+
+.stepper-content {
+    flex: 1;
+    padding-bottom: 8px;
+}
+
+.stepper-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--color-text);
+}
+
+.stepper-time {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+}
+
+/* STEPPER HORIZONTAL COMPACTO (Ley de Zeigarnik — Sobre CTA) */
+.stepper-horizontal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+}
+
+.stepper-h-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.stepper-h-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #94a3b8;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.stepper-h-step.completed .stepper-h-circle {
+    background: #16a34a;
+    color: white;
+}
+
+.stepper-h-step.active .stepper-h-circle {
+    background: var(--color-primary);
+    color: white;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.2);
+}
+
+.stepper-h-step.active-intermediate .stepper-h-circle {
+    background: #d97706 !important;
+    color: white !important;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2) !important;
+}
+
+.stepper-h-step.rejected .stepper-h-circle {
+    background: #dc2626;
+    color: white;
+}
+
+.stepper-h-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.stepper-h-step.completed .stepper-h-label {
+    color: #166534;
+}
+
+.stepper-h-step.active .stepper-h-label {
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+.stepper-h-step.active-intermediate .stepper-h-label {
+    color: #b45309 !important;
+    font-weight: 700 !important;
+}
+
+.stepper-h-step.rejected .stepper-h-label {
+    color: #dc2626;
+}
+
+.stepper-h-connector {
+    flex: 1;
+    height: 2px;
+    background: #e2e8f0;
+    margin: 0 4px;
+    min-width: 12px;
+}
+
+.stepper-h-connector.completed {
+    background: #16a34a;
+}
+
+/* BARRA DE ACCIONES FIJA INFERIOR (LEY DE FITTS - ALTURA MIN 48PX) */
+.detail-bottom-bar {
+    padding: 12px 16px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.btn-b2b {
+    flex: 1;
+    height: 48px; /* Ley de Fitts */
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-b2b-success {
+    background: #16a34a;
+    color: white;
+}
+
+.btn-b2b-success:hover {
+    background: #15803d;
+}
+
+.btn-b2b-primary {
+    background: var(--color-primary);
+    color: white;
+}
+
+.btn-b2b-primary:hover {
+    background: var(--color-primary-hover);
+}
+
+.btn-b2b-danger {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-b2b-danger:hover {
+    background: #b91c1c;
+}
+
+.btn-b2b-secondary {
+    background: #f1f5f9;
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+}
+
+.btn-b2b-secondary:hover {
+    background: #e2e8f0;
+    color: var(--color-text);
+}
+
+/* MODALES PLANOS */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(2px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.modal-box {
+    background: var(--color-surface);
+    padding: 24px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+}
+
+.modal-box h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.modal-form-group {
+    margin-bottom: 14px;
+}
+
+.modal-form-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.modal-form-group input,
+.modal-form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
+    outline: none;
+}
+
+.modal-form-group input:focus,
+.modal-form-group textarea:focus {
+    border-color: var(--color-primary);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+}
+
+/* TOAST */
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.toast {
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.toast.success { background-color: #16a34a; }
+.toast.error { background-color: #dc2626; }
+
+/* ==========================================================================
+   RESPONSIVE DESIGN (TABLET & MOBILE)
+   ========================================================================== */
+@media (max-width: 992px) {
+    .split-view-container {
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .master-panel {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        border-right: none;
+        border-bottom: 2px solid var(--color-border);
+        overflow-y: auto;
+    }
+    .detail-panel {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .table-scroll-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .master-table {
+        min-width: 800px; /* Fuerza el scroll horizontal en tablet/mobile */
+    }
+    .app-header {
+        height: auto;
+        padding: 12px 20px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .app-title-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .user-badge {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
