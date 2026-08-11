@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS log_envios_informes (
   estado_envio ENUM('ENVIADO', 'FALLIDO') NOT NULL DEFAULT 'ENVIADO',
   error_mensaje TEXT NULL,
   cantidad_cobranzas INT DEFAULT 1,
+  payload_json LONGTEXT NULL,
   fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY idx_log_envios_empresa (empresa_id),
   KEY idx_log_envios_estado (estado_envio),
