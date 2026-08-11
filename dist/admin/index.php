@@ -10,7 +10,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
-        'path' => '/form/admin/',
+        'path' => '/',
         'domain' => '',
         'secure' => false, // Cambiar a true si se configura HTTPS en producción
         'httponly' => true,

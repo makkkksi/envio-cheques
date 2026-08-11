@@ -13,7 +13,7 @@ require_once __DIR__ . '/../config/auth.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
-        'path' => '/form/admin/',
+        'path' => '/',
         'domain' => '',
         'secure' => false,
         'httponly' => true,
