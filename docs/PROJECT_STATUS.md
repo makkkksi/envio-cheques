@@ -44,6 +44,7 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 - [x] **Parche de Integridad ERP (Foreign Keys)** — Solucionada incompatibilidad de `vendedor_id` nativo del ERP en `api/guardar_cobranza.php`, `api/completar_envio.php` y `api/editar_cheques.php`, usando fallback a Usuario Sistema (`ID 1`) en `historial_estados` cuando el ID del vendedor no existe en la tabla de usuarios web local.
 - [x] **Trazabilidad de Nombre Vendedor** — Ajustada la prioridad en `get_cobranzas.php` y `get_detalle_cobranza.php` para dar precedencia absoluta a `c.vendedor_nombre` capturado desde terreno.
 - [x] **Sincronización Google Sheets** — Inyección automática de `WEB#{cobranza_id}` en la Columna G (Nº Recibo) de los 4 excels y adición de `BCIPREMIER` a la lista de bancos.
+- [x] **Auditoría Pre-Despliegue AWS** — Revisión de seguridad y variables de entorno para Producción (`PORTAL_BASE_URL` a nivel raíz, `.htaccess` configurado, validación de rutas relativas de API).
 
 ## Próximo trabajo inmediato
 

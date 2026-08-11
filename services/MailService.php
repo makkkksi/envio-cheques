@@ -70,7 +70,7 @@ class MailService
             $cobranzaId = (int)($cobranza['id'] ?? 0);
             
             // Link al portal
-            $linkGestion = PORTAL_BASE_URL . "?id=" . $cobranzaId;
+            $linkGestion = PORTAL_BASE_URL . "/admin/detalle.php?id=" . $cobranzaId;
 
             // Construcción del cuerpo del mensaje en HTML con un diseño premium y limpio
             $asunto = "[PARA TESORERIA] Registro de Cobranza - Factura N° {$nFactura} ({$empresa})";
@@ -245,7 +245,7 @@ class MailService
             $razonSocial = htmlspecialchars($cobranza['razon_social_cliente'] ?? '');
             $defaultCC = self::getConfigValue($pdo, 'email_cuentas_corrientes_general', 'cuentascorrientes@automarco.cl');
             $emailCuentasCorrientes = !empty($cobranza['email_tesoreria_defecto']) ? $cobranza['email_tesoreria_defecto'] : $defaultCC;
-            $linkPortal = PORTAL_BASE_URL . "admin/index.php?id=" . $cobranzaId;
+            $linkPortal = PORTAL_BASE_URL . "/admin/index.php?id=" . $cobranzaId;
 
             // --- A) ENVIAR CORREO A CUENTAS CORRIENTES ---
             $asuntoCC = "[PARA C.CORRIENTES] [VALIDADO TESORERÍA] Cobranza N° {$cobranzaId} - {$razonSocial} ({$empresa})";

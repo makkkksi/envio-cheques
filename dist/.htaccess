@@ -14,8 +14,8 @@ ServerSignature Off
     # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 </IfModule>
 
-# Impedir lectura de archivos sensibles (como env, sql, md, etc)
-<FilesMatch "(?i)\.(env|sql|md|log|ini|sh)$">
+# Impedir lectura de archivos sensibles (como env, sql, md, json, etc)
+<FilesMatch "(?i)\.(env|sql|md|log|ini|sh|json)$">
     Require all denied
 </FilesMatch>
 
@@ -31,6 +31,10 @@ SetEnv DB_HOST localhost
 SetEnv DB_USER usuario_cpanel
 SetEnv DB_PASS contrasena_fuerte
 SetEnv DB_NAME_CENTRAL nombre_bd_central
+
+# Rutas Base de la Aplicación
+SetEnv PORTAL_BASE_URL "https://www.autotec.cl/cobranza_cheques"
+SetEnv UPLOADS_BASE_URL "https://www.autotec.cl/cobranza_cheques/uploads"
 
 # Correo (si usas SMTP externo, sino mantén los default de app.php)
 # SetEnv MAIL_HOST mail.tu-dominio.com
