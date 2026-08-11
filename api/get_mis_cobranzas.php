@@ -55,10 +55,14 @@ try {
 
     $params = [];
 
-    // En producción filtra por vendedor autenticado. En local (bypass) si vendedor_id es NULL o se consultan todas.
-    if (defined('APP_ENV') && APP_ENV === 'production') {
-        $sql .= " AND c.vendedor_id = :vendedor_id";
-        $params[':vendedor_id'] = $usuario_id;
+    $vendedor_filtro = filter_input(INPUT_GET, 'vendedor_id', FILTER_VALIDATE_INT) 
+                    ?: filter_input(INPUT_GET, 'vendedor', FILTER_VALIDATE_INT)
+                    ?: ($_SESSION['vendedor_auth']['vendedor_id'] ?? $usuario_id);
+
+    // En producción o local, filtrar por el vendedor solicitado o en sesión (incluyendo registros con vendedor_id NULL)
+    if ($vendedor_filtro) {
+        $sql .= " AND (c.vendedor_id = :vendedor_id OR c.vendedor_id IS NULL)";
+        $params[':vendedor_id'] = $vendedor_filtro;
     }
 
     if ($estado !== null) {
