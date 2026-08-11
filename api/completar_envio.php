@@ -46,7 +46,10 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
     }
 
     $tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'];
-    $mime = mime_content_type($fileData['tmp_name']);
+    $mime = function_exists('mime_content_type') ? @mime_content_type($fileData['tmp_name']) : ($fileData['type'] ?? 'image/jpeg');
+    if (!$mime) {
+        $mime = $fileData['type'] ?? 'image/jpeg';
+    }
     if (!in_array($mime, $tiposPermitidos, true)) {
         throw new InvalidArgumentException("Tipo de archivo no permitido en {$subcarpeta}: {$mime}");
     }
@@ -64,14 +67,18 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
     $dirAbsoluto = UPLOADS_BASE_PATH . "/{$empresa_id}/{$mesAno}/{$subcarpeta}";
 
     if (!is_dir($dirAbsoluto)) {
-        if (!mkdir($dirAbsoluto, 0755, true)) {
-            throw new RuntimeException("No se pudo crear el directorio de destino");
+        if (!@mkdir($dirAbsoluto, 0777, true) && !is_dir($dirAbsoluto)) {
+            throw new RuntimeException("No se pudo crear el directorio de destino ({$dirAbsoluto}). Verifique permisos CHMOD de la carpeta uploads.");
         }
     }
 
     $rutaAbsolutaCompleta = $dirAbsoluto . '/' . $nombreGuardado;
-    if (!move_uploaded_file($fileData['tmp_name'], $rutaAbsolutaCompleta)) {
-        throw new RuntimeException("No se pudo mover el archivo subido");
+    $moved = is_uploaded_file($fileData['tmp_name']) 
+        ? move_uploaded_file($fileData['tmp_name'], $rutaAbsolutaCompleta)
+        : @copy($fileData['tmp_name'], $rutaAbsolutaCompleta);
+
+    if (!$moved) {
+        throw new RuntimeException("No se pudo mover el archivo subido a {$dirAbsoluto}. Verifique permisos de escritura del servidor.");
     }
 
     return $dirRelativo . '/' . $nombreGuardado;
@@ -265,6 +272,5 @@ try {
     }
     error_log('[completar_envio.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    $msg = (defined('APP_ENV') && APP_ENV === 'local') ? $e->getMessage() : 'Error al registrar el envío. Intente nuevamente.';
-    echo json_encode(['success' => false, 'message' => $msg]);
+    echo json_encode(['success' => false, 'message' => 'Error al registrar el envío: ' . $e->getMessage()]);
 }

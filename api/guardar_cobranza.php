@@ -444,6 +444,5 @@ try {
     }
     error_log('[guardar_cobranza.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    $msg = (defined('APP_ENV') && APP_ENV === 'local') ? $e->getMessage() : 'Error al guardar la cobranza. Intente nuevamente.';
-    echo json_encode(['success' => false, 'message' => $msg]);
+    echo json_encode(['success' => false, 'message' => 'Error al guardar la cobranza: ' . $e->getMessage()]);
 }
