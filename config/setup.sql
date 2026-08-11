@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS cheques (
   cuenta_corriente VARCHAR(50) NULL,
   monto DECIMAL(12,0) NOT NULL,
   fecha_vencimiento DATE NOT NULL,
+  emitido_a VARCHAR(200) NULL,
   foto_cheque_url VARCHAR(255) NOT NULL,
   comentario TEXT NULL,
   numero_papeleta_deposito VARCHAR(50) NULL,
