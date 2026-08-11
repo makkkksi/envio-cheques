@@ -27,14 +27,14 @@ ServerSignature Off
 SetEnv APP_ENV production
 
 # Base de datos
-SetEnv DB_HOST localhost
-SetEnv DB_USER usuario_cpanel
-SetEnv DB_PASS contrasena_fuerte
-SetEnv DB_NAME_CENTRAL nombre_bd_central
+SetEnv DB_HOST dbaws.automarco.cl
+SetEnv DB_USER admingabtec@db-gabtec-server
+SetEnv DB_PASS 2wkPnhSa4x
+SetEnv DB_NAME_CENTRAL bd_modulo_cobranzas
 
 # Rutas Base de la Aplicación
-SetEnv PORTAL_BASE_URL "https://www.autotec.cl/cobranza_cheques"
-SetEnv UPLOADS_BASE_URL "https://www.autotec.cl/cobranza_cheques/uploads"
+SetEnv PORTAL_BASE_URL "http://72.62.109.245/autotec/cobranza_cheques"
+SetEnv UPLOADS_BASE_URL "http://72.62.109.245/autotec/cobranza_cheques/uploads"
 
 # Correo (si usas SMTP externo, sino mantén los default de app.php)
 # SetEnv MAIL_HOST mail.tu-dominio.com
