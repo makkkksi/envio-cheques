@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS empresas (
   nombre VARCHAR(100) NOT NULL,
   nombre_bd VARCHAR(100) NOT NULL UNIQUE,
   email_tesoreria_defecto VARCHAR(150) NOT NULL,
+  google_sheet_id VARCHAR(255) NULL,
   dias_maximos_envio INT DEFAULT 3,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
