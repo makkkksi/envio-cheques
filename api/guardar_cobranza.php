@@ -39,7 +39,10 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
     }
 
     $tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic'];
-    $mime = function_exists('mime_content_type') ? mime_content_type($fileData['tmp_name']) : ($fileData['type'] ?? 'image/jpeg');
+    $mime = function_exists('mime_content_type') ? @mime_content_type($fileData['tmp_name']) : ($fileData['type'] ?? 'image/jpeg');
+    if (!$mime) {
+        $mime = $fileData['type'] ?? 'image/jpeg';
+    }
     if (!in_array($mime, $tiposPermitidos, true)) {
         throw new InvalidArgumentException("Tipo de archivo no permitido en {$subcarpeta}: {$mime}");
     }
@@ -57,8 +60,8 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
     $dirAbsoluto = UPLOADS_BASE_PATH . "/{$empresa_id}/{$mesAno}/{$subcarpeta}";
 
     if (!is_dir($dirAbsoluto)) {
-        if (!mkdir($dirAbsoluto, 0755, true)) {
-            throw new RuntimeException("No se pudo crear el directorio de destino");
+        if (!@mkdir($dirAbsoluto, 0777, true) && !is_dir($dirAbsoluto)) {
+            throw new RuntimeException("No se pudo crear la carpeta de destino ({$dirAbsoluto}). Falta permiso de escritura (CHMOD 777) en la carpeta uploads/");
         }
     }
 
@@ -68,7 +71,7 @@ function procesarSubidaArchivo(array $fileData, int $empresa_id, string $subcarp
         : @copy($fileData['tmp_name'], $rutaAbsolutaCompleta);
 
     if (!$moved) {
-        throw new RuntimeException("No se pudo mover el archivo subido");
+        throw new RuntimeException("No se pudo mover el archivo subido a {$dirAbsoluto}. Verifique permisos de escritura CHMOD 777 de la carpeta uploads/");
     }
 
     return $dirRelativo . '/' . $nombreGuardado;
