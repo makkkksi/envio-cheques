@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cobranza — Autotec</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#c0392b;--red-dark:#a93226;--blue:#1a6faf;--blue-light:#eaf4fb;
+  --gray-900:#1a1a2e;--gray-700:#444;--gray-500:#888;--gray-200:#e8e8e8;
+  --gray-100:#f5f5f5;--white:#fff;--shadow:0 2px 12px rgba(0,0,0,.10);--radius:8px;--nav-h:60px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--gray-700);background:var(--gray-100)}
+button{cursor:pointer;border:none;font-family:inherit}
+input{font-family:inherit}
+
+.navbar{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:var(--white);display:flex;align-items:center;padding:0 1.5rem;gap:1rem;box-shadow:var(--shadow);border-bottom:2px solid var(--red)}
+.brand{cursor:pointer;display:flex;align-items:center}
+.btn-volver{background:rgba(0,0,0,.06);color:var(--gray-700);padding:.4rem .9rem;border-radius:5px;font-size:.85rem;font-weight:600;transition:.15s}
+.btn-volver:hover{background:rgba(0,0,0,.12)}
+.nav-right{display:flex;align-items:center;gap:.75rem;margin-left:auto}
+.nav-user{color:var(--gray-700);font-size:.85rem}
+.btn-logout{background:none;color:var(--gray-500);font-size:.8rem;padding:.3rem .6rem;border-radius:4px}
+.btn-logout:hover{background:var(--gray-100);color:var(--gray-900)}
+
+.page-wrap{max-width:1200px;margin:0 auto;padding:1.5rem 1rem}
+
+/* BUSCADOR */
+.search-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.2rem 1.5rem;margin-bottom:1.2rem}
+.search-box-title{font-size:.82rem;font-weight:700;color:var(--white);background:var(--red);
+  display:inline-block;padding:.25rem .75rem;border-radius:4px;margin-bottom:1rem}
+.search-form-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;margin-bottom:1rem}
+.search-field{display:flex;flex-direction:column;gap:.3rem}
+.search-field label{font-size:.8rem;font-weight:600;color:var(--gray-700)}
+.search-field input, .search-field select{padding:.52rem .75rem;border:1.5px solid var(--gray-200);border-radius:6px;font-size:.88rem;width:100%;transition:.15s;font-family:inherit;background:var(--white);color:inherit}
+.search-field input:focus, .search-field select:focus{outline:none;border-color:var(--blue)}
+.search-actions{display:flex;gap:.75rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.search-actions-left{display:flex;gap:.5rem;align-items:center}
+.btn-buscar{background:var(--blue);color:var(--white);padding:.55rem 1.4rem;border-radius:6px;font-size:.88rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
+.btn-buscar:hover{background:#155a8f}
+.btn-recaudacion{background:#27ae60;color:var(--white);padding:.55rem 1.4rem;border-radius:6px;font-size:.88rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
+.btn-recaudacion:hover{background:#219150}
+
+@media(max-width:768px){
+  .search-form-grid{grid-template-columns:1fr}
+  .search-actions{flex-direction:column;align-items:stretch;gap:.6rem}
+  .search-actions-left{width:100%}
+  .btn-buscar, .btn-recaudacion{width:100%;padding:.65rem 1rem}
+}
+
+/* TABLA */
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem}
+.results-title{font-size:.95rem;font-weight:600;color:var(--gray-900)}
+.results-count{font-size:.82rem;color:var(--gray-500)}
+
+.table-wrap{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:900px}
+thead tr{background:var(--gray-900);color:var(--white)}
+th{padding:.6rem .75rem;text-align:left;font-weight:600;font-size:.78rem;white-space:nowrap}
+td{padding:.55rem .75rem;border-bottom:1px solid var(--gray-200);vertical-align:middle}
+tr:hover td{background:var(--blue-light)}
+
+.vencido{color:var(--red);font-weight:700}
+.vigente{color:#27ae60;font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot.rojo{background:var(--red)}
+.dot.verde{background:#27ae60}
+.dot.amarillo{background:#f39c12}
+
+.pagination{display:flex;gap:.4rem;justify-content:center;margin-top:1.2rem;flex-wrap:wrap}
+.page-btn{padding:.4rem .8rem;border-radius:5px;font-size:.85rem;background:var(--white);
+  border:1px solid var(--gray-200);color:var(--gray-700);transition:.15s}
+.page-btn:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue)}
+.page-btn.active{background:var(--blue);color:var(--white);border-color:var(--blue)}
+
+.state-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:3rem 2rem;text-align:center;color:var(--gray-500)}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(0,0,0,.1);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:var(--gray-900);color:var(--white);padding:.7rem 1.2rem;border-radius:7px;font-size:.85rem;font-weight:500;box-shadow:var(--shadow);transform:translateY(10px);opacity:0;transition:.3s;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{border-left:4px solid var(--red)}
+</style>
+</head>
+<body style="visibility:hidden">
+<div id="pageLoader" style="position:fixed;inset:0;background:#1a1a2e;visibility:visible;display:flex;align-items:center;justify-content:center;z-index:99999"><div class="spinner" style="border-color:rgba(255,255,255,.25);border-top-color:#fff"></div></div>
+
+
+<nav class="navbar">
+  <div class="brand" onclick="location.href='../index.html'"><img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="height:36px;object-fit:contain"></div>
+  <button class="btn-volver" onclick="location.href='../index.html'">← Volver</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName"></span>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+  <div class="search-box">
+    <div class="search-box-title">— Listado de Cobranza</div>
+    <div class="search-form-grid">
+      <div class="search-field">
+        <label>RUT</label>
+        <input type="text" id="filtRut" placeholder="Ej: 12345678" onkeydown="if(event.key==='Enter') buscar()">
+      </div>
+      <div class="search-field">
+        <label>Razón Social</label>
+        <input type="text" id="filtNombre" placeholder="Nombre o razón social" onkeydown="if(event.key==='Enter') buscar()">
+      </div>
+      <div class="search-field">
+        <label>Empresa</label>
+        <select id="filtEmpresa">
+          <option value="">Todas</option>
+          <option value="EMP03">Autotec</option>
+          <option value="EMP01">Automarco</option>
+          <option value="EMP10">Gabtec</option>
+          <option value="EMP06">HD Automarco</option>
+          <option value="EMP24">Top Repuestos</option>
+        </select>
+      </div>
+    </div>
+    <div class="search-actions">
+      <div class="search-actions-left">
+        <button class="btn-buscar" onclick="buscar()">Buscar</button>
+      </div>
+      <button type="button" class="btn-recaudacion" onclick="irARecaudacionCheques()" title="Registrar cheques y comprobantes de cobranza">Subir Cheques / Recaudación</button>
+    </div>
+  </div>
+
+  <div class="results-header">
+    <span class="results-title" id="resultsTitle">Ingrese RUT o Razón Social para buscar</span>
+    <span class="results-count" id="resultsCount"></span>
+  </div>
+
+  <div id="cobranzaWrap">
+    <div class="state-box"><p>Use el buscador para ver documentos de cobranza.</p></div>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API     = '../api';
+let authToken = localStorage.getItem('at_token') || '';
+let currentPage = 0;
+let currentVendCod = '';
+let currentVendNombre = '';
+let currentEmpresaCod = '';
+const PAGE_SIZE = 50;
+
+function detectarEmpresaPorHost() {
+  const host = window.location.hostname.toLowerCase();
+  if (host.includes('gabtec')) return 'EMP10';
+  if (host.includes('automarcohd') || host.includes('hdautomarco')) return 'EMP06';
+  if (host.includes('automarco')) return 'EMP01';
+  if (host.includes('autotec')) return 'EMP03';
+  return 'EMP03';
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const loaderTimeout = setTimeout(showPageLoaderTimeout, 8000);
+  if (!authToken) { location.href = '../index.html'; return; }
+  const res = await apiFetch(`${API}/auth.php?action=check`);
+  clearTimeout(loaderTimeout);
+  if (!res.ok) { location.href = '../index.html'; return; }
+  currentVendCod = res.data.vend_cod || '';
+  currentVendNombre = res.data.nombre || '';
+  currentEmpresaCod = res.data.empresa_codigo || detectarEmpresaPorHost();
+  document.getElementById('navUserName').textContent = res.data.nombre || '';
+  revealPage();
+
+  // Si viene RUT por URL (desde alerta mora) → pre-filtrar
+  const urlParams = new URLSearchParams(location.search);
+  const rutUrl    = urlParams.get('rut') || '';
+  if (rutUrl) {
+    document.getElementById('filtRut').value = rutUrl;
+  } else {
+    // Si hay cliente activo seleccionado → pre-filtrar por él
+    const cliActivo = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+    if (cliActivo.rut) {
+      document.getElementById('filtRut').value = cliActivo.rut;
+    }
+  }
+  buscar(0); // Cargar automáticamente al entrar
+});
+
+function revealPage() {
+  document.body.style.visibility = 'visible';
+  const loader = document.getElementById('pageLoader');
+  if (loader) loader.remove();
+}
+
+function showPageLoaderTimeout() {
+  const el = document.getElementById('pageLoader');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="text-align:center;color:#fff;padding:1rem">
+      <p style="margin-bottom:1rem;font-size:.9rem">Esto está tardando más de lo normal…</p>
+      <button onclick="location.reload()" style="padding:.6rem 1.5rem;background:#c0392b;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem">Reintentar</button>
+    </div>`;
+}
+
+async function buscar(page = 0) {
+  const rut    = document.getElementById('filtRut').value.trim();
+  const nombre = document.getElementById('filtNombre').value.trim();
+  // Sin filtros muestra toda la cobranza del vendedor
+
+  currentPage = page;
+  const empresa = document.getElementById('filtEmpresa').value;
+  const qs = new URLSearchParams({ action: 'buscar', rut, nombre, empresa, page }).toString();
+  const wrap = document.getElementById('cobranzaWrap');
+  wrap.innerHTML = `<div class="state-box"><div class="spinner"></div><p style="margin-top:.75rem">Cargando…</p></div>`;
+  document.getElementById('pagination').innerHTML = '';
+
+  const res = await apiFetch(`${API}/cobranza.php?${qs}`);
+  if (!res.ok) { wrap.innerHTML = `<div class="state-box"><p>${res.msg}</p></div>`; return; }
+
+  const rows  = res.data.cobranza || [];
+  const total = res.data.total    || 0;
+  document.getElementById('resultsTitle').textContent = 'Resultados';
+  document.getElementById('resultsCount').textContent = `${total} documento${total !== 1 ? 's' : ''}`;
+
+  if (!rows.length) { wrap.innerHTML = `<div class="state-box"><p>Sin documentos encontrados.</p></div>`; return; }
+
+  const hoy = new Date();
+  const tbody = rows.map(r => {
+    // Campos en MAYÚSCULAS tal como vienen de la BD
+    const dotClass = r.ESTADO_FECHA || 'verde';
+    const vencida  = dotClass === 'rojo' || dotClass === 'amarillo';
+
+    return `<tr>
+      <td>${esc(r.CLIRUT)}-${esc(r.CLIDV)}</td>
+      <td>${esc(r.CLINOMBRE||'')}</td>
+      <td><span class="dot ${dotClass}"></span>${esc(r.DOCTO)}</td>
+      <td class="${vencida?'vencido':'vigente'}">${esc(r.VENCTO)}</td>
+      <td>${esc(r.EMISION)}</td>
+      <td>${esc(r.GLOSA)}</td>
+      <td style="text-align:right">${formatoPrecio(r.TOTAL_CUOTA)}</td>
+      <td style="text-align:right;font-weight:700;color:${vencida?'var(--red)':'inherit'}">${formatoPrecio(r.SALDO_CUOTA)}</td>
+      <td>${esc(r.EMPRESA_LABEL||r.EMPRESA)}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>RUT</th><th>Razón Social</th><th>Documento</th>
+        <th>Vencimiento</th><th>Emisión</th><th>Glosa</th>
+        <th style="text-align:right">Total Cuota</th>
+        <th style="text-align:right">Saldo</th>
+        <th>Empresa</th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>
+  </div>`;
+
+  renderPagination(total, page, PAGE_SIZE);
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // Formato DD/MM/YYYY
+  const p = str.split('/');
+  if (p.length === 3) return new Date(p[2], p[1]-1, p[0]);
+  return null;
+}
+
+function renderPagination(total, page, perPage) {
+  const pages = Math.ceil(total / perPage);
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  let html = '';
+  const start = Math.max(0, page-2), end = Math.min(pages-1, page+2);
+  if (start > 0)       html += `<button class="page-btn" onclick="gotoPage(0)">«</button>`;
+  if (start > 1)       html += `<button class="page-btn" onclick="gotoPage(${start-1})">…</button>`;
+  for (let i=start; i<=end; i++)
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="gotoPage(${i})">${i+1}</button>`;
+  if (end < pages-2)   html += `<button class="page-btn" onclick="gotoPage(${end+1})">…</button>`;
+  if (end < pages-1)   html += `<button class="page-btn" onclick="gotoPage(${pages-1})">»</button>`;
+  document.getElementById('pagination').innerHTML = html;
+}
+function gotoPage(p) { buscar(p); window.scrollTo({top:0,behavior:'smooth'}); }
+
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  localStorage.removeItem('at_token'); sessionStorage.clear(); location.href = '../index.html';
+}
+async function apiFetch(url, method='GET', body=null) {
+  try {
+    const opts = { method, headers: {'Content-Type':'application/json','X-Token':authToken} };
+    if (body) opts.body = JSON.stringify(body);
+    return await (await fetch(url, opts)).json();
+  } catch(e) { return {ok:false,msg:'Error de red'}; }
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatoPrecio(n) { return '$'+Number(n||0).toLocaleString('es-CL'); }
+function showToast(msg,type='') {
+  const t=document.getElementById('toast'); t.textContent=msg; t.className=`toast show ${type}`;
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function irARecaudacionCheques() {
+  // Si el usuario eligió una empresa en el selector, respetamos su selección manual.
+  // Si no seleccionó ninguna ("Todas"), auto-detectamos por su sesión de login o dominio actual:
+  const filtroEmp = document.getElementById('filtEmpresa').value;
+  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
+
+  if (!currentVendCod) {
+    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
+    return;
+  }
+  const urlDestino = `https://www.autotec.cl/cobranza_cheques/app/index.html?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
+  window.location.href = urlDestino;
+}
+</script>
+</body>
+</html>

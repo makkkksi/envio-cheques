@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mis Pedidos — Autotec</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#c0392b;--red-dark:#a93226;--blue:#1a6faf;--blue-light:#eaf4fb;
+  --gray-900:#1a1a2e;--gray-700:#444;--gray-500:#888;--gray-200:#e8e8e8;
+  --gray-100:#f5f5f5;--white:#fff;--shadow:0 2px 12px rgba(0,0,0,.10);--radius:8px;--nav-h:60px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--gray-700);background:var(--gray-100)}
+button{cursor:pointer;border:none;font-family:inherit}
+
+/* NAV */
+.navbar{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:var(--white);
+  display:flex;align-items:center;padding:0 1.5rem;gap:1rem;
+  box-shadow:var(--shadow);border-bottom:2px solid var(--red)}
+.brand{cursor:pointer;display:flex;align-items:center}
+.btn-volver{background:rgba(0,0,0,.06);color:var(--gray-700);padding:.4rem .9rem;border-radius:5px;font-size:.85rem;font-weight:600;transition:.15s}
+.btn-volver:hover{background:rgba(0,0,0,.12)}
+.nav-right{display:flex;align-items:center;gap:.75rem;margin-left:auto}
+.nav-user{color:var(--gray-700);font-size:.85rem}
+.btn-logout{background:none;color:var(--gray-500);font-size:.8rem;padding:.3rem .6rem;border-radius:4px}
+.btn-logout:hover{background:var(--gray-100);color:var(--gray-900)}
+
+.page-wrap{max-width:1100px;margin:0 auto;padding:1.5rem 1rem}
+
+/* ESTADOS */
+.badge{display:inline-block;padding:.2rem .65rem;border-radius:20px;font-size:.75rem;font-weight:700;text-transform:uppercase}
+.badge.enviado   {background:#eaf4fb;color:var(--blue)}
+.badge.procesado {background:#eafaf1;color:#27ae60}
+.badge.anulado   {background:#fdedec;color:var(--red)}
+.badge.borrador  {background:var(--gray-100);color:var(--gray-500)}
+
+/* LISTA PEDIDOS */
+.pedido-list{display:flex;flex-direction:column;gap:.65rem}
+.pedido-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:.85rem 1rem;display:grid;
+  grid-template-columns: 80px 1fr auto auto;
+  gap:.5rem 1rem;align-items:center;transition:.15s}
+.pedido-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.13)}
+.pedi-id{font-size:1rem;font-weight:800;color:var(--blue)}
+.pedi-emp{font-size:.72rem;color:var(--gray-500)}
+.pedi-info{}
+.pedi-cliente{font-size:.9rem;font-weight:700;color:var(--gray-900)}
+.pedi-rut{font-size:.75rem;color:var(--gray-500)}
+.pedi-meta{font-size:.78rem;color:var(--gray-500);margin-top:.2rem}
+.pedi-meta span{margin-right:.75rem}
+.pedi-totales{text-align:right}
+.pedi-total{font-size:1rem;font-weight:700;color:var(--gray-900)}
+.pedi-items{font-size:.75rem;color:var(--gray-500);margin-top:.15rem}
+.pedi-actions{display:flex;flex-direction:column;gap:.35rem;align-items:flex-end}
+.btn-ver{background:var(--blue);color:var(--white);padding:.38rem .8rem;border-radius:5px;font-size:.8rem;font-weight:600;transition:.15s}
+.btn-ver:hover{background:#155a8f}
+
+/* FILTROS */
+.filter-bar{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:.85rem 1.2rem;margin-bottom:1rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
+.filter-bar label{font-size:.8rem;font-weight:600;color:var(--gray-700)}
+.filter-bar select{padding:.4rem .6rem;border:1.5px solid var(--gray-200);border-radius:5px;font-size:.83rem;font-family:inherit}
+.filter-bar select:focus{outline:none;border-color:var(--blue)}
+
+/* MODAL DETALLE */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:var(--radius);max-width:680px;width:100%;padding:1.5rem;
+  box-shadow:0 8px 40px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.modal-title{font-size:1rem;font-weight:700;color:var(--gray-900)}
+.modal-close{background:none;font-size:1.2rem;color:var(--gray-500)}
+.det-table{width:100%;border-collapse:collapse;font-size:.83rem;margin:1rem 0}
+.det-table th{background:var(--gray-100);padding:.45rem .6rem;text-align:left;font-size:.76rem;color:var(--gray-500)}
+.det-table td{padding:.45rem .6rem;border-bottom:1px solid var(--gray-200)}
+.det-table tr:last-child td{border-bottom:none}
+.det-totales{background:var(--gray-100);border-radius:6px;padding:.75rem 1rem;font-size:.85rem}
+.det-totales div{display:flex;justify-content:space-between;padding:.2rem 0}
+.det-totales .grand{font-weight:700;font-size:.95rem;border-top:1px solid var(--gray-200);margin-top:.3rem;padding-top:.4rem}
+.det-info{display:grid;grid-template-columns:1fr 1fr;gap:.4rem .75rem;margin-bottom:1rem;font-size:.83rem}
+.det-info-row{display:flex;gap:.4rem}
+.det-info-label{color:var(--gray-500);min-width:90px;flex-shrink:0}
+.det-info-value{font-weight:600;color:var(--gray-900)}
+
+/* PAGINATION */
+.pagination{display:flex;gap:.4rem;justify-content:center;margin-top:1.2rem;flex-wrap:wrap}
+.page-btn{padding:.4rem .8rem;border-radius:5px;font-size:.85rem;background:var(--white);border:1px solid var(--gray-200);color:var(--gray-700);transition:.15s}
+.page-btn:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue)}
+.page-btn.active{background:var(--blue);color:var(--white);border-color:var(--blue)}
+
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem}
+.results-title{font-size:.95rem;font-weight:600;color:var(--gray-900)}
+.results-count{font-size:.82rem;color:var(--gray-500)}
+
+.state-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:3rem 2rem;text-align:center;color:var(--gray-500)}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(0,0,0,.1);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:var(--gray-900);color:var(--white);padding:.7rem 1.2rem;border-radius:7px;font-size:.85rem;font-weight:500;box-shadow:var(--shadow);transform:translateY(10px);opacity:0;transition:.3s;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+
+@media(max-width:600px){
+  .pedido-card{grid-template-columns:60px 1fr}
+  .pedi-totales,.pedi-actions{grid-column:2}
+}
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand" onclick="location.href='../index.html'"><img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="height:36px;object-fit:contain"></div>
+  <button class="btn-volver" onclick="location.href='../index.html'">← Volver</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName"></span>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <!-- FILTRO ESTADO -->
+  <div class="filter-bar">
+    <label>Estado:</label>
+    <select id="filtEstado" onchange="cargarPedidos()">
+      <option value="">Todos</option>
+      <option value="INCOMPLETA">Incompleto</option>
+      <option value="EN PROCESO">En Proceso</option>
+      <option value="COTIZACION EN ESPERA">Cotización en Espera</option>
+      <option value="COTIZACION ENVIADA">Cotización Enviada</option>
+      <option value="COTIZACION ENTREGADA">Cotización Entregada</option>
+      <option value="ENTREGADO">Entregado</option>
+      <option value="ENVIO MERCADOPAGO">Envío MercadoPago</option>
+      <option value="ANULADA">Anulado</option>
+    </select>
+    <label id="filtVendedorLabel" style="display:none">Vendedor:</label>
+    <select id="filtVendedor" onchange="cargarPedidos()" style="display:none">
+      <option value="">Todos los vendedores</option>
+    </select>
+    <span style="font-size:.82rem;color:var(--gray-500);margin-left:auto" id="resultsCount"></span>
+  </div>
+
+  <div id="pedidoList">
+    <div class="state-box"><div class="spinner"></div><p style="margin-top:.75rem">Cargando pedidos…</p></div>
+  </div>
+  <div class="pagination" id="pagination"></div>
+
+</div>
+
+<!-- MODAL DETALLE PEDIDO -->
+<div class="modal-overlay" id="detalleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="detalleTitle">Detalle del Pedido</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="detalleBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API      = '../api';
+let authToken  = localStorage.getItem('at_token') || '';
+let currentPage = 0;
+const PAGE_SIZE = 50;
+let esAdmin = false;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!authToken) { location.href = '../index.html'; return; }
+  const res = await apiFetch(`${API}/auth.php?action=check`);
+  if (!res.ok) { location.href = '../index.html'; return; }
+  document.getElementById('navUserName').textContent = res.data.nombre || '';
+  esAdmin = res.data.rol === 'admin';
+
+  if (esAdmin) {
+    document.getElementById('filtVendedorLabel').style.display = 'inline';
+    document.getElementById('filtVendedor').style.display      = 'inline';
+    const rVend = await apiFetch(`${API}/pedidos.php?action=vendedores`);
+    if (rVend.ok) {
+      const sel = document.getElementById('filtVendedor');
+      (rVend.data || []).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.vend_cod;
+        opt.textContent = v.nombre || `Vendedor ${v.vend_cod}`;
+        sel.appendChild(opt);
+      });
+    }
+  }
+
+  cargarPedidos();
+});
+
+// ============================================================
+// CARGAR PEDIDOS
+// ============================================================
+async function cargarPedidos(page = 0) {
+  currentPage = page;
+  const estado    = document.getElementById('filtEstado').value;
+  const vendedor  = esAdmin ? (document.getElementById('filtVendedor')?.value || '') : '';
+  const qs     = new URLSearchParams({ action: 'lista', page, estado, vendedor }).toString();
+  const list   = document.getElementById('pedidoList');
+
+  list.innerHTML = `<div class="state-box"><div class="spinner"></div><p style="margin-top:.75rem">Cargando…</p></div>`;
+  document.getElementById('pagination').innerHTML = '';
+
+  const res = await apiFetch(`${API}/pedidos.php?${qs}`);
+  if (!res.ok) { list.innerHTML = `<div class="state-box"><p>${res.msg}</p></div>`; return; }
+
+  const pedidos = res.data.pedidos || [];
+  const total   = res.data.total   || 0;
+  document.getElementById('resultsCount').textContent = `${total} pedido${total !== 1 ? 's' : ''}`;
+
+  if (!pedidos.length) {
+    list.innerHTML = `<div class="state-box"><p>No hay pedidos registrados.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = `<div class="pedido-list">${pedidos.map(renderPedido).join('')}</div>`;
+  renderPagination(total, page, PAGE_SIZE);
+}
+
+// ============================================================
+// RENDER PEDIDO CARD
+// ============================================================
+function renderPedido(p) {
+  const estado      = p.pedi_estado || '';
+  const esBorrador  = estado === 'INCOMPLETA';
+  // Las cotizaciones (esperando o ya enviadas por correo) siguen siendo editables/eliminables
+  const esEditable  = ['INCOMPLETA', 'COTIZACION EN ESPERA', 'COTIZACION ENVIADA'].includes(estado);
+  const estadoLabel = esc(estado);
+  // Mapear estado a clase CSS para color
+  const badgeClass  = {
+    'INCOMPLETA':           'borrador',
+    'EN PROCESO':           'enviado',
+    'COTIZACION EN ESPERA': 'enviado',
+    'COTIZACION ENVIADA':   'enviado',
+    'COTIZACION ENTREGADA': 'procesado',
+    'ENTREGADO':            'procesado',
+    'ANULADA':              'anulado',
+    'ENVIO MERCADOPAGO':    'enviado',
+  }[estado] || 'borrador';
+  const fecha      = p.pedi_fecha ? p.pedi_fecha.substring(0, 10) : '—';
+  const oc         = p.pedi_orden_compra ? `OC: ${p.pedi_orden_compra}` : '';
+  const vendedorTag = esAdmin
+    ? `<span>👤 ${esc(p.vendedor_nombre || p.pedi_vendedor || 'Sin vendedor')}</span>`
+    : '';
+
+  return `<div class="pedido-card">
+    <div>
+      <div class="pedi-id">#${p.pedi_id}</div>
+      <div class="pedi-emp">Emp: ${esc(p.emp_id || '1')}</div>
+    </div>
+    <div class="pedi-info">
+      <div class="pedi-cliente">${esc(p.cli_razon_social || p.cli_rut || '—')}</div>
+      <div class="pedi-rut">RUT: ${esc(p.cli_rut || '')} / Sec: ${esc(p.cli_sec || '')}</div>
+      <div class="pedi-meta">
+        <span>📅 ${fecha}</span>
+        ${oc ? `<span>📋 ${esc(oc)}</span>` : ''}
+        <span>📦 ${p.items} ítem${p.items != 1 ? 's' : ''}</span>
+        ${vendedorTag}
+      </div>
+    </div>
+    <div class="pedi-totales">
+      <div class="pedi-total">${formatoPrecio(p.pedi_total)}</div>
+      <div class="pedi-items"><span class="badge ${badgeClass}">${estadoLabel}</span></div>
+    </div>
+    <div class="pedi-actions">
+      <button class="btn-ver" onclick="verDetalle(${p.pedi_id})">Ver detalle</button>
+      ${esEditable ? `<button onclick="editarPedido(${p.pedi_id})" style="padding:.38rem .8rem;background:var(--green,#27ae60);color:#fff;border-radius:5px;font-size:.8rem;font-weight:600;cursor:pointer">✏️ Editar</button>
+      <button onclick="eliminarPedido(${p.pedi_id})" style="padding:.38rem .8rem;background:var(--red);color:#fff;border-radius:5px;font-size:.8rem;font-weight:600;cursor:pointer">🗑 Eliminar</button>` : ''}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// VER DETALLE PEDIDO
+// ============================================================
+async function verDetalle(pediId) {
+  document.getElementById('detalleTitle').textContent = `Pedido #${pediId}`;
+  document.getElementById('detalleBody').innerHTML    = '<div class="state-box"><div class="spinner"></div></div>';
+  document.getElementById('detalleModal').classList.add('open');
+
+  const res = await apiFetch(`${API}/pedidos.php?action=detalle&pedi_id=${pediId}`);
+  if (!res.ok) { document.getElementById('detalleBody').innerHTML = `<p>${res.msg}</p>`; return; }
+
+  const c = res.data.cabecera;
+  const d = res.data.detalle || [];
+
+  const infoHtml = `<div class="det-info">
+    <div class="det-info-row"><span class="det-info-label">Cliente:</span><span class="det-info-value">${esc(c.cli_razon_social||'')}</span></div>
+    <div class="det-info-row"><span class="det-info-label">RUT:</span><span class="det-info-value">${esc(c.cli_rut||'')} / ${esc(c.cli_sec||'')}</span></div>
+    <div class="det-info-row"><span class="det-info-label">Fecha:</span><span class="det-info-value">${(c.pedi_fecha||'').substring(0,10)}</span></div>
+    <div class="det-info-row"><span class="det-info-label">Estado:</span><span class="det-info-value"><span class="badge ${(c.pedi_estado||'').toLowerCase()}">${esc(c.pedi_estado||'')}</span></span></div>
+    ${c.pedi_orden_compra ? `<div class="det-info-row"><span class="det-info-label">Orden Compra:</span><span class="det-info-value">${esc(c.pedi_orden_compra)}</span></div>` : ''}
+    ${c.pedi_observaciones ? `<div class="det-info-row" style="grid-column:span 2"><span class="det-info-label">Observaciones:</span><span class="det-info-value">${esc(c.pedi_observaciones)}</span></div>` : ''}
+  </div>`;
+
+  const tbody = d.map(item => {
+    const dscto = parseFloat(item.ped_prod_dscto || 0);
+    const neto  = parseInt(item.ped_prod_neto || 0);
+    const total = neto * parseInt(item.ped_prod_cantidad);
+    return `<tr>
+      <td><strong>${esc(item.prod_id)}</strong><br><small style="color:var(--gray-500)">${esc(item.prod_nombre||'')}</small></td>
+      <td style="text-align:center">${item.ped_prod_cantidad}</td>
+      <td style="text-align:right">${formatoPrecio(neto)}</td>
+      <td style="text-align:right">${dscto > 0 ? dscto+'%' : '—'}</td>
+      <td style="text-align:right;font-weight:600">${formatoPrecio(total)}</td>
+    </tr>`;
+  }).join('');
+
+  const totalesHtml = `<div class="det-totales">
+    <div><span>Neto:</span><span>${formatoPrecio(c.pedi_total_neto)}</span></div>
+    <div><span>IVA 19%:</span><span>${formatoPrecio(c.pedi_total_iva)}</span></div>
+    <div class="grand"><span>TOTAL:</span><span>${formatoPrecio(c.pedi_total)}</span></div>
+  </div>`;
+
+  document.getElementById('detalleBody').innerHTML = `
+    ${infoHtml}
+    <table class="det-table">
+      <thead><tr>
+        <th>Producto</th><th style="text-align:center">Cant.</th>
+        <th style="text-align:right">P.Neto</th>
+        <th style="text-align:right">Dscto</th>
+        <th style="text-align:right">Total</th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>
+    ${totalesHtml}`;
+}
+
+function closeModal() { document.getElementById('detalleModal').classList.remove('open'); }
+
+async function editarPedido(pediId) {
+  // NO sobreescribir carro_pedi_id — carro.html usa el ?pedi_id= de la URL directamente
+  location.href = 'carro.html?pedi_id=' + pediId;
+}
+
+async function eliminarPedido(pediId) {
+  if (!confirm('¿Está seguro de eliminar este pedido?')) return;
+  const res = await apiFetch(`${API}/pedidos.php?action=eliminar&pedi_id=${pediId}`, 'POST', {});
+  if (res.ok) {
+    showToast('Pedido eliminado', '');
+    // Si el pedido eliminado era el carro activo de la sesión, limpiar el
+    // estado local — si no, el navegador sigue "creyendo" que hay un carro
+    // con productos que en realidad ya no existe en la base de datos.
+    const activoActual = sessionStorage.getItem('carro_pedi_id');
+    if (activoActual && String(activoActual) === String(pediId)) {
+      sessionStorage.removeItem('carro_pedi_id');
+      sessionStorage.removeItem('carro_dscto');
+    }
+    cargarPedidos(currentPage);
+  }
+  else showToast(res.msg || 'Error', 'error');
+}
+document.getElementById('detalleModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('detalleModal')) closeModal();
+});
+
+// ============================================================
+// PAGINACIÓN
+// ============================================================
+function renderPagination(total, page, perPage) {
+  const pages = Math.ceil(total / perPage);
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  let html = '';
+  const start = Math.max(0, page-2), end = Math.min(pages-1, page+2);
+  if (start > 0)       html += `<button class="page-btn" onclick="gotoPage(0)">«</button>`;
+  if (start > 1)       html += `<button class="page-btn" onclick="gotoPage(${start-1})">…</button>`;
+  for (let i=start; i<=end; i++)
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="gotoPage(${i})">${i+1}</button>`;
+  if (end < pages-2)   html += `<button class="page-btn" onclick="gotoPage(${end+1})">…</button>`;
+  if (end < pages-1)   html += `<button class="page-btn" onclick="gotoPage(${pages-1})">»</button>`;
+  document.getElementById('pagination').innerHTML = html;
+}
+function gotoPage(p) { cargarPedidos(p); window.scrollTo({top:0,behavior:'smooth'}); }
+
+// ============================================================
+// HELPERS
+// ============================================================
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  localStorage.removeItem('at_token'); sessionStorage.clear(); location.href = '../index.html';
+}
+async function apiFetch(url, method='GET', body=null) {
+  try {
+    const opts = { method, headers: {'Content-Type':'application/json','X-Token':authToken} };
+    if (body) opts.body = JSON.stringify(body);
+    return await (await fetch(url, opts)).json();
+  } catch(e) { return {ok:false,msg:'Error de red'}; }
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatoPrecio(n) { return '$'+Number(n||0).toLocaleString('es-CL'); }
+function showToast(msg,type='') {
+  const t=document.getElementById('toast'); t.textContent=msg; t.className=`toast show ${type}`;
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>

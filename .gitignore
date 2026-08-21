@@ -23,4 +23,8 @@ scratch/
 scratch_test.*
 query.php
 install_fpdf.php
-enviar_mailtrap.php
+enviar_mailtrap.php
+
+# Logs de ejecución
+logs/
+*.log

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autotec</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#c0392b;--blue:#1a6faf;--gray-900:#1a1a2e;--white:#fff;--shadow:0 2px 12px rgba(0,0,0,.10);--nav-h:52px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--white);height:100vh;display:flex;flex-direction:column}
+.navbar{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:var(--white);display:flex;align-items:center;padding:0 1.2rem;gap:.75rem;box-shadow:var(--shadow);border-bottom:2px solid var(--red);flex-shrink:0}
+.brand{cursor:pointer;display:flex;align-items:center}
+.page-title{font-size:.9rem;font-weight:600;color:var(--gray-600);
+  border-left:1px solid rgba(255,255,255,.2);padding-left:.75rem;margin-left:.25rem}
+.btn-volver{background:rgba(0,0,0,.06);color:var(--gray-700);padding:.35rem .8rem;
+  border-radius:5px;font-size:.82rem;font-weight:600;border:none;cursor:pointer;transition:.15s}
+.btn-volver:hover{background:rgba(0,0,0,.12)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:.75rem}
+.nav-user{color:var(--gray-700);font-size:.82rem}
+.btn-logout{background:none;color:rgba(255,255,255,.5);font-size:.78rem;padding:.25rem .5rem;
+  border:none;cursor:pointer;border-radius:4px;transition:.15s}
+.btn-logout:hover{background:var(--gray-100);color:var(--gray-900)}
+
+.iframe-wrap{flex:1;position:relative}
+.iframe-wrap iframe{width:100%;height:100%;border:none;display:block}
+
+.loading-overlay{position:absolute;inset:0;background:var(--white);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;z-index:10}
+.loading-overlay.hidden{display:none}
+.spinner{width:36px;height:36px;border:3px solid rgba(0,0,0,.1);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--gray-500);font-size:.88rem}
+
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:var(--gray-900);color:var(--white);padding:.7rem 1.2rem;border-radius:7px;font-size:.85rem;font-weight:500;box-shadow:var(--shadow);transform:translateY(10px);opacity:0;transition:.3s;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{border-left:4px solid var(--red)}
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand" onclick="location.href='../index.html'"><img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="height:36px;object-fit:contain"></div>
+  <span class="page-title" id="pageTitle">Cargando…</span>
+  <button class="btn-volver" onclick="history.back()">← Volver</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName"></span>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<div class="iframe-wrap">
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Cargando…</div>
+  </div>
+  <iframe id="mainFrame" src="" title="Página externa" allowfullscreen
+          onload="document.getElementById('loadingOverlay').classList.add('hidden')">
+  </iframe>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:none;align-items:center;justify-content:center;padding:1rem" id="dsctoModal">
+  <div style="background:#fff;border-radius:8px;max-width:400px;width:100%;padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+    <div style="font-weight:700;font-size:1rem;color:var(--gray-900);margin-bottom:.75rem">💰 Descuento del Cliente</div>
+    <p style="font-size:.88rem;margin-bottom:1rem;color:#444">Cliente: <strong id="dsctoClienteNombre"></strong><br>Descuento asignado: <strong id="dsctoClientePct"></strong></p>
+    <div style="margin-bottom:1rem">
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.3rem;color:#444">¿Usar este descuento o ingresar otro?</label>
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <input type="number" id="dsctoInputAnalisis" min="0" max="100" step="0.5"
+               style="width:80px;padding:.5rem;border:1.5px solid #ddd;border-radius:6px;font-size:.95rem;text-align:center"> %
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <button onclick="confirmarDescuentoAnalisis()" style="flex:1;padding:.6rem;background:var(--blue);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer">✅ Confirmar y Agregar</button>
+      <button onclick="cancelarDescuentoAnalisis()" style="flex:1;padding:.6rem;background:#e8e8e8;color:#444;border:none;border-radius:6px;font-weight:700;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API     = '../api';
+let authToken = localStorage.getItem('at_token') || '';
+
+const PAGES = {
+  analisis:    { title: 'Análisis de Clientes', requireCliente: true,
+                 urlFn: (user, cli, params, productos) => {
+                   // Android: CLIRUT = "13436142-5/01" → replaceAll("[-/\s]","") → "1343614251"
+                   // Nuestro cli_activo tiene: rut="13436142", dv="5", sec="01"
+                   const rutCompleto = (cli?.rut || '') + (cli?.dv || '') + (cli?.sec || '');
+                   const rutLimpio   = rutCompleto.replace(/[-/ ]/g, '').trim();
+                   return `https://autotecbi.automarco.cl/#/${rutLimpio}?productos=${productos || ''}`;
+                 }},
+  analisis_cli:{ title: 'Información de Cliente', requireCliente: true, allowUrlParams: true,
+                 urlFn: (user, cli, params) => {
+                   // Android: rut = "16394023-K" (con DV), sec = "01" (2 dígitos)
+                   const rut    = (params?.rut || cli?.rut || '') + '-' + (params?.dv || cli?.dv || '');
+                   const secRaw = params?.sec || cli?.sec || '0';
+                   const sec    = String(parseInt(secRaw) || 0);
+                   return `https://www.autotec.cl/bo/tipo_cliente3/info-cliente2.php?cli_rut=${encodeURIComponent(rut)}&cli_sec=${encodeURIComponent(sec)}`;
+                 }},
+  sugerido:    { title: 'Pedido Sugerido',
+                 urlFn: (user, cli) => `https://autotecbi.automarco.cl/#/sugerido?codv=${user?.vend_cod || ''}` },
+  seguimiento: { title: 'Seguimiento de Pedidos',
+                 urlFn: (user, cli) => `https://www.autotec.cl/json/simpleroute2.php?codv=${user?.vend_cod || ''}` },
+  devoluciones:{ title: 'Devoluciones',
+                 urlFn: (user, cli) => `https://devoluciones.automarco.cl/` },
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!authToken) { location.href = '../index.html'; return; }
+
+  const res = await apiFetch(`${API}/auth.php?action=check`);
+  if (!res.ok) { location.href = '../index.html'; return; }
+
+  const user = res.data;
+  document.getElementById('navUserName').textContent = user.nombre || '';
+
+  const params = new URLSearchParams(location.search);
+  const tipo   = params.get('tipo') || '';
+  const cfg    = PAGES[tipo];
+
+  if (!cfg) {
+    document.getElementById('pageTitle').textContent = 'Página no encontrada';
+    document.getElementById('loadingText').textContent = 'Tipo de página no reconocido.';
+    return;
+  }
+
+  document.title = `${cfg.title} — Autotec`;
+  document.getElementById('pageTitle').textContent   = cfg.title;
+  document.getElementById('loadingText').textContent = `Cargando ${cfg.title}…`;
+
+  // Obtener cliente activo si existe
+  const cliRaw = sessionStorage.getItem('cli_activo');
+  const cli    = cliRaw ? JSON.parse(cliRaw) : null;
+
+  // Validar cliente si es requerido (salvo que la página acepte rut directo por URL)
+  const rutParam = params.get('rut') || '';
+  if (cfg.requireCliente && !cli && !(cfg.allowUrlParams && rutParam)) {
+    document.getElementById('loadingOverlay').innerHTML = `
+      <div style="text-align:center;padding:2rem">
+        <p style="color:var(--gray-700);font-size:.95rem;margin-bottom:1.2rem;font-weight:600">
+          Debe seleccionar un cliente antes de acceder a esta sección.
+        </p>
+        <button onclick="location.href='../pages/clientes.html'"
+          style="padding:.6rem 1.5rem;background:#1a6faf;color:#fff;border:none;border-radius:6px;font-size:.9rem;font-weight:700;cursor:pointer">
+          Ir a Clientes
+        </button>
+      </div>`;
+    return;
+  }
+
+  // Productos del carro actual (para analisis de cliente — igual que Android)
+  let productosConcatenados = '';
+  const pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+  if (pediIdSesion !== '0') {
+    try {
+      const authToken = localStorage.getItem('at_token') || '';
+      const rCarro    = await fetch(`../api/carro.php?action=ver&pedi_id_sesion=${pediIdSesion}`,
+                          { headers: { 'X-Token': authToken } });
+      const cData     = await rCarro.json();
+      if (cData.ok && cData.data?.detalle?.length) {
+        productosConcatenados = cData.data.detalle.map(d => d.prod_id).join(',');
+      }
+    } catch(e) {}
+  }
+
+  const extraRut = params.get('rut') || '';
+  const extraDv  = params.get('dv')  || '';
+  const extraSec = params.get('sec') || '';
+  const url = cfg.urlFn(user, cli, { rut: extraRut, dv: extraDv, sec: extraSec }, productosConcatenados);
+  document.getElementById('mainFrame').src = url;
+});
+
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  localStorage.removeItem('at_token');
+  sessionStorage.clear();
+  location.href = '../index.html';
+}
+
+async function apiFetch(url, method='GET', body=null) {
+  try {
+    const opts = { method, headers: {'Content-Type':'application/json','X-Token':authToken} };
+    if (body) opts.body = JSON.stringify(body);
+    return await (await fetch(url, opts)).json();
+  } catch(e) { return {ok:false,msg:'Error de red'}; }
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ============================================================
+// PUENTE CON LA APP DE ANÁLISIS (reemplaza addJavascriptInterface
+// de Android: la app de Análisis nos manda los productos vía
+// window.parent.postMessage en vez de window.Android.recibirDatos)
+// ============================================================
+window.addEventListener('message', async (event) => {
+  // DIAGNÓSTICO TEMPORAL: log de cualquier mensaje que llegue, sea cual sea su forma.
+  console.log('[postMessage recibido] origin:', event.origin, 'data:', event.data);
+
+  const data = event.data;
+  if (!data || data.tipo !== 'agregarProductos' || !Array.isArray(data.items)) {
+    console.log('[postMessage] Ignorado: no coincide con el formato esperado ({tipo:"agregarProductos", items:[...]})');
+    return;
+  }
+  console.log('[postMessage] Items a agregar:', data.items);
+
+  const cli = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+  if (!cli.rut) {
+    showToast('No hay cliente seleccionado para agregar los productos', 'error');
+    return;
+  }
+
+  const itemsValidos = data.items.filter(item => {
+    const cantidad = parseInt(item.cantidad, 10);
+    return item.prodId && cantidad && cantidad > 0;
+  });
+  if (!itemsValidos.length) {
+    console.log('[postMessage] Ningún item válido para agregar');
+    return;
+  }
+
+  const pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+
+  // Primer producto del carro (sin carro activo aún): igual que en ficha.html,
+  // preguntar el % de descuento antes de agregar.
+  if (!pediIdSesion || pediIdSesion === '0') {
+    const dsctoSug = parseFloat(cli.descuento || 0);
+    document.getElementById('dsctoClienteNombre').textContent = cli.nombre || '';
+    document.getElementById('dsctoClientePct').textContent    = dsctoSug > 0 ? `${dsctoSug}%` : 'sin descuento';
+    document.getElementById('dsctoInputAnalisis').value        = dsctoSug;
+    document.getElementById('dsctoModal').style.display        = 'flex';
+    window._pendingAnalisisItems = itemsValidos;
+    return;
+  }
+
+  // Ya hay carro activo: reutilizar el descuento ya definido para este carro
+  const dscto = parseFloat(sessionStorage.getItem('carro_dscto') || '0');
+  await procesarAgregarProductosAnalisis(itemsValidos, dscto);
+});
+
+async function confirmarDescuentoAnalisis() {
+  const dscto = parseFloat(document.getElementById('dsctoInputAnalisis').value || 0);
+  sessionStorage.setItem('carro_dscto', dscto);
+  document.getElementById('dsctoModal').style.display = 'none';
+
+  const items = window._pendingAnalisisItems || [];
+  window._pendingAnalisisItems = null;
+  await procesarAgregarProductosAnalisis(items, dscto);
+}
+
+function cancelarDescuentoAnalisis() {
+  document.getElementById('dsctoModal').style.display = 'none';
+  window._pendingAnalisisItems = null;
+}
+
+async function procesarAgregarProductosAnalisis(items, dscto) {
+  const cli = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+  let pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+  let agregados = 0;
+  let fallidos  = 0;
+
+  for (const item of items) {
+    const cantidad = parseInt(item.cantidad, 10);
+
+    const res = await apiFetch(`${API}/carro.php?action=agregar`, 'POST', {
+      prod_id: item.prodId,
+      cantidad: cantidad,
+      dscto: dscto,
+      cli_rut: cli.rut,
+      cli_sec: cli.sec || '',
+      pedi_id_sesion: pediIdSesion,
+      forzar: true,
+    });
+    console.log('[postMessage] Respuesta para', item.prodId, ':', res);
+
+    if (res.ok) {
+      agregados++;
+      // Si se creó un carro nuevo (no había uno en sesión), guardarlo y
+      // reutilizarlo para el resto de los productos de este mismo lote
+      if (res.data?.pedi_id) {
+        pediIdSesion = String(res.data.pedi_id);
+        sessionStorage.setItem('carro_pedi_id', pediIdSesion);
+      }
+    } else {
+      fallidos++;
+    }
+  }
+
+  if (agregados > 0) {
+    showToast(`Se ${agregados === 1 ? 'agregó' : 'agregaron'} ${agregados} producto${agregados === 1 ? '' : 's'} al carro`, 'success');
+  }
+  if (fallidos > 0) {
+    showToast(`${fallidos} producto${fallidos === 1 ? '' : 's'} no se pudo${fallidos === 1 ? '' : 'ieron'} agregar`, 'error');
+  }
+}
+</script>
+</body>
+</html>

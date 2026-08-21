@@ -122,7 +122,8 @@ CREATE TABLE cobranzas (
   email_tesoreria      VARCHAR(150),
   tipo_entrega         ENUM('CHILEXPRESS','PRESENCIAL_SANTIAGO') NULL,
   numero_seguimiento   VARCHAR(100),                    -- OT Chilexpress (si aplica)
-  comprobante_url      VARCHAR(255),                    -- ruta relativa a uploads/
+  comprobante_url      VARCHAR(255) NULL,               -- ruta relativa a uploads/ (NULL si fue purgada)
+  comprobante_purgado_at TIMESTAMP NULL,                -- fecha en que se eliminó el archivo físico
   justificacion_descuadre TEXT NULL,
   estado               ENUM('PENDIENTE_ENVIO','EN_TRANSITO','ENTREGADO_SANTIAGO',
                             'RECIBIDO_TESORERIA','DEPOSITADO','RECHAZADO') DEFAULT 'PENDIENTE_ENVIO',
@@ -134,7 +135,8 @@ CREATE TABLE cobranzas (
 
 | Campo | Descripción |
 |-------|-------------|
-| `comprobante_url` | Ruta relativa: `uploads/{empresa_id}/{YYYY-MM}/comprobantes/archivo.jpg` |
+| `comprobante_url` | Ruta relativa: `uploads/{empresa_id}/{YYYY-MM}/comprobantes/archivo.jpg` (se setea a `NULL` tras la purga automática) |
+| `comprobante_purgado_at` | Timestamp de auditoría cuando el CRON semanal de purga eliminó el archivo físico |
 | `numero_seguimiento` | Aplica solo cuando `tipo_entrega = 'CHILEXPRESS'` |
 | `justificacion_descuadre` | Razón dada por el vendedor si los montos no coinciden |
 | `estado` | Inicia en `PENDIENTE_ENVIO`. El vendedor solo puede avanzar al estado de envío mediante `completar_envio.php`; Tesorería gestiona los estados posteriores. |
@@ -153,9 +155,12 @@ CREATE TABLE cheques (
   cobranza_id              INT NOT NULL,
   banco                    VARCHAR(100) NULL,
   numero_cheque            VARCHAR(50) NULL,
+  cuenta_corriente         VARCHAR(50) NULL,
   monto                    DECIMAL(12,0) NOT NULL,
   fecha_vencimiento        DATE NOT NULL,
-  foto_cheque_url          VARCHAR(255) NOT NULL,       -- ruta relativa a uploads/
+  emitido_a                VARCHAR(200) NULL,
+  foto_cheque_url          VARCHAR(255) NULL,           -- ruta relativa a uploads/ (NULL si fue purgada)
+  foto_purgada_at          TIMESTAMP NULL,              -- fecha en que se eliminó el archivo físico
   comentario               TEXT NULL,                   -- observación opcional del vendedor
   numero_papeleta_deposito VARCHAR(50) NULL,            -- registrado por Tesorería
   fecha_deposito_real      TIMESTAMP NULL,              -- registrado por Tesorería
@@ -167,7 +172,8 @@ CREATE TABLE cheques (
 | Campo | Quién lo escribe | Cuándo |
 |-------|-----------------|--------|
 | `monto`, `fecha_vencimiento`, `foto_cheque_url`, `comentario` | Vendedor | Al registrar la cobranza |
-| `banco`, `numero_cheque` | Tesorería | Al validar (RECIBIDO_TESORERIA) |
+| `foto_purgada_at` | Cron Purga | Al cumplir >3 meses post-vencimiento |
+| `banco`, `numero_cheque`, `cuenta_corriente`, `emitido_a` | Tesorería | Al validar (RECIBIDO_TESORERIA) |
 | `numero_papeleta_deposito` | Tesorería | Al marcar como `DEPOSITADO` |
 | `fecha_deposito_real` | Tesorería | Al marcar como `DEPOSITADO` |
 

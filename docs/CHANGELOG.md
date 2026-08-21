@@ -2,6 +2,71 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [Unreleased] - 2026-08-19
+
+### Arquitectura Suite Modular SaaS (Fase 1 — Zero-Breakage)
+- **Header Unificado y App Switcher (`admin/includes/app_header.php`, `admin/css/shell.css`)**:
+  - Implementada barra de navegación SaaS modular compartida entre los portales de Tesorería, Cuentas Corrientes y Rendición de Gastos.
+  - Pestañas dinámicas con clase `.shell-tab--active` según la variable `$CURRENT_MODULE` (`cheques`, `cuentas_corrientes`, `rendiciones`).
+  - Control de visibilidad por rol de sesión (`ADMINISTRADOR`, `TESORERIA`, `SUPERVISORA_CC`).
+  - Centralización del modal de cierre de sesión (`#modalLogout`) en el componente común.
+- **Centralización de Utilidades UI Compartidas (`admin/js/shared_ui.js`)**:
+  - Unificado el visor de imágenes **Lightbox** (zoom con rueda y botones, rotación 90°, arrastre mouse/touch, alto contraste y descarga de comprobantes).
+  - Centralizado el helper global `showToast()` para notificaciones y alertas en tiempo real.
+  - Vinculación universal de listeners de teclado (`Escape`) y eventos de logout.
+- **Limpieza de Código Duplicado (`admin/admin.js`, `admin/js/cuentas_corrientes.js`)**:
+  - Eliminadas las definiciones redundantes de Lightbox, Toasts y bindings de modales de las lógicas específicas de cada módulo.
+- **Stub Preparatorio Módulo 3 (`admin/rendiciones.php`)**:
+  - Creada vista inicial con UI informativa para el futuro módulo de Rendiciones de Gastos y Viáticos.
+- **Sincronización Dual Exhaustiva**:
+  - Sincronizados y verificados por hash SHA256 todos los archivos creados y modificados en `dist/cheques_cobranza/app/admin/`.
+
+## [Unreleased] - 2026-08-18
+
+### Experiencia de Usuario & Flujo Tesorería / Cuentas Corrientes
+- **Permanencia en Bandeja al Validar (`admin.js`)**: Modificado `ejecutarCambioEstado` para evitar la redirección automática a la pestaña *Enviados a C.Corrientes* al validar una cobranza (`RECIBIDO_TESORERIA`). El usuario permanece en su bandeja de trabajo actual, se limpia el panel lateral de detalle y se emite un toast de confirmación: *"Cobranza validada y enviada a Cuentas Corrientes correctamente."*
+- **Ocultación de Tab "Por Enviar" (`admin/index.php`)**: Ocultada visualmente la pestaña `PENDIENTE_ENVIO` en el panel de Tesorería preservando los contadores internos.
+- **Hora de Corte Manual (`HH:MM`) (`modal_config_cc.php` / `modal_config_cc.js`)**: Reemplazado el selector estático por un `<input type="time">` nativo con validación regex para permitir cualquier hora y minuto exacto de corte.
+- **Auto-Trigger en Vivo de Despacho (`cuentas_corrientes.js`)**: Vigilante del navegador cada 10 segundos que ejecuta automáticamente el despacho a digitadoras si el portal está abierto y se alcanza la hora configurada.
+
+### Seguridad: Blindaje Integral contra IDOR (SEC-01) & Sanitización de URL
+- **Blindaje IDOR en Endpoints API de Vendedores (`api/` y `dist/cheques_cobranza/app/api/`)**:
+  - `get_clientes.php`: En entorno `production`, la identidad del vendedor (`$vendedor_id`) y su empresa (`$empresa_param`) se leen exclusivamente desde `$_SESSION['vendedor_auth']`. Si no existe sesión activa, responde `401 Unauthorized`.
+  - `get_facturas_cliente.php`: Incorporada autenticación y validación estricta de pertenencia a cartera ERP en producción (`{$db_origen}.tbl_clientes WHERE cli_vendedor = :vid`). Si el cliente no pertenece al vendedor en sesión, responde `403 Forbidden`.
+  - `guardar_cobranza.php`: La autoría (`$vendedor_id`, `$vendedor_nombre`) se asigna estrictamente desde `$_SESSION['vendedor_auth']`, neutralizando intentos de suplantación vía `$_POST['vendedor_id']`.
+  - `get_mis_cobranzas.php`: El filtro de historial en producción fuerza `c.vendedor_id = :vendedor_id` utilizando el ID de la sesión autenticada.
+  - `completar_envio.php`: Reforzada la comprobación IDOR verificando que la cobranza pertenezca al `vendedor_id` de la sesión activa antes de adjuntar comprobantes o avanzar estados.
+- **Sanitización de URL en Frontend (`script.js` y `dist/.../script.js`)**:
+  - Implementada llamada a `window.history.replaceState({}, document.title, window.location.pathname)` inmediatamente tras la autenticación exitosa en `auth_seller.php`, removiendo de forma transparente los parámetros sensibles (`vendedor_id`, `empresa`, `vendedor_nombre`) de la barra de direcciones del navegador.
+- **Sincronización Dual Completa**:
+  - Sincronizados al 100% los 6 archivos modificados entre la raíz y `dist/cheques_cobranza/app/`.
+
+### Automatización y Tareas Programadas (Fase 4 del Roadmap)
+- **Despacho Automático Diario por Hora de Corte (`cron/resumen_diario_cuentas_corrientes.php`)**:
+  - Lectura dinámica de la hora de corte (`hora_despacho_diario`) e interruptor maestro (`despacho_automatico_activado`) desde la tabla `configuraciones_sistema`.
+  - Fragmentación inteligente de cheques validados (`RECIBIDO_TESORERIA`) por empresa de emisión (`emitido_a`), generando reportes PDF consolidados con adjunto hacia digitadoras y copia a Supervisora de CC.
+  - Cierre transaccional: actualización a `DEPOSITADO` e inserción en `historial_estados` y `log_envios_informes` con control anti-duplicados por fecha.
+- **Motor de Alertas Automáticas por Días Transcurridos (`cron/check_alertas.php`)**:
+  - Detección proactiva de cobranzas en estados iniciales (`PENDIENTE_ENVIO`, `EN_TRANSITO`, `ENTREGADO_SANTIAGO`) que superan los días límite (`usuarios.dias_alerta_personalizado` o `empresas.dias_maximos_envio`).
+  - Envío de alerta corporativa con plantilla HTML, resumen de facturas/cheques, días de retraso y botón directo al detalle en el portal de Tesorería.
+- **Seguridad en Crons**:
+  - Implementada guardia de acceso dual: ejecución nativa CLI y ejecución HTTP protegida con token secreto `CRON_SECRET_KEY` (`config/app.php`).
+  - Documentada la configuración de Crontab Linux / cPanel y WebCron en `cron/README.md`.
+
+## [Unreleased] - 2026-08-14
+
+### Integración Portal Vendedores Web (E-Commerce ↔ Cobranzas)
+- **Botón Recaudación de Cheques en `dist/vendedores/pages/cobranza.html`**: Agregado botón directo que extrae `vend_cod` de la sesión del vendedor (`api/auth.php?action=check`) y valida la empresa seleccionada en el filtro para abrir `https://www.autotec.cl/cobranza_cheques/index.html?vendedor_id={vend_cod}&empresa={empresa}`.
+- **Documentación de Integración (`docs/INTEGRATION.md`)**: Creada especificación técnica completa con diagramas de secuencia, mapeo de códigos ERP (`EMP01`, `EMP03`, `EMP06`, `EMP10`), flujo de autenticación y consideraciones de seguridad.
+
+### Seguridad y Hardening (Remediación OWASP ZAP Fase 2)
+- **Ajuste de Compatibilidad CSP Dinámica**: Restablecido `'unsafe-inline'` balanceado en `script-src` y `style-src` en `.htaccess` y `dist/.htaccess` para admitir atributos inline (`display: none`, variables CSS, micro-interacciones) y manipulación dinámica de propiedades DOM (`element.style.display`) sin violaciones de seguridad en el navegador.
+- **Rediseño y Blindaje de Botones Superiores**: Creadas las clases CSS `.btn-header-config`, `.btn-header-portal` y `.btn-header-logout` en `admin/styles.css` y `admin/css/cuentas_corrientes.css`.
+- **Manejador de Eventos Modal Configuración**: Vinculado `abrirModalConfigCC` de forma dual (`onclick` y `DOMContentLoaded` listener) en `admin/js/modal_config_cc.js`, garantizando la apertura inmediata del modal en Tesorería y Cuentas Corrientes.
+- **Desacoplamiento de Assets**: Mantenida la extracción modular de estilos y scripts en `admin/css/` y `admin/js/` sincronizados entre `root` y `dist/`.
+- **Emisión Estricta de Cabeceras HTTP desde PHP**: Añadido bloque de seguridad en `dist/config/app.php` para emitir `Strict-Transport-Security` (HSTS max-age 31536000), `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` y supresión activa de `Server` y `X-Powered-By`.
+- **Protección RCE en Uploads**: Configurado `dist/uploads/.htaccess` con desactivación de motores PHP (`php_flag engine off`) y bloqueo estricto de ejecución de scripts.
+
 ## [Unreleased] - 2026-08-07
 
 ### Sincronización y Despliegue Producción

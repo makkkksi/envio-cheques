@@ -11,7 +11,7 @@
 ```
 Fase 1 ██████████ 100% — Backend base + flujo dividido + DDL alineado
 Fase 2 ██████████ 100% — Portal Tesorería con Hardening & Desglose Multi-Factura
-Fase 4 ░░░░░░░░░░   0% — Cron alertas por días transcurridos
+Fase 4 ██████████ 100% — Cron Jobs: Despacho Automático CC por Hora de Corte & Alertas por Días
 Fase 5 ██████████ 100% — WebView App Eclipse, Smart Client Picker & Multi-Factura Cross-Empresa
 ```
 
@@ -93,33 +93,26 @@ Fase 5 ██████████ 100% — WebView App Eclipse, Smart Client
 
 ---
 
-## Fase 4 — Motor de Alertas por Días Transcurridos
+## Fase 4 — Cron Jobs: Despacho Automático CC & Motor de Alertas
 
-**Objetivo:** Implementar un proceso automático que detecte cobranzas en tránsito demoradas y envíe alertas por correo.
+**Objetivo:** Automatizar el despacho diario hacia Cuentas Corrientes según hora de corte configurable en panel/BD y detectar cobranzas en tránsito demoradas con alertas por correo.
 
 **Entregables:**
 
-| Archivo | Descripción |
-|---------|-------------|
-| `cron/check_alertas.php` | Script PHP ejecutado por Cron Job (medianoche diaria) |
-| `cron/README.md` | Instrucciones para configurar el Cron en el hosting |
+| Archivo | Estado | Descripción |
+|---------|--------|-------------|
+| `cron/resumen_diario_cuentas_corrientes.php` | ✅ | Script PHP ejecutado cada 15 min. Evalúa hora de corte en BD (`configuraciones_sistema.hora_despacho_diario`), fragmenta por empresa emisora, adjunta PDF consolidado y despacha a digitadoras con CC a Supervisora. |
+| `cron/check_alertas.php` | ✅ | Script PHP diario (08:00 AM) que detecta cobranzas demoradas (`dias_transcurridos > dias_maximos`) y notifica al vendedor y CC. |
+| `cron/README.md` | ✅ | Guía completa de configuración para Crontab Linux / cPanel y WebCron protegido por token. |
+| `services/MailService.php` | ✅ | Métodos `enviarResumenDiarioDigitadora()` con CC y `enviarAlertaDemora()` con enlace al portal. |
 
-**Lógica del script:**
-
-```
-1. Consultar cobranzas WHERE estado IN ('PENDIENTE_ENVIO', 'EN_TRANSITO', 'ENTREGADO_SANTIAGO')
-2. Para cada cobranza:
-   a. Obtener dias_maximos_envio (del vendedor si tiene override, sino de la empresa)
-   b. Calcular dias_transcurridos = DATEDIFF(NOW(), created_at)
-   c. Si dias_transcurridos > dias_maximos_envio:
-      - Enviar correo de alerta al vendedor
-      - Enviar correo de alerta a jefatura de cobranza
-3. Registrar ejecución en log
-```
-
-**Configuración en hosting (cPanel):**
+**Configuración en Crontab Linux:**
 ```bash
-0 0 * * * php /home/usuario/public_html/form/cron/check_alertas.php
+# Despacho automático por hora de corte (Lun-Vie 08:00 a 19:00 hrs):
+*/15 8-19 * * 1-5 /usr/bin/php /var/www/html/autotec/cobranza_cheques/app/cron/resumen_diario_cuentas_corrientes.php >> /var/www/html/autotec/cobranza_cheques/app/logs/cron_despacho_cc.log 2>&1
+
+# Motor de alertas por demora (Diario 08:00 AM):
+0 8 * * 1-6 /usr/bin/php /var/www/html/autotec/cobranza_cheques/app/cron/check_alertas.php >> /var/www/html/autotec/cobranza_cheques/app/logs/cron_alertas.log 2>&1
 ```
 
 ---

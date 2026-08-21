@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha Producto — Autotec</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --red:#c0392b; --red-dark:#a93226; --blue:#1a6faf; --blue-light:#eaf4fb;
+  --gray-900:#1a1a2e; --gray-700:#444; --gray-500:#888; --gray-200:#e8e8e8;
+  --gray-100:#f5f5f5; --white:#fff; --shadow:0 2px 12px rgba(0,0,0,.10);
+  --radius:8px; --nav-h:60px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--gray-700);background:var(--gray-100)}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;border:none;font-family:inherit}
+
+/* NAV — igual al index */
+.navbar{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:var(--white);
+  display:flex;align-items:center;padding:0 1.5rem;gap:1rem;
+  box-shadow:var(--shadow);border-bottom:2px solid var(--red)}
+.brand{cursor:pointer;display:flex;align-items:center}
+.btn-volver{background:rgba(0,0,0,.06);color:var(--gray-700);padding:.4rem .9rem;
+  border-radius:5px;font-size:.85rem;font-weight:600;transition:.15s}
+.btn-volver:hover{background:rgba(0,0,0,.12)}
+.nav-right{display:flex;align-items:center;gap:.75rem;margin-left:auto}
+.nav-cart-btn{background:var(--red);color:var(--white);padding:.4rem .9rem;border-radius:5px;
+  font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.4rem;transition:.15s}
+.nav-cart-btn:hover{background:var(--red-dark)}
+.cart-badge{background:var(--white);color:var(--red);border-radius:50%;width:18px;height:18px;
+  font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.nav-user{color:var(--gray-700);font-size:.85rem}
+.btn-logout{background:none;color:rgba(255,255,255,.6);font-size:.8rem;padding:.3rem .6rem;border-radius:4px;transition:.15s}
+.btn-logout:hover{background:var(--gray-100);color:var(--gray-900)}
+
+/* LAYOUT */
+.page-wrap{max-width:1200px;margin:0 auto;padding:1.5rem 1rem}
+.breadcrumb{font-size:.82rem;color:var(--gray-500);margin-bottom:1rem}
+.breadcrumb a{color:var(--blue);cursor:pointer}
+.breadcrumb a:hover{text-decoration:underline}
+
+/* FICHA GRID */
+.ficha-grid{display:grid;grid-template-columns:480px 1fr;gap:1.5rem;align-items:start}
+@media(max-width:800px){.ficha-grid{grid-template-columns:1fr}}
+
+/* GALERÍA */
+.galeria{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:1rem}
+.img-principal-wrap{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  background:var(--gray-100);border-radius:6px;overflow:hidden;margin-bottom:.75rem;cursor:pointer;
+  min-height:460px}
+.img-principal{width:100%;height:100%;object-fit:contain}
+.img-thumbs{display:flex;gap:.5rem;flex-wrap:wrap}
+.img-thumb{width:70px;height:70px;object-fit:contain;border-radius:5px;
+  border:2px solid var(--gray-200);padding:3px;cursor:pointer;background:var(--gray-100);transition:.15s}
+.img-thumb:hover,.img-thumb.active{border-color:var(--blue)}
+
+/* PANEL DERECHO */
+.ficha-info{display:flex;flex-direction:column;gap:1rem}
+.prod-header{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.2rem}
+.prod-categoria{font-size:.75rem;font-weight:600;color:var(--blue);text-transform:uppercase;margin-bottom:.3rem}
+.prod-nombre{font-size:1.3rem;font-weight:700;color:var(--gray-900);margin-bottom:.5rem}
+.prod-codigo-row{display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.83rem;color:var(--gray-500);margin-bottom:.75rem}
+.prod-codigo-row strong{color:var(--gray-700)}
+.prod-marca-img{height:32px;object-fit:contain;margin-bottom:.75rem}
+
+.precio-box{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;padding:.75rem 0;
+  border-top:1px solid var(--gray-200);border-bottom:1px solid var(--gray-200);margin:.75rem 0}
+.precio-label{font-size:.78rem;color:var(--gray-500)}
+.precio-valor{font-size:1.8rem;font-weight:800;color:var(--red)}
+.stock-badge{font-size:.82rem;font-weight:600;padding:.3rem .75rem;border-radius:20px}
+.stock-badge.ok{background:#eafaf1;color:#27ae60}
+.stock-badge.out{background:#fdedec;color:var(--red)}
+
+.agregar-row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+.qty-wrap{display:flex;align-items:center;border:1.5px solid var(--gray-200);border-radius:6px;overflow:hidden}
+.qty-btn{background:var(--gray-100);border:none;width:34px;height:40px;font-size:1.1rem;
+  cursor:pointer;transition:.15s;color:var(--gray-700)}
+.qty-btn:hover{background:var(--gray-200)}
+.qty-input{width:52px;height:40px;border:none;text-align:center;font-size:.95rem;font-weight:600;
+  font-family:inherit;outline:none}
+.btn-agregar-ficha{background:var(--blue);color:var(--white);padding:.65rem 1.5rem;
+  border-radius:6px;font-size:.92rem;font-weight:700;transition:.15s;flex:1}
+.btn-agregar-ficha:hover{background:#155a8f}
+.nota-stock{font-size:.75rem;color:var(--gray-500);margin-top:.4rem}
+
+/* TABS */
+.tabs-wrap{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.tabs-header{display:flex;border-bottom:2px solid var(--gray-200)}
+.tab-btn{padding:.75rem 1.2rem;font-size:.88rem;font-weight:600;color:var(--gray-500);
+  background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;
+  transition:.15s;cursor:pointer}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-btn:hover:not(.active){color:var(--gray-700)}
+.tab-content{padding:1.2rem;display:none}
+.tab-content.active{display:block}
+
+/* TABLA OEM */
+.oem-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.oem-table th{background:var(--gray-100);padding:.5rem .75rem;text-align:left;font-size:.78rem;color:var(--gray-500)}
+.oem-table td{padding:.5rem .75rem;border-bottom:1px solid var(--gray-200)}
+.oem-table tr:last-child td{border-bottom:none}
+
+/* TABLA APLICACIONES */
+.app-table{width:100%;border-collapse:collapse;font-size:.83rem}
+.app-table th{background:var(--gray-100);padding:.5rem .75rem;text-align:left;font-size:.78rem;
+  color:var(--gray-500);white-space:nowrap}
+.app-table td{padding:.5rem .75rem;border-bottom:1px solid var(--gray-200)}
+.app-table tr:last-child td{border-bottom:none}
+.app-table tr:hover td{background:var(--blue-light)}
+
+/* RELACIONADOS */
+.relacionados-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.75rem;margin-top:1rem}
+.rel-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:.75rem;cursor:pointer;transition:.15s;text-align:center}
+.rel-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.13)}
+.rel-img{width:80px;height:80px;object-fit:contain;margin:0 auto .5rem}
+.rel-nombre{font-size:.78rem;font-weight:600;color:var(--gray-900);line-height:1.3}
+.rel-precio{font-size:.85rem;font-weight:700;color:var(--red);margin-top:.3rem}
+
+/* MODAL IMAGEN */
+.img-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:3000;
+  display:none;align-items:center;justify-content:center;padding:1rem}
+.img-modal.open{display:flex}
+.img-modal img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px}
+.img-modal-close{position:fixed;top:1rem;right:1rem;background:rgba(255,255,255,.2);
+  color:var(--white);border:none;width:36px;height:36px;border-radius:50%;font-size:1.2rem;cursor:pointer}
+
+/* CART DRAWER — mismo del index */
+.cart-drawer{position:fixed;right:0;top:0;bottom:0;width:380px;background:var(--white);
+  box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:1500;transform:translateX(100%);transition:.3s;display:flex;flex-direction:column}
+.cart-drawer.open{transform:translateX(0)}
+.cart-drawer-header{padding:1rem 1.2rem;background:var(--gray-900);color:var(--white);
+  display:flex;align-items:center;justify-content:space-between}
+.cart-drawer-title{font-weight:700;font-size:1rem}
+.cart-close{background:none;color:rgba(255,255,255,.7);font-size:1.1rem}
+.cart-items{flex:1;overflow-y:auto;padding:.75rem}
+.cart-item{display:grid;grid-template-columns:1fr auto;gap:.4rem;padding:.65rem 0;border-bottom:1px solid var(--gray-200)}
+.cart-item-name{font-size:.83rem;font-weight:600;color:var(--gray-900)}
+.cart-item-code{font-size:.75rem;color:var(--gray-500)}
+.cart-item-qty{font-size:.8rem;color:var(--gray-700)}
+.cart-item-price{font-weight:700;color:var(--red);font-size:.88rem;text-align:right}
+.cart-footer{padding:1rem 1.2rem;border-top:1px solid var(--gray-200)}
+.cart-total-row{display:flex;justify-content:space-between;margin-bottom:.35rem;font-size:.88rem}
+.cart-total-row.grand{font-weight:700;font-size:1rem;color:var(--gray-900);margin-top:.4rem}
+.btn-confirm{width:100%;margin-top:.8rem;padding:.65rem;background:var(--red);color:var(--white);
+  border-radius:5px;font-size:.9rem;font-weight:700;transition:.15s}
+.btn-confirm:hover{background:var(--red-dark)}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:var(--gray-900);
+  color:var(--white);padding:.7rem 1.2rem;border-radius:7px;font-size:.85rem;font-weight:500;
+  box-shadow:var(--shadow);transform:translateY(10px);opacity:0;transition:.3s;pointer-events:none;max-width:320px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-left:4px solid #27ae60}
+.toast.error{border-left:4px solid var(--red)}
+
+
+/* FICHA TÉCNICA */
+.ficha-tecnica{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.2rem;margin-bottom:0}
+.ficha-tecnica h3{font-size:.9rem;font-weight:700;color:var(--blue);margin-bottom:.75rem;
+  padding-bottom:.4rem;border-bottom:2px solid var(--blue-light)}
+.ficha-table{width:100%;border-collapse:collapse}
+.ficha-table tr:nth-child(even) td{background:var(--gray-100)}
+.ficha-table td{padding:.38rem .6rem;font-size:.82rem;vertical-align:top}
+.ficha-table td:first-child{color:var(--gray-500);font-weight:500;width:48%;white-space:nowrap}
+.ficha-table td:last-child{color:var(--gray-900);font-weight:600}
+
+/* STATE */
+.state-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:3rem 2rem;text-align:center;color:var(--gray-500)}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(0,0,0,.1);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:420px){.cart-drawer{width:100%}}
+</style>
+</head>
+<body style="visibility:hidden">
+<div id="pageLoader" style="position:fixed;inset:0;background:#1a1a2e;visibility:visible;display:flex;align-items:center;justify-content:center;z-index:99999"><div class="spinner" style="border-color:rgba(255,255,255,.25);border-top-color:#fff"></div></div>
+
+
+<!-- NAV -->
+<nav class="navbar">
+  <div class="brand" onclick="volverALista()"><img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="height:36px;object-fit:contain"></div>
+  <button class="btn-volver" onclick="volverALista()">← Volver</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName"></span>
+    <button class="nav-cart-btn" onclick="toggleCart()">
+      🛒 Carro <span class="cart-badge" id="cartBadge">0</span>
+    </button>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+  <div class="breadcrumb" id="breadcrumb">
+    <a onclick="volverALista()">Productos</a> / <span id="bcNombre">…</span>
+  </div>
+
+  <div id="fichaWrap">
+    <div class="state-box"><div class="spinner"></div><p style="margin-top:.75rem">Cargando ficha…</p></div>
+  </div>
+</div>
+
+<!-- MODAL IMAGEN GRANDE -->
+<div class="img-modal" id="imgModal" onclick="closeImgModal()">
+  <button class="img-modal-close" onclick="closeImgModal()">✕</button>
+  <img id="imgModalSrc" src="" alt="">
+</div>
+
+<!-- CARRO LATERAL -->
+<div class="cart-drawer" id="cartDrawer">
+  <div class="cart-drawer-header">
+    <span class="cart-drawer-title">🛒 Carro de Compras</span>
+    <button class="cart-close" onclick="toggleCart()">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"><div class="state-box"><p>El carro está vacío.</p></div></div>
+  <div class="cart-footer" id="cartFooter" style="display:none">
+    <div class="cart-total-row"><span>Neto:</span><span id="cartNeto">$0</span></div>
+    <div class="cart-total-row"><span>IVA 19%:</span><span id="cartIva">$0</span></div>
+    <div class="cart-total-row grand"><span>TOTAL:</span><span id="cartTotal">$0</span></div>
+    <button class="btn-confirm" onclick="showConfirmModal()">Confirmar Pedido</button>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR -->
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:none;align-items:center;justify-content:center;padding:1rem" id="confirmModal">
+  <div style="background:var(--white);border-radius:var(--radius);max-width:420px;width:100%;padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <span style="font-weight:700;font-size:1rem">Confirmar Pedido</span>
+      <button onclick="closeConfirm()" style="background:none;font-size:1.2rem;color:var(--gray-500)">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div><label style="font-size:.83rem;font-weight:600;display:block;margin-bottom:.3rem">Orden de Compra (opcional)</label>
+        <input type="text" id="oc_input" placeholder="Número OC" style="width:100%;padding:.6rem .8rem;border:1.5px solid var(--gray-200);border-radius:6px;font-size:.9rem;font-family:inherit"></div>
+      <div><label style="font-size:.83rem;font-weight:600;display:block;margin-bottom:.3rem">Observaciones</label>
+        <textarea id="obs_input" rows="3" style="width:100%;padding:.5rem .7rem;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:.88rem;resize:vertical"></textarea></div>
+      <button class="btn-confirm" onclick="confirmarPedido()">✅ Enviar Pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DESCUENTO -->
+<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:none;align-items:center;justify-content:center;padding:1rem" id="dsctoModal">
+  <div style="background:var(--white);border-radius:var(--radius);max-width:400px;width:100%;padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+    <div style="font-weight:700;font-size:1rem;color:var(--gray-900);margin-bottom:.75rem">💰 Descuento del Cliente</div>
+    <p style="font-size:.88rem;margin-bottom:1rem">Cliente: <strong id="dsctoClienteNombre"></strong><br>Descuento asignado: <strong id="dsctoClientePct"></strong></p>
+    <div style="margin-bottom:1rem">
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.3rem">¿Usar este descuento o ingresar otro?</label>
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <input type="number" id="dsctoInput" min="0" max="100" step="0.5"
+               style="width:80px;padding:.5rem;border:1.5px solid var(--gray-200);border-radius:6px;font-size:.95rem;text-align:center"> %
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <button onclick="confirmarDescuento()" style="flex:1;padding:.6rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700">✅ Confirmar y Agregar</button>
+      <button onclick="document.getElementById('dsctoModal').style.display='none'" style="flex:1;padding:.6rem;background:var(--gray-200);color:var(--gray-700);border-radius:6px;font-weight:700">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API      = '../api';
+const API_IMG  = 'https://www.autotec.cl/images/';
+let authToken  = localStorage.getItem('at_token') || '';
+let currentUser = null;
+let prodId     = null;
+let imagenes   = [];
+let imgActual  = 0;
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(location.search);
+  prodId = params.get('prod_id');
+
+  const loaderTimeout = setTimeout(showPageLoaderTimeout, 8000);
+  if (!authToken) { location.href = '../index.html'; return; }
+  const ok = await checkSession();
+  clearTimeout(loaderTimeout);
+  if (!ok) { location.href = '../index.html'; return; }
+  revealPage();
+
+  if (!prodId) {
+    document.getElementById('fichaWrap').innerHTML = '<div class="state-box"><p>Producto no especificado.</p></div>';
+    return;
+  }
+  await cargarFicha();
+  await loadCarroBadge();
+});
+
+// Restaurada desde bfcache (ej. botón "atrás" desde Análisis): refrescar contador
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && authToken) loadCarroBadge();
+});
+
+function revealPage() {
+  document.body.style.visibility = 'visible';
+  const loader = document.getElementById('pageLoader');
+  if (loader) loader.remove();
+}
+
+function showPageLoaderTimeout() {
+  const el = document.getElementById('pageLoader');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="text-align:center;color:#fff;padding:1rem">
+      <p style="margin-bottom:1rem;font-size:.9rem">Esto está tardando más de lo normal…</p>
+      <button onclick="location.reload()" style="padding:.6rem 1.5rem;background:#c0392b;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem">Reintentar</button>
+    </div>`;
+}
+
+async function checkSession() {
+  const res = await apiFetch(`${API}/auth.php?action=check`);
+  if (res.ok) { currentUser = res.data; document.getElementById('navUserName').textContent = res.data.nombre || ''; return true; }
+  authToken = ''; localStorage.removeItem('at_token'); return false;
+}
+
+// ============================================================
+// CARGAR FICHA COMPLETA
+// ============================================================
+async function cargarFicha() {
+  const [rProd, rImgs, rOem, rApps] = await Promise.all([
+    apiFetch(`${API}/ficha.php?action=detalle&prod_id=${encodeURIComponent(prodId)}`),
+    apiFetch(`${API}/ficha.php?action=imagenes&prod_id=${encodeURIComponent(prodId)}`),
+    apiFetch(`${API}/ficha.php?action=oem&prod_id=${encodeURIComponent(prodId)}`),
+    apiFetch(`${API}/ficha.php?action=aplicaciones&prod_id=${encodeURIComponent(prodId)}`),
+  ]);
+
+  if (!rProd.ok) {
+    document.getElementById('fichaWrap').innerHTML = `<div class="state-box"><p>${rProd.msg}</p></div>`;
+    return;
+  }
+
+  const p    = rProd.data;
+  imagenes   = rImgs.data || [];
+  const oems = rOem.data  || [];
+  const apps = rApps.data || [];
+
+
+  document.title = `${p.prod_nombre} — Autotec`;
+  document.getElementById('bcNombre').textContent = p.prod_nombre;
+
+  // Stock
+  const stockNum = parseInt(p.prod_stock);
+  const stockOk  = stockNum > 0;
+  window._fichaStockOk = stockOk;
+  let stockTxt;
+  if (!stockOk)              stockTxt = '<span class="stock-badge out">Sin stock</span>';
+  else if (stockNum <= 100)  stockTxt = `<span class="stock-badge ok">✔ Stock: ${stockNum}</span>`;
+  else                       stockTxt = '<span class="stock-badge ok">✔ Disponible</span>';
+
+  // Imagen principal — los productos de "correa" (por categoría) siempre
+  // usan esta imagen genérica, sin importar si tienen fotos propias o no.
+  const CLA_IDS_CORREA = ['10', '32', '33', '34'];
+  const esCorrea = CLA_IDS_CORREA.includes(String(p.cla_id));
+  const imgPrincipal = esCorrea
+    ? 'https://www.autotec.cl/autotecB/imagenes/productos/THUMBS/PK.jpg'
+    : (imagenes.length
+        ? (imagenes[0].img_grande ? `${API_IMG}${imagenes[0].img_grande}` : `${API_IMG}${imagenes[0].img_chica}`)
+        : 'https://www.autotec.cl/imagenes/productos/th_no_existe.jpg');
+
+  // Thumbnails
+  const thumbsHtml = imagenes.map((img, i) => `
+    <img src="${API_IMG}${img.img_chica}" class="img-thumb ${i===0?'active':''}"
+         onclick="cambiarImg(${i})" onerror="this.style.display='none'">`
+  ).join('');
+
+  // Ficha técnica por clasificación (cla_id) — igual que sitio web Autotec
+  function getFichaFields(p) {
+    const mm = v => v && String(v).trim() !== '' ? `${String(v).trim()} mm.` : null;
+    const v  = f => f && String(f).trim() !== '' ? String(f).trim() : null;
+    const cla = String(p.cla_id || '');
+
+    // Filtros de aceite: clasific 11,14,15,16,17,18,28
+    const aceiteClasifs = ['11','14','15','16','17','18','28'];
+    // Embalajes/químicos: clasific 19,20,21,22
+    const quimicoClasifs = ['19','20','21','22'];
+
+    if (cla === '1') return [  // Filtros aceite (ficha especial)
+      ['Diámetro Exterior',   v(p.diametro)],
+      ['Altura',              v(p.alto)],
+      ['Diám. int. Oring',    v(p.diametro_entrada)],
+      ['Diám. ext. Oring',    v(p.diametro_salida)],
+      ['Tamaño rosca',        v(p.medida)],
+      ['Ajuste válvula kpa',  v(p.caracteristica)],
+      ['Válvula antidrenaje', v(p.especificacion)],
+      ['Unidades x Caja',     v(p.unidades_caja)],
+    ];
+    if (cla === '2') return [  // Filtros aire
+      ['Largo',       v(p.largo)],
+      ['Ancho',       v(p.ancho)],
+      ['Altura',      v(p.alto)],
+      ['Observación', v(p.homologacion)],
+    ];
+    if (cla === '4') return [  // Tapones
+      ['Altura',              v(p.alto)],
+      ['Diámetro',            v(p.diametro)],
+      ['Tamaño rosca',        v(p.medida)],
+      ['Diám. ext. sello',    v(p.medida_interna)],
+      ['Diám. int. sello',    v(p.medida_externa)],
+      ['Hilo Inferior',       v(p.medida_hilo)],
+    ];
+    if (cla === '5') return [  // Filtros habitáculo
+      ['Largo',      v(p.largo)],
+      ['Ancho',      v(p.ancho)],
+      ['Alto',       v(p.alto)],
+      ['Nro. Piezas',v(p.num_pieza)],
+      ['Otro',       v(p.otros)],
+    ];
+    if (cla === '6') return [  // Retenes
+      ['Altura',           v(p.alto)],
+      ['Diámetro Exterior',v(p.medida_externa)],
+      ['Diámetro int',     v(p.medida_interna)],
+      ['Medida sello',     v(p.medida_hilo)],
+    ];
+    if (cla === '7') return [  // Retenes 2
+      ['Altura',          v(p.alto)],
+      ['Diámetro Exterior',v(p.medida_externa)],
+      ['Diámetro interior',v(p.medida_interna)],
+      ['Medida sello',    v(p.medida)],
+    ];
+    if (cla === '8') return [  // Pistones
+      ['Origen',    v(p.origen)],
+      ['Milímetros',v(p.otros)],
+      ['Cantidad',  v(p.num_pieza)],
+    ];
+    if (cla === '9') return [  // Mangueras
+      ['Conexión',    v(p.medida_interna)],
+      ['Observación', v(p.medida_externa)],
+    ];
+    if (cla === '10') return [ // Correas
+      ['Medida Interna', v(p.medida_interna)],
+      ['Medida Externa',  v(p.medida_externa)],
+      ['Lw',             v(p.lw)],
+      ['Tipo',           v(p.tipo2)],
+      ['Tipo Medida',    v(p.med_tipo2)],
+    ];
+    if (cla === '12') return [ // Bujías
+      ['Tipo Bujía',          v(p.tipo2)],
+      ['Aislación Proy.',     p.aislacion ? `${p.aislacion} mm.` : null],
+      ['Tipo Asiento',        v(p.tipo_asiento)],
+      ['Diám. Elec. Central', p.diametro ? `${p.diametro} mm.` : null],
+      ['Medida Hex.',         p.medida ? `${p.medida} mm.` : null],
+      ['Electrodo Central',   v(p.electrodo_central)],
+      ['Hilo',                p.hilo ? `${p.hilo} mm.` : null],
+      ['Elect. de Tierra',    v(p.electrodo_tierra)],
+      ['Largo Hilo',          p.largo ? `${p.largo} mm.` : null],
+    ];
+    if (cla === '25') return [ // Lámparas
+      ['Tipo',        v(p.tipo2)],
+      ['Base',        v(p.caracteristica)],
+      ['Voltaje',     v(p.voltaje)],
+      ['Watts',       v(p.potencia)],
+      ['Observación', v(p.especificacion)],
+    ];
+    if (cla === '26') return [ // Filtros 26
+      ['Altura',           v(p.alto)],
+      ['Diámetro',         v(p.diametro)],
+      ['Diám. int. Oring', v(p.diametro_entrada)],
+      ['Diám. ext. Oring', v(p.diametro_salida)],
+      ['Tamaño rosca',     v(p.medida)],
+      ['Hilo Inferior',    v(p.medida_hilo)],
+    ];
+    if (cla === '27') return [ // Especiales
+      ['Porcentaje', v(p.especificacion)],
+      ['Cantidad',   v(p.homologacion)],
+      ['Envase',     v(p.unidades_caja)],
+    ];
+    if (cla === '29') return [ // Baterías
+      ['Origen',      v(p.origen)],   ['Largo',      v(p.largo)],
+      ['Familia',     v(p.familia)],  ['Ancho',      v(p.ancho)],
+      ['Modelo',      v(p.modelo)],   ['Alto',       v(p.alto)],
+      ['A/H',         v(p.a_h)],      ['Tipo Borne', v(p.tipo_borne)],
+      ['CCA',         v(p.cca)],      ['Positivo',   v(p.pos_borne)],
+      ['Cap. Reserva',v(p.cap_reserva)],
+    ];
+    if (aceiteClasifs.includes(cla)) return [ // Aceites y lubricantes
+      ['Tipo',         v(p.tipo_aceite)],
+      ['Especificación',v(p.especificacion)],
+      ['Homologación', v(p.homologacion)],
+      ['Unid. x Caja', v(p.unidades_caja)],
+      ['Formato',      v(p.formato)],
+      ['Color',        v(p.color)],
+    ];
+    if (quimicoClasifs.includes(cla)) return [ // Químicos
+      ['Nombre',       v(p.homologacion)],
+      ['ML',           v(p.formato)],
+      ['GR',           v(p.especificacion)],
+      ['Unid. x Caja', v(p.unidades_caja)],
+      ['Características',v(p.caracteristica)],
+    ];
+    if (cla === '23') return [ // Universal
+      ['Aplicación',  v(p.aplicacion)],
+      ['Adaptadores', v(p.adaptadores)],
+    ];
+    // Por defecto: mostrar todos los campos que tengan valor
+    return [
+      ['Medida Interna',  v(p.medida_interna)],  ['Medida Externa',  v(p.medida_externa)],
+      ['Diám. Entrada',   v(p.diametro_entrada)], ['Diám. Salida',    v(p.diametro_salida)],
+      ['Medida Hilo',     v(p.medida_hilo)],      ['Diámetro',        v(p.diametro)],
+      ['Alto',            v(p.alto)],             ['Ancho',           v(p.ancho)],
+      ['Largo',           v(p.largo)],            ['Hilo',            v(p.hilo)],
+      ['Tipo Asiento',    v(p.tipo_asiento)],     ['Especificación',  v(p.especificacion)],
+      ['Homologación',    v(p.homologacion)],     ['Tipo Aceite',     v(p.tipo_aceite)],
+      ['Voltaje',         v(p.voltaje)],          ['Potencia',        v(p.potencia)],
+      ['Norma',           v(p.norma)],            ['Capacidad',       v(p.capacidad)],
+      ['Onza',            v(p.onza)],             ['Origen',          v(p.origen)],
+      ['Formato',         v(p.formato)],          ['Color',           v(p.color)],
+      ['Aplicación',      v(p.aplicacion)],       ['Unidades x Caja', v(p.unidades_caja)],
+    ];
+  }
+
+  const fichaFields = getFichaFields(p);
+  const fichaRows = fichaFields
+    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '' && String(v).trim() !== '0')
+    .map(([k, v]) => `<tr><td>${esc(k)}:</td><td>${esc(String(v))}</td></tr>`)
+    .join('');
+  const fichaHtml = fichaRows
+    ? `<div class="ficha-tecnica">
+        <h3>Ficha Técnica</h3>
+        <table class="ficha-table"><tbody>${fichaRows}</tbody></table>
+       </div>`
+    : '';
+
+  // OEM table
+  const oemHtml = oems.length
+    ? `<table class="oem-table">
+        <thead><tr><th>Cód. Equivalente</th><th>Marca</th></tr></thead>
+        <tbody>${oems.map(o=>`<tr><td>${esc(o.cod_equivalente)}</td><td>${esc(o.marca_competencia||'—')}</td></tr>`).join('')}</tbody>
+       </table>`
+    : '<p style="color:var(--gray-500);font-size:.85rem">Sin códigos OEM registrados.</p>';
+
+  // Aplicaciones table
+  const appsHtml = apps.length
+    ? `<table class="app-table">
+        <thead><tr><th>Marca</th><th>Modelo / Cil. / Combust.</th><th>Año Inicio</th><th>Año Término</th><th>Motor</th></tr></thead>
+        <tbody>${apps.map(a=>`
+          <tr>
+            <td>${esc(a.marca_vehiculo||'')}</td>
+            <td>${esc(a.mod_descripcion||'')} ${esc(a.cilindrada||'')} ${esc(a.motor_completo||'')}</td>
+            <td>${esc(a.agno_inicio||'')}</td>
+            <td>${esc(a.agno_fin||'')}</td>
+            <td>${esc(a.motor_completo||'')}</td>
+          </tr>`).join('')}
+        </tbody>
+       </table>`
+    : '<p style="color:var(--gray-500);font-size:.85rem">Sin aplicaciones registradas.</p>';
+
+
+
+  document.getElementById('fichaWrap').innerHTML = `
+    <div class="ficha-grid">
+
+      <!-- GALERÍA -->
+      <div class="galeria">
+        <div class="img-principal-wrap" onclick="abrirImgModal(${imgActual})">
+          <img id="imgPrincipal" src="${imgPrincipal}" class="img-principal"
+               onerror="this.onerror=null;this.src='https://www.autotec.cl/imagenes/productos/th_no_existe.jpg'" alt="${esc(p.prod_nombre)}">
+        </div>
+        <div class="img-thumbs">${thumbsHtml}</div>
+      </div>
+
+      <!-- INFO -->
+      <div class="ficha-info">
+
+        <!-- HEADER -->
+        <div class="prod-header">
+          <div class="prod-categoria">${esc(p.cla_nombre||'')}</div>
+          <div class="prod-nombre">${esc(p.prod_nombre)}</div>
+          <div class="prod-codigo-row">
+            <span><strong>ID:</strong> ${esc(p.prod_id)}</span>
+            <span><strong>Cód. Equiv.:</strong> ${esc(p.codigo_equivalente1||'—')}</span>
+          </div>
+          ${p.marca_img ? `<img src="${API_IMG}${p.marca_img}" class="prod-marca-img" onerror="this.style.display='none'">` : ''}
+
+          ${fichaHtml}
+
+          <div class="precio-box">
+            <div>
+              <div class="precio-label">Precio Neto</div>
+              <div class="precio-valor">${formatoPrecio(p.prod_precio)}</div>
+            </div>
+            ${stockTxt}
+          </div>
+
+          <div class="agregar-row">
+            <div class="qty-wrap">
+              <button class="qty-btn" onclick="cambiarQty(-1)">−</button>
+              <input type="number" class="qty-input" id="qtyFicha"
+                value="${Math.max(1, parseInt(p.multiplo||1))}"
+                min="${Math.max(1, parseInt(p.multiplo||1))}"
+                step="${Math.max(1, parseInt(p.multiplo||1))}"
+                max="9999">
+              <button class="qty-btn" onclick="cambiarQty(1)">+</button>
+            </div>
+            <button class="btn-agregar-ficha" onclick="agregarAlCarro('${p.prod_id}',${parseInt(p.prod_precio||0)})" style="${!stockOk?'opacity:.6':''}">
+              🛒 Agregar al Carro
+            </button>
+          </div>
+          ${parseInt(p.multiplo||0) > 1 ? `<div class="nota-stock" style="color:var(--blue)">Se vende en múltiplos de ${p.multiplo} unidades</div>` : ''}
+
+        </div>
+
+        <!-- TABS -->
+        <div class="tabs-wrap">
+          <div class="tabs-header">
+            <button class="tab-btn active" onclick="activarTab(this,'tabOem')">Códigos Equivalentes</button>
+            <button class="tab-btn" onclick="activarTab(this,'tabApps')">Aplicaciones</button>
+          </div>
+          <div class="tab-content active" id="tabOem">${oemHtml}</div>
+          <div class="tab-content" id="tabApps">${appsHtml}</div>
+        </div>
+
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// GALERÍA
+// ============================================================
+function cambiarImg(idx) {
+  imgActual = idx;
+  const img = imagenes[idx];
+  if (!img) return;
+  // Usar img_grande para la imagen principal si existe
+  const src = img.img_grande ? `${API_IMG}${img.img_grande}` : `${API_IMG}${img.img_chica}`;
+  document.getElementById('imgPrincipal').src = src;
+  document.querySelectorAll('.img-thumb').forEach((t,i) => t.classList.toggle('active', i===idx));
+}
+
+function abrirImgModal(idx) {
+  const img = imagenes[idx];
+  if (!img) return;
+  // Usar img_grande si existe, sino img_chica
+  const src = img.img_grande ? `${API_IMG}${img.img_grande}` : `${API_IMG}${img.img_chica}`;
+  document.getElementById('imgModalSrc').src = src;
+  document.getElementById('imgModal').classList.add('open');
+}
+
+function closeImgModal() { document.getElementById('imgModal').classList.remove('open'); }
+
+// ============================================================
+// TABS
+// ============================================================
+function activarTab(btn, tabId) {
+  btn.closest('.tabs-wrap').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.closest('.tabs-wrap').querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
+// ============================================================
+// CANTIDAD
+// ============================================================
+function cambiarQty(delta) {
+  const inp  = document.getElementById('qtyFicha');
+  if (!inp) return;
+  const step = parseInt(inp.step || 1) || 1;
+  const min  = parseInt(inp.min  || 1) || 1;
+  inp.value  = Math.max(min, parseInt(inp.value||min) + (delta * step));
+}
+
+// ============================================================
+// CARRO
+// ============================================================
+async function agregarAlCarro(prodId, precio) {
+  if (window._fichaStockOk === false) {
+    alert('El producto seleccionado no se agregará en el carro de compras debido a que se encuentra con stock 0');
+    return;
+  }
+
+  // Verificar cliente seleccionado
+  if (!sessionStorage.getItem('cli_activo')) {
+    showToast('Debe seleccionar un cliente antes de agregar productos', 'error');
+    setTimeout(() => location.href = '../pages/clientes.html', 1500);
+    return;
+  }
+
+  const cli          = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+  const pediIdSesion = parseInt(sessionStorage.getItem('carro_pedi_id') || '0');
+  const dscto        = parseFloat(sessionStorage.getItem('carro_dscto') || '0');
+
+  // Primer producto: preguntar descuento
+  if (!pediIdSesion) {
+    const dsctoSug = parseFloat(cli.descuento || 0);
+    document.getElementById('dsctoClienteNombre').textContent = cli.nombre || '';
+    document.getElementById('dsctoClientePct').textContent    = dsctoSug > 0 ? `${dsctoSug}%` : 'sin descuento';
+    document.getElementById('dsctoInput').value               = dsctoSug;
+    document.getElementById('dsctoModal').style.display = 'flex';
+    window._pendingAdd = { prodId, precio };
+    return;
+  }
+
+  await _doAgregarAlCarro(prodId);
+}
+
+async function _doAgregarAlCarro(prodId) {
+  const cli          = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+  const pediIdSesion = parseInt(sessionStorage.getItem('carro_pedi_id') || '0');
+  const dscto        = parseFloat(sessionStorage.getItem('carro_dscto') || '0');
+  const cant         = parseInt(document.getElementById('qtyFicha')?.value || 1);
+
+  const res = await apiFetch(`${API}/carro.php?action=agregar`, 'POST', {
+    prod_id: prodId, cantidad: cant, dscto, forzar: false,
+    cli_rut: cli.rut || '', cli_sec: cli.sec || '',
+    pedi_id_sesion: pediIdSesion
+  });
+
+  if (!res.ok) { showToast(res.msg || 'Error al agregar', 'error'); return; }
+
+  if (res.data?.ya_existe && !res.data?.forzar) {
+    if (confirm(`Este producto ya está en el carro con ${res.data.cantidad_actual} unidad(es). ¿Reemplazar con ${cant}?`)) {
+      await apiFetch(`${API}/carro.php?action=agregar`, 'POST', {
+        prod_id: prodId, cantidad: cant, dscto, forzar: true,
+        cli_rut: cli.rut || '', cli_sec: cli.sec || '',
+        pedi_id_sesion: pediIdSesion
+      });
+    }
+  }
+
+  if (res.data?.pedi_id) sessionStorage.setItem('carro_pedi_id', res.data.pedi_id);
+  showToast('Producto agregado al carro ✓', 'success');
+  loadCarroBadge();
+}
+
+function confirmarDescuento() {
+  const val = parseFloat(document.getElementById('dsctoInput').value || 0);
+  sessionStorage.setItem('carro_dscto', val);
+  document.getElementById('dsctoModal').style.display = 'none';
+  if (window._pendingAdd) {
+    _doAgregarAlCarro(window._pendingAdd.prodId);
+    window._pendingAdd = null;
+  }
+}
+
+async function loadCarroBadge() {
+  const res = await apiFetch(`${API}/carro.php?action=ver`);
+  if (!res.ok) return;
+  document.getElementById('cartBadge').textContent = res.data.detalle?.length || 0;
+}
+
+async function toggleCart() {
+  const d = document.getElementById('cartDrawer');
+  d.classList.toggle('open');
+  if (d.classList.contains('open')) loadCartDrawer();
+}
+
+async function loadCartDrawer() {
+  const res = await apiFetch(`${API}/carro.php?action=ver`);
+  if (!res.ok) return;
+  const { cabecera, detalle } = res.data;
+  const itemsEl  = document.getElementById('cartItems');
+  const footerEl = document.getElementById('cartFooter');
+  document.getElementById('cartBadge').textContent = detalle.length;
+  if (!detalle.length) {
+    itemsEl.innerHTML = '<div class="state-box"><p>El carro está vacío.</p></div>';
+    footerEl.style.display = 'none'; return;
+  }
+  itemsEl.innerHTML = detalle.map(d => `
+    <div class="cart-item">
+      <div>
+        <div class="cart-item-name">${esc(d.prod_nombre)}</div>
+        <div class="cart-item-code">${esc(d.prod_id)}</div>
+        <div class="cart-item-qty">Cant: ${d.ped_prod_cantidad} × ${formatoPrecio(d.ped_prod_neto)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="cart-item-price">${formatoPrecio(d.ped_prod_neto * d.ped_prod_cantidad)}</div>
+        <button onclick="eliminarDelCarro(${d.id})" style="background:none;color:var(--gray-500);font-size:.85rem;cursor:pointer">🗑</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('cartNeto').textContent  = formatoPrecio(cabecera.pedi_total_neto);
+  document.getElementById('cartIva').textContent   = formatoPrecio(cabecera.pedi_total_iva);
+  document.getElementById('cartTotal').textContent = formatoPrecio(cabecera.pedi_total);
+  footerEl.style.display = 'block';
+}
+
+async function eliminarDelCarro(itemId) {
+  await apiFetch(`${API}/carro.php?action=actualizar`, 'POST', { item_id: itemId, cantidad: 0 });
+  loadCartDrawer();
+}
+
+function showConfirmModal() { document.getElementById('confirmModal').style.display = 'flex'; }
+function closeConfirm()     { document.getElementById('confirmModal').style.display = 'none'; }
+
+async function confirmarPedido() {
+  const res = await apiFetch(`${API}/carro.php?action=confirmar`, 'POST', {
+    observaciones: document.getElementById('obs_input').value,
+    orden_compra:  document.getElementById('oc_input').value,
+  });
+  closeConfirm();
+  if (res.ok) { showToast(res.msg, 'success'); document.getElementById('cartDrawer').classList.remove('open'); loadCarroBadge(); }
+  else showToast(res.msg || 'Error', 'error');
+}
+
+// ============================================================
+// NAVEGACIÓN
+// ============================================================
+function volverALista() { history.back(); }
+function irAFicha(pid)  { location.href = `ficha.html?prod_id=${encodeURIComponent(pid)}`; }
+
+// ============================================================
+// AUTH
+// ============================================================
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  localStorage.removeItem('at_token'); sessionStorage.clear(); location.href = '../index.html';
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+async function apiFetch(url, method = 'GET', body = null) {
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Token': authToken } };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    return await r.json();
+  } catch(e) { return { ok: false, msg: 'Error de red' }; }
+}
+
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatoPrecio(n) { return '$' + Number(n||0).toLocaleString('es-CL'); }
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

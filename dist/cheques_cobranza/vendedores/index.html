@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autotec — Repuestos y Accesorios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== VARIABLES ===== */
+:root {
+  --red:       #c0392b;
+  --red-dark:  #a93226;
+  --red-light: #fadbd8;
+  --blue:      #1a6faf;
+  --blue-light:#eaf4fb;
+  --gray-900:  #1a1a2e;
+  --gray-700:  #444;
+  --gray-500:  #888;
+  --gray-200:  #e8e8e8;
+  --gray-100:  #f5f5f5;
+  --white:     #ffffff;
+  --shadow:    0 2px 12px rgba(0,0,0,.10);
+  --radius:    8px;
+  --nav-h:     60px;
+}
+
+/* ===== RESET ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; color: var(--gray-700); background: var(--gray-100); }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; border: none; }
+input, select { font-family: inherit; }
+
+/* ===== TOP NAV ===== */
+.navbar {
+  position: sticky; top: 0; z-index: 1000;
+  height: var(--nav-h);
+  background: var(--white);
+  display: flex; align-items: center;
+  padding: 0 1.5rem; gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.10);
+  border-bottom: 2px solid var(--red);
+}
+.navbar .brand{cursor:pointer;display:flex;align-items:center}
+.navbar .brand span { color: var(--red); }
+.nav-links {
+  display: flex; gap: .25rem; flex: 1;
+}
+.nav-links a {
+  color: var(--gray-700); font-size: .88rem; font-weight: 500;
+  padding: .4rem .75rem; border-radius: 5px;
+  transition: background .15s;
+}
+.nav-links a:hover, .nav-links a.active { background: var(--blue-light); color: var(--blue); }
+.nav-links a.nav-link-disabled {
+  color: var(--gray-500, #999); opacity: .55; cursor: not-allowed;
+}
+.nav-links a.nav-link-disabled:hover { background: transparent; color: var(--gray-500, #999); }
+.nav-right { display: flex; align-items: center; gap: .75rem; margin-left: auto; }
+.nav-cart-btn {
+  background: var(--red); color: var(--white);
+  padding: .4rem .9rem; border-radius: 5px; font-size: .85rem; font-weight: 600;
+  display: flex; align-items: center; gap: .4rem;
+  transition: background .15s;
+}
+.nav-cart-btn:hover { background: var(--red-dark); }
+.cart-badge {
+  background: var(--white); color: var(--red);
+  border-radius: 50%; width: 18px; height: 18px;
+  font-size: .7rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-user { color: var(--gray-700); font-size: .85rem; }
+.btn-logout { background: none; color: var(--gray-500); font-size: .8rem; padding: .3rem .6rem; border-radius: 4px; transition: background .15s; }
+.btn-logout:hover { background: var(--gray-100); color: var(--gray-900); }
+.hamburger { display: none; background: none; padding: .4rem; }
+.hamburger span { display: block; width: 22px; height: 2px; background: var(--gray-700); margin: 4px 0; transition: .3s; }
+
+/* ===== MOBILE NAV ===== */
+@media (max-width: 768px) {
+  .nav-links { display: none; position: fixed; top: var(--nav-h); left: 0; right: 0;
+    background: var(--gray-900); flex-direction: column; padding: 1rem;
+    border-top: 1px solid rgba(255,255,255,.1); gap: .25rem; z-index: 999;
+  }
+  .nav-links.open { display: flex; }
+  .hamburger { display: block; }
+  .nav-user { display: none; }
+}
+
+/* ===== LAYOUT ===== */
+.page-wrap { max-width: 1280px; margin: 0 auto; padding: 1.5rem 1rem; display: grid;
+  grid-template-columns: 300px 1fr; gap: 1.5rem; align-items: start; }
+@media (max-width: 900px) { .page-wrap { grid-template-columns: 1fr; } }
+
+/* ===== SIDEBAR BÚSQUEDA ===== */
+.sidebar { position: sticky; top: calc(var(--nav-h) + 1rem); }
+.search-panel { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.search-section { border-bottom: 1px solid var(--gray-200); }
+.search-section-header {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .85rem 1rem; background: var(--white);
+  font-weight: 600; font-size: .9rem; cursor: pointer;
+  user-select: none;
+}
+.search-section-header .icon { color: var(--red); font-size: 1rem; }
+.search-section-body { padding: .75rem 1rem 1rem; }
+.search-section-body.collapsed { display: none; }
+
+.form-group { margin-bottom: .6rem; }
+.form-group select, .form-group input {
+  width: 100%; padding: .5rem .7rem; border: 1px solid var(--gray-200);
+  border-radius: 5px; font-size: .85rem; background: var(--white);
+  transition: border .15s;
+}
+.form-group select:focus, .form-group input:focus {
+  outline: none; border-color: var(--blue);
+}
+.form-group select:disabled { background: var(--gray-100); color: var(--gray-500); }
+
+.btn-buscar {
+  width: 100%; padding: .55rem; background: var(--blue); color: var(--white);
+  border-radius: 5px; font-size: .88rem; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: .4rem;
+  transition: background .15s; margin-top: .5rem;
+}
+.btn-buscar:hover { background: #155a8f; }
+
+.search-code-wrap { display: flex; gap: .4rem; }
+.search-code-wrap input { flex: 1; }
+.search-code-wrap button {
+  background: var(--blue); color: var(--white);
+  padding: 0 .9rem; border-radius: 5px; font-size: 1rem;
+  transition: background .15s;
+}
+.search-code-wrap button:hover { background: #155a8f; }
+
+/* ===== MAIN CONTENT ===== */
+.main-content {}
+
+.results-header {
+  background: var(--white); border-radius: var(--radius);
+  padding: .85rem 1.1rem; margin-bottom: 1rem;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: var(--shadow); flex-wrap: wrap; gap: .5rem;
+}
+.results-title { font-size: 1rem; font-weight: 600; color: var(--gray-900); }
+.results-count { font-size: .83rem; color: var(--gray-500); }
+
+/* ===== PRODUCT LIST ===== */
+.product-list { display: flex; flex-direction: column; gap: .75rem; }
+
+.product-card {
+  background: var(--white); border-radius: var(--radius);
+  box-shadow: var(--shadow); display: grid;
+  grid-template-columns: 144px 1fr auto auto;
+  gap: .75rem 1rem; align-items: center;
+  padding: .85rem 1rem;
+  transition: box-shadow .15s;
+}
+.product-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.13); }
+
+.prod-img {
+  width: 144px; height: 144px; object-fit: contain;
+  border-radius: 5px; border: 1px solid var(--gray-200);
+  padding: 4px; background: var(--gray-100);
+}
+.prod-img-placeholder {
+  width: 144px; height: 144px; border-radius: 5px;
+  background: var(--gray-100); border: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gray-500); font-size: 2.5rem;
+}
+
+.prod-info {}
+.prod-code { font-size: .8rem; color: var(--blue); font-weight: 600; cursor: pointer; }
+.prod-code:hover { text-decoration: underline; }
+.prod-name { font-size: .92rem; font-weight: 600; color: var(--gray-900); margin: .2rem 0; }
+.prod-oem { font-size: .78rem; color: var(--gray-500); }
+.prod-app { margin-top: .3rem; }
+.prod-app-label { font-size: .75rem; font-weight: 600; color: var(--red); }
+.prod-app-text { font-size: .78rem; color: var(--gray-700); }
+.prod-app-more { font-size: .75rem; color: var(--blue); cursor: pointer; font-weight: 500; }
+.prod-app-more:hover { text-decoration: underline; }
+
+.prod-price-col { text-align: right; min-width: 110px; }
+.prod-price { font-size: 1.05rem; font-weight: 700; color: var(--red); }
+.prod-price-label { font-size: .72rem; color: var(--gray-500); }
+.prod-stock { font-size: .78rem; margin-top: .2rem; }
+.prod-stock.ok { color: #27ae60; font-weight: 500; }
+.prod-stock.out { color: var(--red); }
+
+.prod-actions { display: flex; flex-direction: column; gap: .4rem; align-items: flex-end; min-width: 110px; }
+.qty-input {
+  width: 70px; padding: .38rem .5rem; border: 1px solid var(--gray-200);
+  border-radius: 5px; text-align: center; font-size: .88rem;
+}
+.btn-agregar {
+  background: var(--blue); color: var(--white);
+  padding: .42rem .9rem; border-radius: 5px;
+  font-size: .82rem; font-weight: 600; white-space: nowrap;
+  transition: background .15s;
+}
+.btn-agregar:hover { background: #155a8f; }
+.btn-agregar:disabled { background: var(--gray-200); color: var(--gray-500); cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .product-card { grid-template-columns: 120px 1fr; }
+  .prod-price-col, .prod-actions { grid-column: 2; }
+  .prod-actions { flex-direction: row; }
+}
+
+/* ===== PAGINATION ===== */
+.pagination { display: flex; gap: .4rem; justify-content: center; margin-top: 1.2rem; flex-wrap: wrap; }
+.page-btn {
+  padding: .4rem .8rem; border-radius: 5px; font-size: .85rem;
+  background: var(--white); border: 1px solid var(--gray-200);
+  color: var(--gray-700); transition: .15s;
+}
+.page-btn:hover { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
+.page-btn.active { background: var(--blue); color: var(--white); border-color: var(--blue); }
+
+/* ===== EMPTY / LOADING ===== */
+.state-box {
+  background: var(--white); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 3rem 2rem;
+  text-align: center; color: var(--gray-500);
+}
+.state-box .state-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+.state-box p { font-size: .9rem; }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  z-index: 2000; display: none; align-items: center; justify-content: center; padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--white); border-radius: var(--radius);
+  max-width: 520px; width: 100%; padding: 1.5rem;
+  box-shadow: 0 8px 40px rgba(0,0,0,.25); max-height: 90vh; overflow-y: auto;
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.modal-title { font-size: 1rem; font-weight: 700; color: var(--gray-900); }
+.modal-close { background: none; font-size: 1.2rem; color: var(--gray-500); }
+
+/* ===== CARRO LATERAL ===== */
+.cart-drawer {
+  position: fixed; right: 0; top: 0; bottom: 0; width: 380px;
+  background: var(--white); box-shadow: -4px 0 24px rgba(0,0,0,.15);
+  z-index: 1500; transform: translateX(100%); transition: transform .3s;
+  display: flex; flex-direction: column;
+}
+.cart-drawer.open { transform: translateX(0); }
+.cart-drawer-header {
+  padding: 1rem 1.2rem; background: var(--gray-900); color: var(--white);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.cart-drawer-title { font-weight: 700; font-size: 1rem; }
+.cart-close { background: none; color: rgba(255,255,255,.7); font-size: 1.1rem; }
+.cart-items { flex: 1; overflow-y: auto; padding: .75rem; }
+.cart-item {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: .4rem; padding: .65rem 0; border-bottom: 1px solid var(--gray-200);
+}
+.cart-item-name { font-size: .83rem; font-weight: 600; color: var(--gray-900); }
+.cart-item-code { font-size: .75rem; color: var(--gray-500); }
+.cart-item-qty { font-size: .8rem; color: var(--gray-700); }
+.cart-item-price { font-weight: 700; color: var(--red); font-size: .88rem; text-align: right; }
+.cart-item-del { background: none; color: var(--gray-500); font-size: .85rem; cursor: pointer; }
+.cart-footer { padding: 1rem 1.2rem; border-top: 1px solid var(--gray-200); }
+.cart-total-row { display: flex; justify-content: space-between; margin-bottom: .35rem; font-size: .88rem; }
+.cart-total-row.grand { font-weight: 700; font-size: 1rem; color: var(--gray-900); margin-top: .4rem; }
+.btn-confirm {
+  width: 100%; margin-top: .8rem; padding: .65rem;
+  background: var(--red); color: var(--white); border-radius: 5px;
+  font-size: .9rem; font-weight: 700; transition: background .15s;
+}
+.btn-confirm:hover { background: var(--red-dark); }
+@media (max-width: 420px) { .cart-drawer { width: 100%; } }
+
+/* ===== LOGIN PAGE ===== */
+.login-wrap {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--gray-900) 0%, #2c3e50 100%);
+}
+.login-card {
+  background: var(--white); border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.3);
+  padding: 2.5rem; width: 100%; max-width: 380px; margin: 1rem;
+}
+.login-logo { text-align: center; margin-bottom: 1.5rem; }
+.login-logo h1 { font-size: 1.8rem; font-weight: 800; color: var(--gray-900); }
+.login-logo h1 span { color: var(--red); }
+.login-logo p { color: var(--gray-500); font-size: .85rem; margin-top: .25rem; }
+.login-field { margin-bottom: 1rem; }
+.login-field label { display: block; font-size: .83rem; font-weight: 600; margin-bottom: .3rem; color: var(--gray-700); }
+.login-field input {
+  width: 100%; padding: .6rem .8rem; border: 1.5px solid var(--gray-200);
+  border-radius: 6px; font-size: .9rem; transition: border .15s;
+}
+.login-field input:focus { outline: none; border-color: var(--blue); }
+.btn-login {
+  width: 100%; padding: .65rem; background: var(--red); color: var(--white);
+  border-radius: 6px; font-size: .95rem; font-weight: 700; margin-top: .5rem;
+  transition: background .15s;
+}
+.btn-login:hover { background: var(--red-dark); }
+.login-error { color: var(--red); font-size: .82rem; margin-top: .5rem; text-align: center; display: none; }
+
+/* ===== TOAST ===== */
+.toast {
+  position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
+  background: var(--gray-900); color: var(--white);
+  padding: .7rem 1.2rem; border-radius: 7px;
+  font-size: .85rem; font-weight: 500;
+  box-shadow: var(--shadow);
+  transform: translateY(10px); opacity: 0;
+  transition: .3s; pointer-events: none; max-width: 320px;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-left: 4px solid #27ae60; }
+.toast.error   { border-left: 4px solid var(--red); }
+
+/* ===== BARRA CLIENTE ACTIVO ===== */
+.cliente-bar {
+  background: linear-gradient(90deg, #1a6faf 0%, #155a8f 100%);
+  color: var(--white);
+  padding: .45rem 1.5rem;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .83rem;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.cliente-bar.visible { display: flex; }
+.cliente-bar-info { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.cliente-bar-label { font-weight: 400; opacity: .8; }
+.cliente-bar-nombre { font-weight: 700; font-size: .9rem; }
+.cliente-bar-rut { opacity: .85; }
+.cliente-bar-dscto { background: rgba(255,255,255,.2); padding: .15rem .5rem; border-radius: 10px; font-weight: 600; }
+.cliente-bar-cambiar {
+  background: rgba(255,255,255,.15); color: var(--white);
+  border: 1px solid rgba(255,255,255,.3); padding: .25rem .75rem;
+  border-radius: 4px; font-size: .78rem; cursor: pointer; transition: .15s;
+}
+.cliente-bar-cambiar:hover { background: rgba(255,255,255,.28); }
+
+/* ===== SPINNER ===== */
+.spinner { display: inline-block; width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,.3); border-top-color: var(--white);
+  border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner-lg { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,.25);
+  border-top-color: var(--white); border-radius: 50%; animation: spin .7s linear infinite; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================
+     AUTH CHECK (evita el flash de login mientras se verifica sesión)
+     ====================================================== -->
+<div id="authCheck" class="login-wrap">
+  <div class="spinner-lg"></div>
+</div>
+
+<!-- ======================================================
+     LOGIN PAGE
+     ====================================================== -->
+<div id="loginPage" class="login-wrap" style="display:none">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="max-width:200px;height:auto;margin-bottom:.5rem">
+    </div>
+    <div class="login-field">
+      <label>Usuario</label>
+      <input type="text" id="loginUser" placeholder="Ingrese su usuario" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" placeholder="Ingrese su contraseña" autocomplete="current-password">
+    </div>
+    <button class="btn-login" onclick="doLogin()">Ingresar</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ======================================================
+     MAIN APP
+     ====================================================== -->
+<div id="appPage" style="display:none">
+
+<!-- NAV -->
+<nav class="navbar">
+  <div style="display:flex;flex-direction:column;align-items:flex-start;line-height:1">
+    <img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="height:32px;object-fit:contain">
+    <span id="navUserNameSub" style="font-size:.7rem;color:var(--gray-500);margin-top:2px"></span>
+  </div>
+  <button class="hamburger" onclick="toggleNav()">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="nav-links" id="navLinks">
+    <a href="/vendedores/index.html" class="active">Productos</a>
+    <a href="./pages/pedidos.html" target="_self">Mis Pedidos</a>
+    <a href="./pages/clientes.html" target="_self">Clientes</a>
+    <a href="./pages/cobranza.html">Cobranza</a>
+    <a href="./pages/externo.html?tipo=analisis" id="navAnalisis" onclick="return irAnalisis(event)">Análisis</a>
+    <a href="./pages/externo.html?tipo=sugerido">Pedido Sugerido</a>
+    <a href="./pages/externo.html?tipo=seguimiento">Seguimiento</a>
+    <a href="./pages/externo.html?tipo=devoluciones">Devoluciones</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName" style="display:none"></span>
+    <a href="./pages/carro.html" class="nav-cart-btn">
+      🛒 Carro <span class="cart-badge" id="cartBadge">0</span>
+    </a>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<!-- BARRA CLIENTE ACTIVO -->
+<div class="cliente-bar" id="clienteBar">
+  <div class="cliente-bar-info">
+    <span class="cliente-bar-label">Cliente:</span>
+    <span class="cliente-bar-nombre" id="barNombre"></span>
+    <span class="cliente-bar-rut" id="barRut"></span>
+    <span class="cliente-bar-dscto" id="barDscto"></span>
+  </div>
+  <button class="cliente-bar-cambiar" onclick="limpiarCliente()">✕ Cambiar cliente</button>
+</div>
+
+<!-- LAYOUT -->
+<div class="page-wrap">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="search-panel">
+
+      <!-- BÚSQUEDA POR APLICACIÓN -->
+      <div class="search-section">
+        <div class="search-section-header" onclick="toggleSection('secApp')">
+          <span class="icon">—</span> Búsqueda por Aplicación
+        </div>
+        <div class="search-section-body" id="secApp">
+          <div class="form-group">
+            <select id="filtCategoria" onchange="loadMarcasVehiculo()">
+              <option value="0">— Todas las Categorías —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <select id="filtMarca" onchange="loadModelos()" disabled>
+              <option value="0">Todas las Marcas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <select id="filtModelo" onchange="loadAgnos()" disabled>
+              <option value="0">Todos los Modelos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <select id="filtAgno" disabled>
+              <option value="TODOS">Todos los Años</option>
+            </select>
+          </div>
+          <button class="btn-buscar" onclick="buscarAplicacion()">
+            🔍 Buscar
+          </button>
+        </div>
+      </div>
+
+      <!-- BÚSQUEDA POR CÓDIGO / OEM -->
+      <div class="search-section">
+        <div class="search-section-header" onclick="toggleSection('secCod')">
+          <span class="icon">+</span> Búsqueda por Código / OEM
+        </div>
+        <div class="search-section-body collapsed" id="secCod">
+          <div class="form-group">
+            <div class="search-code-wrap">
+              <input type="text" id="filtCodigo" placeholder="Código, nombre o OEM…"
+                     onkeydown="if(event.key==='Enter') buscarCodigo()">
+              <button onclick="buscarCodigo()">🔍</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- BÚSQUEDA CORREAS ALTERNADOR -->
+      <div class="search-section">
+        <div class="search-section-header" onclick="toggleSection('secAlt')">
+          <span class="icon">+</span> Correas Alternador
+        </div>
+        <div class="search-section-body collapsed" id="secAlt">
+          <div class="form-group">
+            <select id="filtTipoAlt" onchange="loadMedidasAlt()">
+              <option value="0">— Todos los Tipos —</option>
+              <option value="Tipo A">Tipo A</option>
+              <option value="Tipo B">Tipo B</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <select id="filtMedidaAlt" disabled>
+              <option value="0">— Todas las Medidas —</option>
+            </select>
+          </div>
+          <button class="btn-buscar" onclick="buscarCorreasAlt()">🔍 Buscar</button>
+        </div>
+      </div>
+
+      <!-- BÚSQUEDA CORREAS PK -->
+      <div class="search-section">
+        <div class="search-section-header" onclick="toggleSection('secPK')">
+          <span class="icon">+</span> Correas PK
+        </div>
+        <div class="search-section-body collapsed" id="secPK">
+          <div class="form-group">
+            <select id="filtTipoPK" onchange="loadMedidasPK()">
+              <option value="0">— Todos los Tipos —</option>
+              <option value="3PK">3PK</option>
+              <option value="4PK">4PK</option>
+              <option value="5PK">5PK</option>
+              <option value="6PK">6PK</option>
+              <option value="7PK">7PK</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <select id="filtMedidaPK" disabled>
+              <option value="0">— Todas las Medidas —</option>
+            </select>
+          </div>
+          <button class="btn-buscar" onclick="buscarCorreasPK()">🔍 Buscar</button>
+        </div>
+      </div>
+
+    </div><!-- /search-panel -->
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+    <div class="results-header">
+      <span class="results-title" id="resultsTitle">Bienvenido a Autotec</span>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    <div id="productList">
+      <div class="state-box">
+        <div class="state-icon">🔧</div>
+        <p>Use los filtros de la izquierda para buscar productos.</p>
+      </div>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </main>
+
+</div><!-- /page-wrap -->
+</div><!-- /appPage -->
+
+<!-- ======================================================
+     CARRO LATERAL
+     ====================================================== -->
+<div class="cart-drawer" id="cartDrawer">
+  <div class="cart-drawer-header">
+    <span class="cart-drawer-title">🛒 Carro de Compras</span>
+    <button class="cart-close" onclick="toggleCart()">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems">
+    <div class="state-box"><p>El carro está vacío.</p></div>
+  </div>
+  <div class="cart-footer" id="cartFooter" style="display:none">
+    <div class="cart-total-row"><span>Neto:</span><span id="cartNeto">$0</span></div>
+    <div class="cart-total-row"><span>IVA 19%:</span><span id="cartIva">$0</span></div>
+    <div class="cart-total-row grand"><span>TOTAL:</span><span id="cartTotal">$0</span></div>
+    <button class="btn-confirm" onclick="showConfirmModal()">Confirmar Pedido</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     MODAL: Aplicaciones del producto
+     ====================================================== -->
+<div class="modal-overlay" id="appsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="appsModalTitle">Aplicaciones del Producto</span>
+      <button class="modal-close" onclick="closeModal('appsModal')">✕</button>
+    </div>
+    <div id="appsModalBody"></div>
+  </div>
+</div>
+
+<!-- ======================================================
+     MODAL: Confirmar pedido
+     ====================================================== -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Confirmar Pedido</span>
+      <button class="modal-close" onclick="closeModal('confirmModal')">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div class="login-field">
+        <label>Orden de Compra (opcional)</label>
+        <input type="text" id="oc_input" placeholder="Número OC">
+      </div>
+      <div class="login-field">
+        <label>Observaciones</label>
+        <textarea id="obs_input" rows="3" style="width:100%;padding:.5rem .7rem;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:.88rem;resize:vertical"></textarea>
+      </div>
+      <button class="btn-confirm" onclick="confirmarPedido()">✅ Enviar Pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PRODUCTO DUPLICADO -->
+<div class="modal-overlay" id="dupModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">⚠️ Producto ya en el Carro</span>
+      <button class="modal-close" onclick="document.getElementById('dupModal').classList.remove('open')">✕</button>
+    </div>
+    <p style="font-size:.88rem;color:var(--gray-700);margin-bottom:1.2rem;line-height:1.6">
+      El producto <strong id="dupProdId"></strong> ya se encuentra en el carro
+      con <strong id="dupCantActual"></strong> unidad(es).<br><br>
+      ¿Desea reemplazar la cantidad por <strong id="dupCantNueva"></strong> unidad(es)?
+    </p>
+    <div style="display:flex;gap:.75rem">
+      <button onclick="confirmarReemplazo()" style="flex:1;padding:.6rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700;font-size:.88rem">✅ Reemplazar</button>
+      <button onclick="document.getElementById('dupModal').classList.remove('open')" style="flex:1;padding:.6rem;background:var(--gray-200);color:var(--gray-700);border-radius:6px;font-weight:700;font-size:.88rem">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DESCUENTO CLIENTE -->
+<div class="modal-overlay" id="dsctoModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">💰 Descuento del Cliente</span>
+    </div>
+    <p style="font-size:.88rem;margin-bottom:1rem">
+      Cliente: <strong id="dsctoClienteNombre"></strong><br>
+      Descuento asignado: <strong id="dsctoClientePct"></strong>
+    </p>
+    <div class="login-field">
+      <label>¿Desea usar este descuento o ingresar otro?</label>
+      <div style="display:flex;align-items:center;gap:.5rem;margin-top:.3rem">
+        <input type="number" id="dsctoInput" min="0" max="100" step="0.5"
+               style="width:100px;padding:.5rem;border:1.5px solid var(--gray-200);border-radius:6px;font-size:.95rem;text-align:center">
+        <span style="font-size:.9rem;color:var(--gray-700)">%</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem">
+      <button onclick="confirmarDescuento()" style="flex:1;padding:.6rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700;font-size:.9rem">✅ Confirmar y Agregar</button>
+      <button onclick="document.getElementById('dsctoModal').classList.remove('open')" style="flex:1;padding:.6rem;background:var(--gray-200);color:var(--gray-700);border-radius:6px;font-weight:700;font-size:.9rem">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const API = './api';
+let authToken = localStorage.getItem('at_token') || '';
+let currentUser = null;
+let currentPage = 0;
+let currentSearch = null;
+let totalProducts = 0;
+const PAGE_SIZE = 25;
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const authTimeout = setTimeout(showAuthTimeoutMessage, 8000);
+  if (authToken) {
+    const ok = await checkSession();
+    clearTimeout(authTimeout);
+    if (ok) { showApp(); return; }
+  } else {
+    clearTimeout(authTimeout);
+  }
+  showLogin();
+});
+
+// Cuando se vuelve a esta página mediante el botón "atrás" del navegador
+// (ej. desde Análisis), el navegador puede restaurarla desde bfcache sin
+// re-ejecutar DOMContentLoaded — hay que refrescar el contador del carro
+// y el cliente activo manualmente en ese caso.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && authToken) {
+    loadCarroBadge();
+    mostrarClienteActivo();
+  }
+});
+
+function hideAuthCheck() {
+  const el = document.getElementById('authCheck');
+  if (el) el.style.display = 'none';
+}
+
+function showAuthTimeoutMessage() {
+  const el = document.getElementById('authCheck');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="text-align:center;color:#fff;padding:1rem">
+      <p style="margin-bottom:1rem;font-size:.9rem">Esto está tardando más de lo normal…</p>
+      <button onclick="location.reload()" style="padding:.6rem 1.5rem;background:var(--red);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem">Reintentar</button>
+    </div>`;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+async function doLogin() {
+  const usuario  = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value.trim();
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  if (!usuario || !password) { err.textContent = 'Complete usuario y contraseña'; err.style.display='block'; return; }
+
+  const res = await apiFetch(`${API}/auth.php?action=login`, 'POST', {usuario, password});
+  if (res.ok) {
+    authToken = res.data.token;
+    localStorage.setItem('at_token', authToken);
+    currentUser = res.data;
+    // Limpiar sesión anterior (cliente, carro, descuento)
+    sessionStorage.clear();
+    showApp();
+  } else {
+    err.textContent = res.msg || 'Error de autenticación';
+    err.style.display = 'block';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginPage').style.display !== 'none') doLogin();
+});
+
+async function checkSession() {
+  const res = await apiFetch(`${API}/auth.php?action=check`, 'GET');
+  if (res.ok) { currentUser = res.data; return true; }
+  authToken = '';
+  localStorage.removeItem('at_token');
+  return false;
+}
+
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  authToken = '';
+  localStorage.removeItem('at_token');
+  sessionStorage.clear();
+  location.reload();
+}
+
+function showLogin() {
+  hideAuthCheck();
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('appPage').style.display   = 'none';
+}
+
+async function showApp() {
+  hideAuthCheck();
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').style.display   = 'block';
+  document.getElementById('navUserName').textContent    = currentUser?.nombre || '';
+  const subEl = document.getElementById('navUserNameSub');
+  if (subEl) subEl.textContent = currentUser?.nombre || '';
+  mostrarClienteActivo();
+  await loadCategorias();
+  await loadMarcasVehiculo();
+  await loadCarroBadge();
+}
+
+function mostrarClienteActivo() {
+  const raw = sessionStorage.getItem('cli_activo');
+  const bar = document.getElementById('clienteBar');
+  const navAnalisis = document.getElementById('navAnalisis');
+
+  if (!raw) {
+    bar.classList.remove('visible');
+    if (navAnalisis) navAnalisis.classList.add('nav-link-disabled');
+    return;
+  }
+  if (navAnalisis) navAnalisis.classList.remove('nav-link-disabled');
+
+  const cli = JSON.parse(raw);
+
+  // Barra debajo del menú
+  document.getElementById('barNombre').textContent = cli.nombre || '';
+  document.getElementById('barRut').textContent    = `RUT: ${cli.rut}-${cli.dv}`;
+  document.getElementById('barDscto').textContent  = cli.descuento > 0 ? `Dscto: ${cli.descuento}%` : '';
+  bar.classList.add('visible');
+
+  // (badge en nav eliminado, se usa solo la barra)
+}
+
+function irAnalisis(event) {
+  if (!sessionStorage.getItem('cli_activo')) {
+    event.preventDefault();
+    showToast('Debe seleccionar un cliente antes de acceder a Análisis', 'error');
+    return false;
+  }
+  return true;
+}
+
+function limpiarCliente() {
+  sessionStorage.removeItem('cli_activo');
+  sessionStorage.removeItem('carro_dscto');
+  sessionStorage.removeItem('carro_pedi_id'); // limpiar carro al cambiar cliente
+  location.href = './pages/clientes.html';
+}
+
+// ============================================================
+// API HELPER
+// ============================================================
+async function apiFetch(url, method = 'GET', body = null) {
+  try {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Token': authToken }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    return await r.json();
+  } catch(e) {
+    return { ok: false, msg: 'Error de red' };
+  }
+}
+
+// ============================================================
+// SEARCH SIDEBAR
+// ============================================================
+function toggleSection(id) {
+  const body = document.getElementById(id);
+  const header = body.previousElementSibling;
+  const icon = header.querySelector('.icon');
+  const collapsed = body.classList.toggle('collapsed');
+  icon.textContent = collapsed ? '+' : '—';
+}
+
+async function loadCategorias() {
+  const res = await apiFetch(`${API}/productos.php?action=categorias`);
+  if (!res.ok) return;
+  const sel = document.getElementById('filtCategoria');
+  res.data.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.cla_id; o.textContent = c.cla_nombre;
+    sel.appendChild(o);
+  });
+}
+
+async function loadMarcasVehiculo() {
+  const res = await apiFetch(`${API}/productos.php?action=marcas_vehiculo`);
+  if (!res.ok) return;
+  const sel = document.getElementById('filtMarca');
+  sel.innerHTML = '<option value="0">Todas las Marcas</option>';
+  res.data.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.marca_id; o.textContent = m.marca_nombre;
+    sel.appendChild(o);
+  });
+  sel.disabled = false;
+  document.getElementById('filtModelo').innerHTML = '<option value="0">Todos los Modelos</option>';
+  document.getElementById('filtModelo').disabled = true;
+  document.getElementById('filtAgno').innerHTML = '<option value="TODOS">Todos los Años</option>';
+  document.getElementById('filtAgno').disabled = true;
+}
+
+async function loadModelos() {
+  const marcaId = document.getElementById('filtMarca').value;
+  const selMod  = document.getElementById('filtModelo');
+  selMod.innerHTML = '<option value="0">Todos los Modelos</option>';
+  if (marcaId === '0') { selMod.disabled = true; return; }
+
+  const res = await apiFetch(`${API}/productos.php?action=modelos&marca_id=${marcaId}`);
+  if (!res.ok) return;
+  res.data.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.mod_id; o.textContent = m.mod_id;  // mod_id es tanto el ID como la descripción
+    selMod.appendChild(o);
+  });
+  selMod.disabled = false;
+  document.getElementById('filtAgno').innerHTML = '<option value="TODOS">Todos los Años</option>';
+  document.getElementById('filtAgno').disabled = true;
+}
+
+async function loadAgnos() {
+  const marcaId = document.getElementById('filtMarca').value;
+  const modId   = document.getElementById('filtModelo').value;
+  const selAgno = document.getElementById('filtAgno');
+  selAgno.innerHTML = '<option value="TODOS">Todos los Años</option>';
+  if (modId === '0') { selAgno.disabled = true; return; }
+
+  const res = await apiFetch(`${API}/productos.php?action=agnos&mod_id=${modId}&marca_id=${marcaId}`);
+  if (!res.ok) return;
+  res.data.forEach(y => {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    selAgno.appendChild(o);
+  });
+  selAgno.disabled = false;
+}
+
+async function loadMedidasAlt() {
+  const tipo = document.getElementById('filtTipoAlt').value;
+  const sel  = document.getElementById('filtMedidaAlt');
+  sel.innerHTML = '<option value="0">— Todas las Medidas —</option>';
+  if (tipo === '0') { sel.disabled = true; return; }
+  const res = await apiFetch(`${API}/productos.php?action=medidas&subtipo=ALT&tipo=${encodeURIComponent(tipo)}`);
+  if (!res.ok) return;
+  res.data.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+  sel.disabled = false;
+}
+
+async function loadMedidasPK() {
+  const tipo = document.getElementById('filtTipoPK').value;
+  const sel  = document.getElementById('filtMedidaPK');
+  sel.innerHTML = '<option value="0">— Todas las Medidas —</option>';
+  if (tipo === '0') { sel.disabled = true; return; }
+  const res = await apiFetch(`${API}/productos.php?action=medidas&subtipo=PK&tipo=${encodeURIComponent(tipo)}`);
+  if (!res.ok) return;
+  res.data.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+  sel.disabled = false;
+}
+
+// ============================================================
+// SEARCH ACTIONS
+// ============================================================
+function buscarAplicacion(page = 0) {
+  const categoria = document.getElementById('filtCategoria').value;
+  const marca_id  = document.getElementById('filtMarca').value;
+  if (categoria === '0' && marca_id === '0') {
+    showToast('Seleccione al menos una Categoría o Marca de vehículo', 'error');
+    return;
+  }
+  currentPage = page;
+  const params = {
+    action: 'buscar_aplicacion',
+    categoria: document.getElementById('filtCategoria').value,
+    marca_id:  document.getElementById('filtMarca').value,
+    mod_id:    document.getElementById('filtModelo').value,
+    agno:      document.getElementById('filtAgno').value,
+    page
+  };
+  currentSearch = params;
+  const qs = new URLSearchParams(params).toString();
+  loadProductos(`${API}/productos.php?${qs}`, 'Búsqueda por Aplicación');
+}
+
+function buscarCodigo(page = 0) {
+  currentPage = page;
+  const q = document.getElementById('filtCodigo').value.trim();
+  if (!q) { showToast('Ingrese un código o nombre', 'error'); return; }
+  const params = { action: 'buscar_codigo', q, page };
+  currentSearch = params;
+  const qs = new URLSearchParams(params).toString();
+  loadProductos(`${API}/productos.php?${qs}`, `Resultados para "${q}"`);
+}
+
+function buscarCorreasAlt(page = 0) {
+  currentPage = page;
+  const tipo   = document.getElementById('filtTipoAlt').value;
+  const medida = document.getElementById('filtMedidaAlt').value;
+  const params = { action: 'buscar_medidas', subtipo: 'ALT', tipo, medida, page };
+  currentSearch = params;
+  const qs = new URLSearchParams(params).toString();
+  loadProductos(`${API}/productos.php?${qs}`, 'Correas Alternador');
+}
+
+function buscarCorreasPK(page = 0) {
+  currentPage = page;
+  const tipo   = document.getElementById('filtTipoPK').value;
+  const medida = document.getElementById('filtMedidaPK').value;
+  const params = { action: 'buscar_medidas', subtipo: 'PK', tipo, medida, page };
+  currentSearch = params;
+  const qs = new URLSearchParams(params).toString();
+  loadProductos(`${API}/productos.php?${qs}`, 'Correas PK');
+}
+
+// ============================================================
+// RENDER PRODUCTS
+// ============================================================
+async function loadProductos(url, title) {
+  const list = document.getElementById('productList');
+  list.innerHTML = `<div class="state-box"><div class="spinner" style="border-color:rgba(0,0,0,.15);border-top-color:var(--blue);width:28px;height:28px;margin:0 auto"></div><p style="margin-top:.75rem">Cargando…</p></div>`;
+  document.getElementById('pagination').innerHTML = '';
+
+  const res = await apiFetch(url);
+  if (!res.ok) {
+    list.innerHTML = `<div class="state-box"><div class="state-icon">⚠️</div><p>${res.msg}</p></div>`;
+    return;
+  }
+
+  const prods = res.data.productos || [];
+  totalProducts = res.data.total || 0;
+  document.getElementById('resultsTitle').textContent = title;
+  document.getElementById('resultsCount').textContent = `${totalProducts} producto${totalProducts!==1?'s':''}`;
+
+  if (!prods.length) {
+    list.innerHTML = `<div class="state-box"><div class="state-icon">🔍</div><p>No se encontraron productos.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = prods.map(p => renderProductCard(p)).join('');
+  renderPagination(totalProducts, currentPage, PAGE_SIZE);
+}
+
+function renderProductCard(p) {
+  const precio = parseInt(p.prod_precio || 0);
+  // Proteger contra null/undefined en prod_stock
+  const stock     = String(p.prod_stock ?? '').toLowerCase();
+  const stockNum  = parseInt(p.prod_stock);
+  const stockOk   = stock.includes('dis') || stockNum > 0;
+  let stockLabel;
+  if (!stockOk) {
+    stockLabel = '<span class="prod-stock out">Sin stock</span>';
+  } else if (!isNaN(stockNum) && stockNum <= 100) {
+    stockLabel = `<span class="prod-stock ok">✔ Stock: ${stockNum}</span>`;
+  } else {
+    stockLabel = '<span class="prod-stock ok">✔ Disponible</span>';
+  }
+
+  // Aplicación principal
+  let appHtml = '';
+  if (p.marca_vehiculo || p.mod_descripcion) {
+    appHtml = `<div class="prod-app">
+      <span class="prod-app-label">Aplicación Principal&nbsp;</span>
+      <span class="prod-app-more" onclick="verAplicaciones('${p.prod_id}','${esc(p.prod_nombre)}')">+ aplicaciones</span><br>
+      <span class="prod-app-text">${esc(p.marca_vehiculo||'')} / ${esc(p.mod_descripcion||'')} ${p.agno_inicio?`/ ${p.agno_inicio}–${p.agno_fin}`:''}</span>
+    </div>`;
+  }
+
+  // Productos de "correa" (buscador de medidas) usan siempre esta imagen genérica.
+  // Los demás usan su propia imagen si existe, y si no, el placeholder "no existe".
+  // Productos de "correa" según su categoría (cla_id), sin importar desde qué
+  // buscador se encontraron, usan siempre esta imagen genérica.
+  const CLA_IDS_CORREA = ['10', '32', '33', '34'];
+  const esCorrea = CLA_IDS_CORREA.includes(String(p.cla_id));
+  const imgSrc = esCorrea
+    ? 'https://www.autotec.cl/autotecB/imagenes/productos/THUMBS/PK.jpg'
+    : (p.img_chica
+        ? `https://www.autotec.cl/images/${p.img_chica}`
+        : 'https://www.autotec.cl/imagenes/productos/th_no_existe.jpg');
+
+  // Multiplo de cantidad mínima (tbl_productos_multiplos)
+  const multiplo  = parseInt(p.multiplo || 1) || 1;
+  const qtyMin    = multiplo > 1 ? multiplo : 1;
+  const qtyStep   = multiplo > 1 ? multiplo : 1;
+
+  return `<div class="product-card">
+    <img src="${imgSrc}" class="prod-img" onclick="irAFicha('${p.prod_id}')" style="cursor:pointer" onerror="this.onerror=null;this.src='https://www.autotec.cl/imagenes/productos/th_no_existe.jpg'">
+
+    <div class="prod-info">
+      <!-- 1. Nombre -->
+      <div class="prod-name">${esc(p.prod_nombre)}</div>
+      <!-- 2. Código Interno -->
+      <div class="prod-oem" style="margin-top:.25rem"><span style="color:var(--gray-500)">Cód. Interno:</span> <span class="prod-code" style="display:inline;font-size:.8rem" onclick="irAFicha('${p.prod_id}')">${esc(p.prod_id)}</span></div>
+      <!-- 3. Código Equivalente -->
+      ${p.codigo_equivalente1 ? `<div class="prod-oem" style="margin-top:.2rem"><span style="color:var(--gray-500)">Cód. Equiv.:</span> <strong>${esc(p.codigo_equivalente1)}</strong></div>` : ''}
+      <!-- 4. OEM -->
+      ${p.oem ? `<div class="prod-oem" style="margin-top:.2rem"><span style="color:var(--gray-500)">OEM:</span> <strong>${esc(p.oem)}</strong></div>` : ''}
+      <!-- 5. Aplicación -->
+      ${appHtml}
+      <!-- 6. Unidades x Caja -->
+      ${p.multiplo && parseInt(p.multiplo) > 1 ? `<div class="prod-oem" style="margin-top:.3rem;color:var(--blue);font-weight:600">Unidades x Caja: ${parseInt(p.multiplo)} unidades</div>` : ''}
+    </div>
+
+    <div class="prod-price-col">
+      <div class="prod-price-label">Precio:</div>
+      <div class="prod-price">${formatoPrecio(precio)}</div>
+      ${stockLabel}
+    </div>
+
+    <div class="prod-actions">
+      <input type="number" class="qty-input" id="qty_${p.prod_id}" value="${qtyMin}" min="${qtyMin}" step="${qtyStep}" max="9999" ${!stockOk?'disabled':''}>
+      ${stockOk
+        ? `<button class="btn-agregar" onclick="agregarAlCarro('${p.prod_id}',${precio})">AGREGAR</button>`
+        : `<button class="btn-agregar" style="background:var(--gray-500,#999);cursor:not-allowed" onclick="alertSinStock()">AGREGAR</button>`}
+    </div>
+  </div>`;
+}
+
+function alertSinStock() {
+  alert('El producto seleccionado no se agregará en el carro de compras debido a que se encuentra con stock 0');
+}
+
+function irAFicha(prodId) {
+  location.href = `./pages/ficha.html?prod_id=${encodeURIComponent(prodId)}`;
+}
+
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatoPrecio(n) {
+  return '$' + Number(n).toLocaleString('es-CL');
+}
+
+function renderPagination(total, page, perPage) {
+  const pages = Math.ceil(total / perPage);
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  let html = '';
+  const start = Math.max(0, page - 2);
+  const end   = Math.min(pages - 1, page + 2);
+  if (start > 0)     html += `<button class="page-btn" onclick="gotoPage(0)">«</button>`;
+  if (start > 1)     html += `<button class="page-btn" onclick="gotoPage(${start-1})">…</button>`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="gotoPage(${i})">${i+1}</button>`;
+  }
+  if (end < pages - 2) html += `<button class="page-btn" onclick="gotoPage(${end+1})">…</button>`;
+  if (end < pages - 1) html += `<button class="page-btn" onclick="gotoPage(${pages-1})">»</button>`;
+  document.getElementById('pagination').innerHTML = html;
+}
+
+function gotoPage(page) {
+  if (!currentSearch) return;
+  currentPage = page;
+  const p = { ...currentSearch, page };
+  const qs = new URLSearchParams(p).toString();
+  loadProductos(`${API}/productos.php?${qs}`, document.getElementById('resultsTitle').textContent);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================
+// APLICACIONES MODAL
+// ============================================================
+async function verAplicaciones(prodId, nombre) {
+  document.getElementById('appsModalTitle').textContent = nombre;
+  document.getElementById('appsModalBody').innerHTML = '<p style="color:var(--gray-500);font-size:.85rem">Cargando…</p>';
+  document.getElementById('appsModal').classList.add('open');
+
+  const res = await apiFetch(`${API}/productos.php?action=aplicaciones_producto&prod_id=${encodeURIComponent(prodId)}`);
+  if (!res.ok || !res.data.length) {
+    document.getElementById('appsModalBody').innerHTML = '<p style="color:var(--gray-500);font-size:.85rem">Sin aplicaciones registradas.</p>';
+    return;
+  }
+  const rows = res.data.map(a =>
+    `<tr style="border-bottom:1px solid var(--gray-200)">
+      <td style="padding:.45rem .6rem;font-size:.82rem;font-weight:600">${esc(a.marca_vehiculo)}</td>
+      <td style="padding:.45rem .6rem;font-size:.82rem">${esc(a.mod_descripcion)}</td>
+      <td style="padding:.45rem .6rem;font-size:.82rem;white-space:nowrap">${a.agno_inicio} – ${a.agno_fin}</td>
+      <td style="padding:.45rem .6rem;font-size:.8rem;color:var(--gray-500)">${esc(a.cilindrada||'')}</td>
+      <td style="padding:.45rem .6rem;font-size:.8rem;color:var(--gray-500)">${esc(a.motor_completo||'')}</td>
+    </tr>`
+  ).join('');
+  document.getElementById('appsModalBody').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead style="background:var(--gray-100)">
+        <tr>
+          <th style="padding:.4rem .6rem;font-size:.78rem;text-align:left">Marca</th>
+          <th style="padding:.4rem .6rem;font-size:.78rem;text-align:left">Modelo</th>
+          <th style="padding:.4rem .6rem;font-size:.78rem;text-align:left">Años</th>
+          <th style="padding:.4rem .6rem;font-size:.78rem;text-align:left">Cilindrada</th>
+          <th style="padding:.4rem .6rem;font-size:.78rem;text-align:left">Motor / Versión</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ============================================================
+// CARRO
+// ============================================================
+async function loadCarroBadge() {
+  const pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+  const url = pediIdSesion !== '0'
+    ? `${API}/carro.php?action=ver&pedi_id_sesion=${pediIdSesion}`
+    : `${API}/carro.php?action=ver`;
+  const res = await apiFetch(url);
+  if (!res.ok) return;
+  const count = res.data.detalle?.length || 0;
+  document.getElementById('cartBadge').textContent = count;
+}
+
+async function agregarAlCarro(prodId, precio) {
+  // Verificar que hay un cliente seleccionado
+  if (!sessionStorage.getItem('cli_activo')) {
+    showToast('Debe seleccionar un cliente antes de agregar productos', 'error');
+    setTimeout(() => location.href = './pages/clientes.html', 1500);
+    return;
+  }
+
+  // Verificar si el carro de ESTA sesión tiene productos
+  const pediIdSesion = parseInt(sessionStorage.getItem('carro_pedi_id') || '0');
+  const cli          = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+
+  // Solo preguntar descuento si no hay pedi_id_sesion aún (primer producto del cliente)
+  if (!pediIdSesion) {
+    const dscto = parseFloat(cli.descuento || 0);
+    document.getElementById('dsctoClienteNombre').textContent = cli.nombre || '';
+    document.getElementById('dsctoClientePct').textContent    = dscto > 0 ? `${dscto}%` : 'sin descuento';
+    document.getElementById('dsctoInput').value               = dscto;
+    document.getElementById('dsctoModal').classList.add('open');
+    window._pendingAdd = { prodId, precio };
+    return;
+  }
+
+  await _doAgregarAlCarro(prodId, precio);
+}
+
+async function _doAgregarAlCarro(prodId, precio, forzar = false) {
+  const dscto        = parseFloat(sessionStorage.getItem('carro_dscto') || '0');
+  const cant         = parseInt(document.getElementById(`qty_${prodId}`)?.value || 1);
+  const cli          = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+  const pediIdSesion = parseInt(sessionStorage.getItem('carro_pedi_id') || '0');
+  const res   = await apiFetch(`${API}/carro.php?action=agregar`, 'POST', {
+    prod_id: prodId, cantidad: cant, dscto, forzar,
+    cli_rut: cli.rut || '', cli_sec: cli.sec || '',
+    pedi_id_sesion: pediIdSesion
+  });
+
+  if (!res.ok) { showToast(res.msg || 'Error al agregar', 'error'); return; }
+
+  // Guardar el pedi_id del carro en sesión para no crear uno nuevo cada vez
+  if (res.data?.pedi_id) sessionStorage.setItem('carro_pedi_id', res.data.pedi_id);
+
+  if (res.data?.ya_existe && !forzar) {
+    // Producto ya está en el carro — mostrar confirmación
+    const cantActual = res.data.cantidad_actual;
+    document.getElementById('dupProdId').textContent   = prodId;
+    document.getElementById('dupCantActual').textContent = cantActual;
+    document.getElementById('dupCantNueva').textContent  = cant;
+    document.getElementById('dupModal').classList.add('open');
+    // Guardar para cuando confirme
+    window._pendingReplace = { prodId, precio };
+    return;
+  }
+
+  showToast('Producto agregado al carro ✓', 'success');
+  loadCarroBadge();
+}
+
+function confirmarReemplazo() {
+  document.getElementById('dupModal').classList.remove('open');
+  if (window._pendingReplace) {
+    _doAgregarAlCarro(window._pendingReplace.prodId, window._pendingReplace.precio, true);
+    window._pendingReplace = null;
+  }
+}
+
+function confirmarDescuento() {
+  const val = parseFloat(document.getElementById('dsctoInput').value || 0);
+  sessionStorage.setItem('carro_dscto', val);
+  // Limpiar pedi_id para que el primer producto cree un nuevo carro
+  // (ya se limpió al seleccionar cliente, pero por seguridad)
+  document.getElementById('dsctoModal').classList.remove('open');
+  if (window._pendingAdd) {
+    _doAgregarAlCarro(window._pendingAdd.prodId, window._pendingAdd.precio);
+    window._pendingAdd = null;
+  }
+}
+
+async function toggleCart() {
+  const d = document.getElementById('cartDrawer');
+  d.classList.toggle('open');
+  if (d.classList.contains('open')) loadCartDrawer();
+}
+
+async function loadCartDrawer() {
+  const res = await apiFetch(`${API}/carro.php?action=ver`);
+  if (!res.ok) return;
+  const { cabecera, detalle } = res.data;
+  const itemsEl   = document.getElementById('cartItems');
+  const footerEl  = document.getElementById('cartFooter');
+  document.getElementById('cartBadge').textContent = detalle.length;
+
+  if (!detalle.length) {
+    itemsEl.innerHTML = '<div class="state-box"><p>El carro está vacío.</p></div>';
+    footerEl.style.display = 'none';
+    return;
+  }
+
+  itemsEl.innerHTML = detalle.map(d => `
+    <div class="cart-item">
+      <div>
+        <div class="cart-item-name">${esc(d.prod_nombre)}</div>
+        <div class="cart-item-code">${esc(d.prod_id)}</div>
+        <div class="cart-item-qty">Cant: ${d.ped_prod_cantidad} × ${formatoPrecio(d.ped_prod_neto)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="cart-item-price">${formatoPrecio(d.ped_prod_neto * d.ped_prod_cantidad)}</div>
+        <button class="cart-item-del" onclick="eliminarDelCarro(${d.id})">🗑</button>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('cartNeto').textContent  = formatoPrecio(cabecera.pedi_total_neto);
+  document.getElementById('cartIva').textContent   = formatoPrecio(cabecera.pedi_total_iva);
+  document.getElementById('cartTotal').textContent = formatoPrecio(cabecera.pedi_total);
+  footerEl.style.display = 'block';
+}
+
+async function eliminarDelCarro(itemId) {
+  const res = await apiFetch(`${API}/carro.php?action=actualizar`, 'POST', { item_id: itemId, cantidad: 0 });
+  if (res.ok) loadCartDrawer();
+}
+
+function showConfirmModal() { document.getElementById('confirmModal').classList.add('open'); }
+
+async function confirmarPedido() {
+  const res = await apiFetch(`${API}/carro.php?action=confirmar`, 'POST', {
+    observaciones: document.getElementById('obs_input').value,
+    orden_compra:  document.getElementById('oc_input').value,
+  });
+  closeModal('confirmModal');
+  if (res.ok) {
+    showToast(res.msg, 'success');
+    document.getElementById('cartDrawer').classList.remove('open');
+    loadCarroBadge();
+  } else {
+    showToast(res.msg || 'Error', 'error');
+  }
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function toggleNav() { document.getElementById('navLinks').classList.toggle('open'); }
+function setNav(el) {
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('navLinks').classList.remove('open');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Close modals clicking overlay
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

@@ -278,12 +278,12 @@ header('Access-Control-Allow-Headers: Authorization, Content-Type');
 **Contexto del Entorno Legado:**  
 El sistema se integra con una App Android legada (Eclipse) y bases de datos MySQL directas del ERP Softland. Dichos sistemas legados históricamente operan con bajo nivel de aislamiento (parámetros GET planos sin firma digital). No obstante, para evitar que este nuevo módulo sea el eslabón débil de la infraestructura, se auditan y priorizan los siguientes hallazgos:
 
-| ID | Hallazgo | Gravedad | Impacto / Riesgo | Necesidad de Reparación |
+| ID | Hallazgo | Gravedad | Impacto / Riesgo | Estado de Mitigación |
 |---|---|---|---|---|
-| **SEC-01** | **Impersonación de Vendedor (IDOR en `vendedor_id`)** | 🔴 **ALTA** | Endpoints como `api/get_clientes.php` y `api/guardar_cobranza.php` aceptan `vendedor_id` enviado por GET/POST sin validar contra la sesión. Un usuario puede cambiar `?vendedor_id=X` y acceder a carteras ajenas. | **Obligatorio para Go-Live.** En entorno `production`, la API debe forzar la identidad desde la sesión o validar un token firmado del WebView. |
-| **SEC-02** | **Descalce de Auth en Admin (Sesión vs Bearer Token)** | 🔴 **ALTA** *(Bloqueante)* | `admin/index.php` autentica con `$_SESSION['admin_logged_in']`, pero los endpoints de `/admin/api/` invocan `requireAuth()` que exige `Authorization: Bearer`. Funciona solo por el bypass de `APP_ENV='local'`. En `production` el portal dará error `401` en todas las acciones. | **Imprescindible.** Se debe adaptar `auth.php` para soportar `$_SESSION` activas en peticiones al portal admin. |
-| **SEC-03** | **Ejecución Directa en `/uploads`** | 🟡 **MEDIA-ALTA** | Si bien se filtran extensiones y MIME types en PHP, no existe restricción a nivel de servidor web en `uploads/`. Un archivo PHP maliciosamente cargado podría ejecutarse. | **Alta Necesidad.** Crear `uploads/.htaccess` con `php_flag engine off` y `Deny from all` para scripts. |
-| **SEC-04** | **Falta de Re-Validación de Cuotas en Backend** | 🟡 **MEDIA** | `guardar_cobranza.php` confía en los montos de facturas/cuotas enviados desde el cliente sin contrastar la suma contra la deuda oficial en `bd_automarco.tbl_cobranza`. | **Recomendado.** En backend recalcular el total sumando las cuotas seleccionadas y verificar que el saldo de la cuota no haya sido alterado en el cliente. |
+| **SEC-01** | **Impersonación de Vendedor (IDOR en `vendedor_id`)** | 🔴 **ALTA** | Endpoints de vendedores (`get_clientes.php`, `get_facturas_cliente.php`, `guardar_cobranza.php`, `get_mis_cobranzas.php`, `completar_envio.php`) aceptaban `vendedor_id` por GET/POST sin forzar la sesión. | ✅ **Implementado.** En `APP_ENV === 'production'`, todos los endpoints extraen estrictamente la identidad desde `$_SESSION['vendedor_auth']`, validan cartera de clientes autorizada y limpian la URL en frontend (`history.replaceState`). |
+| **SEC-02** | **Descalce de Auth en Admin (Sesión vs Bearer Token)** | 🔴 **ALTA** *(Bloqueante)* | `admin/index.php` autentica con `$_SESSION['admin_logged_in']`, pero los endpoints de `/admin/api/` invocan `requireAuth()` que exige `Authorization: Bearer`. Funciona solo por el bypass de `APP_ENV='local'`. En `production` el portal dará error `401` en todas las acciones. | ✅ **Implementado.** Middleware unificado en `config/auth.php` con soporte dual para `$_SESSION['admin_logged_in']` y token Bearer. |
+| **SEC-03** | **Ejecución Directa en `/uploads`** | 🟡 **MEDIA-ALTA** | Si bien se filtran extensiones y MIME types en PHP, no existía restricción a nivel de servidor web en `uploads/`. Un archivo PHP maliciosamente cargado podría ejecutarse. | ✅ **Implementado.** Archivo `uploads/.htaccess` con `php_flag engine off` y `Deny from all` para scripts ejecutables. |
+| **SEC-04** | **Falta de Re-Validación de Cuotas en Backend** | 🟡 **MEDIA** | `guardar_cobranza.php` confiaba en los montos de facturas/cuotas enviados desde el cliente sin contrastar la suma contra la deuda oficial en `bd_automarco.tbl_cobranza`. | ✅ **Implementado.** Re-validación transaccional con `GET_LOCK`, verificación contra `tbl_cobranza` y bloqueo de duplicados activos. |
 
 ---
 
@@ -291,12 +291,13 @@ El sistema se integra con una App Android legada (Eclipse) y bases de datos MySQ
 
 1. **Fase Inmediata (MVP / Local):**  
    - Mantener `APP_ENV = 'local'` durante pruebas de usabilidad y feedback de UI/UX.
-   - Mantener la experiencia fluida en la App Eclipse (WebView recibe `vendedor_id` por parámetro URL).
+   - Mantener la experiencia fluida en la App Eclipse (WebView recibe `vendedor_id` por parámetro URL con fallback de sesión).
 
-2. **Fase Pre-Producción (Go-Live):**  
-   - Unificar middleware en `config/auth.php` para resolver **SEC-02** (Sesión PHP + Bearer).
-   - Crear `uploads/.htaccess` para resolver **SEC-03**.
-   - Implementar validación de sesión/token en `api/get_clientes.php` (**SEC-01**).
+2. **Fase Pre-Producción / Producción (Go-Live):**  
+   - ✅ Unificado middleware en `config/auth.php` para resolver **SEC-02** (Sesión PHP + Bearer).
+   - ✅ Creado `uploads/.htaccess` para resolver **SEC-03** (RCE Protection).
+   - ✅ Implementado blindaje integral contra IDOR en todos los endpoints de vendedores (**SEC-01**).
+   - ✅ Implementada re-validación de saldos y cuotas ERP en backend (**SEC-04**).
 
 ---
 
@@ -311,5 +312,10 @@ Durante la auditoría general de seguridad y rendimiento de Julio de 2026, se ap
 ### 10.2 Alerta de Bypass de Autenticación en Entorno de Desarrollo (`config/auth.php`)
 * **Medida:** Se agregó registro de seguridad explícito en el archivo de log del servidor.
 * **Comportamiento:** Cuando la aplicación se ejecuta con `APP_ENV = 'local'` y se invoca un bypass silencioso para otorgar privilegios de `ADMINISTRADOR` sin token Bearer, el sistema imprime un registro de advertencia `[SECURITY WARNING]` en el log de errores. Esto previene que una mala configuración involuntaria de `APP_ENV` en producción pase desapercibida para el departamento de TI.
+
+### 10.3 Hardening de Seguridad HTTP (OWASP ZAP)
+* **Medida:** Se añadieron encabezados de seguridad globales en `.htaccess` (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, y se ocultó X-Powered-By/Server).
+* **Comportamiento:** Mitiga ataques de Clickjacking, MIME-sniffing, y fuerza conexiones HTTPS seguras. La directiva Content Security Policy (CSP) fue configurada restrictivamente (`default-src 'self'`). Las dependencias de Google Fonts se descargaron localmente para prescindir del SRI, y se removió cualquier uso de `unsafe-inline` en scripts y estilos (refactorizados hacia clases CSS y Event Listeners en JavaScript puro).
+* **Cookies de Sesión:** Todas las instancias de inicialización de sesión (`session_set_cookie_params`) exigen `secure=true`. En el portal Admin se aplica `SameSite=Strict`, mientras que para el WebView móvil se fijó `SameSite=Lax` para mantener retrocompatibilidad de navegación intra-app.
 
 

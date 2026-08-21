@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clientes — Autotec</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --red:#c0392b; --red-dark:#a93226; --blue:#1a6faf; --blue-light:#eaf4fb;
+  --gray-900:#1a1a2e; --gray-700:#444; --gray-500:#888; --gray-200:#e8e8e8;
+  --gray-100:#f5f5f5; --white:#fff; --shadow:0 2px 12px rgba(0,0,0,.10); --radius:8px; --nav-h:60px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--gray-700);background:var(--gray-100)}
+button{cursor:pointer;border:none;font-family:inherit}
+input{font-family:inherit}
+
+/* NAV */
+.navbar{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:var(--white);display:flex;align-items:center;padding:0 1.5rem;gap:1rem;box-shadow:var(--shadow);border-bottom:2px solid var(--red)}
+.brand{cursor:pointer;display:flex;align-items:center}
+.btn-volver{background:rgba(0,0,0,.06);color:var(--gray-700);padding:.4rem .9rem;border-radius:5px;font-size:.85rem;font-weight:600;transition:.15s}
+.btn-volver:hover{background:rgba(0,0,0,.12)}
+.nav-right{display:flex;align-items:center;gap:.75rem;margin-left:auto}
+.nav-cart-btn{background:var(--red);color:var(--white);padding:.4rem .9rem;border-radius:5px;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.4rem;transition:.15s}
+.nav-cart-btn:hover{background:var(--red-dark)}
+.cart-badge{background:var(--white);color:var(--red);border-radius:50%;width:18px;height:18px;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.nav-user{color:var(--gray-700);font-size:.85rem}
+.btn-logout{background:none;color:rgba(255,255,255,.6);font-size:.8rem;padding:.3rem .6rem;border-radius:4px;transition:.15s}
+.btn-logout:hover{background:var(--gray-100);color:var(--gray-900)}
+
+/* LAYOUT */
+.page-wrap{max-width:1100px;margin:0 auto;padding:1.5rem 1rem}
+
+/* BUSCADOR */
+.search-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.2rem 1.5rem;margin-bottom:1.2rem}
+.search-box-title{font-size:.82rem;font-weight:700;color:var(--white);background:var(--blue);
+  display:inline-block;padding:.25rem .75rem;border-radius:4px;margin-bottom:1rem}
+.search-fields{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end}
+.search-field{display:flex;flex-direction:column;gap:.3rem}
+.search-field label{font-size:.8rem;font-weight:600;color:var(--gray-700)}
+.search-field input{padding:.5rem .75rem;border:1.5px solid var(--gray-200);border-radius:6px;
+  font-size:.88rem;width:200px;transition:.15s}
+.search-field input:focus{outline:none;border-color:var(--blue)}
+.btn-buscar{background:var(--blue);color:var(--white);padding:.52rem 1.2rem;border-radius:6px;
+  font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:.4rem;transition:.15s}
+.btn-buscar:hover{background:#155a8f}
+
+/* RESULTADOS HEADER */
+.results-header{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem}
+.results-title{font-size:.95rem;font-weight:600;color:var(--gray-900)}
+.results-count{font-size:.82rem;color:var(--gray-500)}
+
+/* LISTA CLIENTES */
+.cliente-list{display:flex;flex-direction:column;gap:.6rem}
+
+.cliente-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:.85rem 1rem;display:flex;align-items:center;gap:1rem;
+  transition:box-shadow .15s;cursor:pointer}
+.cliente-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.13)}
+
+.cli-main{flex:1;min-width:0}
+.cli-rut{font-size:.78rem;color:var(--blue);font-weight:700}
+.cli-nombre{font-size:.95rem;font-weight:700;color:var(--gray-900);margin:.15rem 0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cli-email{font-size:.78rem;color:var(--gray-500);margin-bottom:.3rem}
+.cli-bottom{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.cli-descuento{font-size:.8rem;font-weight:600;color:var(--gray-700)}
+.cli-descuento span{color:var(--red)}
+.cli-dir{font-size:.78rem;color:var(--gray-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+.cli-dir-full{font-size:.78rem;color:var(--gray-500);margin-top:.25rem;line-height:1.4}
+
+.cli-actions{display:flex;gap:.5rem;flex-shrink:0}
+.btn-info{background:var(--blue-light);color:var(--blue);width:38px;height:38px;
+  border-radius:6px;font-size:1rem;display:flex;align-items:center;justify-content:center;
+  transition:.15s;flex-shrink:0}
+.btn-info:hover{background:var(--blue);color:var(--white)}
+.btn-carro{background:var(--red);color:var(--white);padding:.4rem .9rem;
+  border-radius:6px;font-size:.82rem;font-weight:600;white-space:nowrap;transition:.15s}
+.btn-carro:hover{background:var(--red-dark)}
+
+/* PAGINACIÓN */
+.pagination{display:flex;gap:.4rem;justify-content:center;margin-top:1.2rem;flex-wrap:wrap}
+.page-btn{padding:.4rem .8rem;border-radius:5px;font-size:.85rem;background:var(--white);
+  border:1px solid var(--gray-200);color:var(--gray-700);transition:.15s}
+.page-btn:hover{background:var(--blue-light);border-color:var(--blue);color:var(--blue)}
+.page-btn.active{background:var(--blue);color:var(--white);border-color:var(--blue)}
+
+/* STATE */
+.state-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:3rem 2rem;text-align:center;color:var(--gray-500)}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(0,0,0,.1);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* MODAL INFO CLIENTE */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;
+  display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:var(--radius);max-width:480px;width:100%;
+  padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.modal-title{font-size:1rem;font-weight:700;color:var(--gray-900)}
+.modal-close{background:none;font-size:1.2rem;color:var(--gray-500)}
+.info-row{display:flex;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--gray-200);font-size:.85rem}
+.info-row:last-child{border-bottom:none}
+.info-label{color:var(--gray-500);font-weight:500;min-width:120px;flex-shrink:0}
+.info-value{color:var(--gray-900);font-weight:600}
+
+/* MORA / CARRO MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:var(--radius);max-width:420px;width:100%;padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,.25)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.modal-title{font-size:1rem;font-weight:700;color:var(--gray-900)}
+.modal-close{background:none;font-size:1.2rem;color:var(--gray-500)}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:var(--gray-900);
+  color:var(--white);padding:.7rem 1.2rem;border-radius:7px;font-size:.85rem;font-weight:500;
+  box-shadow:var(--shadow);transform:translateY(10px);opacity:0;transition:.3s;pointer-events:none;max-width:320px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-left:4px solid #27ae60}
+.toast.error{border-left:4px solid var(--red)}
+</style>
+</head>
+<body style="visibility:hidden">
+<div id="pageLoader" style="position:fixed;inset:0;background:#1a1a2e;visibility:visible;display:flex;align-items:center;justify-content:center;z-index:99999"><div class="spinner" style="border-color:rgba(255,255,255,.25);border-top-color:#fff"></div></div>
+
+
+<!-- NAV -->
+<nav class="navbar">
+  <div class="brand" onclick="location.href='../index.html'"><img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec" style="height:36px;object-fit:contain"></div>
+  <button class="btn-volver" onclick="location.href='../index.html'">← Volver</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName"></span>
+    <a href="./carro.html" class="nav-cart-btn">
+      🛒 Carro <span class="cart-badge" id="cartBadge">0</span>
+    </a>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <!-- BUSCADOR -->
+  <div class="search-box">
+    <div class="search-box-title">— Búsqueda de acceso a clientes</div>
+    <div class="search-fields">
+      <div class="search-field">
+        <label>RUT</label>
+        <input type="text" id="filtRut" placeholder="Ej: 12345678"
+               onkeydown="if(event.key==='Enter') buscar()">
+      </div>
+      <div class="search-field">
+        <label>Razón Social</label>
+        <input type="text" id="filtNombre" placeholder="Nombre o razón social"
+               onkeydown="if(event.key==='Enter') buscar()">
+      </div>
+      <button class="btn-buscar" onclick="buscar()">🔍 Buscar</button>
+    </div>
+  </div>
+
+  <!-- RESULTADOS -->
+  <div class="results-header">
+    <span class="results-title" id="resultsTitle">Ingrese RUT o Razón Social para buscar</span>
+    <span class="results-count" id="resultsCount"></span>
+  </div>
+
+  <div id="clienteList">
+    <div class="state-box">
+      <p>Use el buscador para encontrar clientes.</p>
+    </div>
+  </div>
+  <div class="pagination" id="pagination"></div>
+
+</div>
+
+<!-- MODAL INFO CLIENTE -->
+<div class="modal-overlay" id="infoModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="infoModalTitle">Información del Cliente</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="infoModalBody"></div>
+  </div>
+</div>
+
+<!-- CART DRAWER -->
+<div style="position:fixed;right:0;top:0;bottom:0;width:380px;background:var(--white);
+  box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:1500;transform:translateX(100%);
+  transition:.3s;display:flex;flex-direction:column" id="cartDrawer">
+  <div style="padding:1rem 1.2rem;background:var(--gray-900);color:var(--white);display:flex;align-items:center;justify-content:space-between">
+    <span style="font-weight:700;font-size:1rem">🛒 Carro de Compras</span>
+    <button onclick="toggleCart()" style="background:none;color:rgba(255,255,255,.7);font-size:1.1rem">✕</button>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:.75rem" id="cartItems">
+    <div class="state-box"><p>El carro está vacío.</p></div>
+  </div>
+  <div style="padding:1rem 1.2rem;border-top:1px solid var(--gray-200)" id="cartFooter" style="display:none">
+    <div style="display:flex;justify-content:space-between;margin-bottom:.35rem;font-size:.88rem"><span>Neto:</span><span id="cartNeto">$0</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:.35rem;font-size:.88rem"><span>IVA 19%:</span><span id="cartIva">$0</span></div>
+    <div style="display:flex;justify-content:space-between;font-weight:700;font-size:1rem;margin-top:.4rem"><span>TOTAL:</span><span id="cartTotal">$0</span></div>
+    <button onclick="location.href='../index.html'" style="width:100%;margin-top:.8rem;padding:.65rem;background:var(--blue);color:var(--white);border-radius:5px;font-size:.9rem;font-weight:700">Ver Carro Completo</button>
+  </div>
+</div>
+
+<!-- MODAL MORA — igual que Android: no cancelable, checkbox obligatorio -->
+<div class="modal-overlay" id="moraModal" style="z-index:3000">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span class="modal-title">⚠️ Notificación</span>
+      <!-- Sin botón cerrar: builder.setCancelable(false) -->
+    </div>
+
+    <!-- Nombre cliente -->
+    <p style="font-size:.9rem;font-weight:700;color:var(--gray-900);margin-bottom:.5rem">
+      Cliente: <span id="moraNombre"></span>
+    </p>
+
+    <!-- Documentos vencidos -->
+    <div id="moraDocsHtml" style="margin-bottom:.85rem"></div>
+
+    <!-- Mensaje exacto de Android -->
+    <p style="font-size:.88rem;color:var(--gray-700);margin-bottom:1rem;line-height:1.5">
+      Pedido quedará retenido por mora, me comprometo a realizar las gestiones de cobranza para evitar demoras en el despacho
+    </p>
+
+    <!-- Checkbox obligatorio -->
+    <label style="display:flex;align-items:center;gap:.6rem;font-size:.88rem;margin-bottom:1.2rem;cursor:pointer;font-weight:600">
+      <input type="checkbox" id="moraCheck" style="width:16px;height:16px">
+      Estoy de acuerdo
+    </label>
+
+    <!-- Botón Aceptar -->
+    <button id="moraAceptar" style="width:100%;padding:.65rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700;font-size:.92rem">
+      Aceptar
+    </button>
+    <p id="moraCheckError" style="color:var(--red);font-size:.78rem;margin-top:.4rem;display:none;text-align:center">
+      Debe marcar la casilla para continuar
+    </p>
+  </div>
+</div>
+
+<!-- MODAL CARRO PENDIENTE -->
+<div class="modal-overlay" id="carroPendModal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <span class="modal-title">🛒 Carro Pendiente</span>
+      <button class="modal-close" onclick="document.getElementById('carroPendModal').classList.remove('open')">✕</button>
+    </div>
+    <p style="font-size:.88rem;margin-bottom:.75rem">
+      <strong id="carroPendNombre"></strong> tiene un carro pendiente. ¿Deseas recuperarlo?
+    </p>
+    <div id="carroPendDetalle" style="max-height:280px;overflow-y:auto;margin-bottom:1rem"></div>
+    <div style="display:flex;gap:.75rem">
+      <button id="btnRecuperarCarro" style="flex:1;padding:.6rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700;font-size:.88rem">✅ Recuperar Carro</button>
+      <button id="btnDescartarCarro" style="flex:1;padding:.6rem;background:var(--gray-200);color:var(--gray-700);border-radius:6px;font-weight:700;font-size:.88rem">Descartar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API       = '../api';
+let authToken   = localStorage.getItem('at_token') || '';
+let currentUser = null;
+let currentPage = 0;
+let totalClientes = 0;
+const PAGE_SIZE = 25;
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const loaderTimeout = setTimeout(showPageLoaderTimeout, 8000);
+  if (!authToken) { location.href = '../index.html'; return; }
+  const ok = await checkSession();
+  clearTimeout(loaderTimeout);
+  if (!ok) { location.href = '../index.html'; return; }
+  revealPage();
+  loadCarroBadge();
+  buscar(0); // Cargar todos los clientes al iniciar
+});
+
+// Restaurada desde bfcache (ej. botón "atrás" desde Análisis): refrescar contador
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && authToken) loadCarroBadge();
+});
+
+function revealPage() {
+  document.body.style.visibility = 'visible';
+  const loader = document.getElementById('pageLoader');
+  if (loader) loader.remove();
+}
+
+function showPageLoaderTimeout() {
+  const el = document.getElementById('pageLoader');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="text-align:center;color:#fff;padding:1rem">
+      <p style="margin-bottom:1rem;font-size:.9rem">Esto está tardando más de lo normal…</p>
+      <button onclick="location.reload()" style="padding:.6rem 1.5rem;background:#c0392b;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem">Reintentar</button>
+    </div>`;
+}
+
+async function checkSession() {
+  const res = await apiFetch(`${API}/auth.php?action=check`);
+  if (res.ok) {
+    currentUser = res.data;
+    document.getElementById('navUserName').textContent = res.data.nombre || '';
+    return true;
+  }
+  authToken = ''; localStorage.removeItem('at_token'); return false;
+}
+
+// ============================================================
+// BUSCAR
+// ============================================================
+async function buscar(page = 0) {
+  let rut      = document.getElementById('filtRut').value.trim();
+  const nombre = document.getElementById('filtNombre').value.trim();
+
+  // Si el RUT viene con DV (ej: 16394023-K), quitar el DV para buscar
+  if (rut.includes('-')) rut = rut.split('-')[0].trim();
+
+  currentPage = page;
+  const qs = new URLSearchParams({ action: 'buscar', rut, nombre, page }).toString();
+
+  const list = document.getElementById('clienteList');
+  list.innerHTML = `<div class="state-box"><div class="spinner"></div><p style="margin-top:.75rem">Buscando…</p></div>`;
+  document.getElementById('pagination').innerHTML = '';
+
+  const res = await apiFetch(`${API}/clientes.php?${qs}`);
+  if (!res.ok) {
+    list.innerHTML = `<div class="state-box"><p>${res.msg}</p></div>`;
+    return;
+  }
+
+  const clientes = res.data.clientes || [];
+  totalClientes  = res.data.total || 0;
+
+  document.getElementById('resultsTitle').textContent  = 'Resultados';
+  document.getElementById('resultsCount').textContent  = `${totalClientes} cliente${totalClientes !== 1 ? 's' : ''}`;
+
+  if (!clientes.length) {
+    list.innerHTML = `<div class="state-box"><p>No se encontraron clientes.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = `<div class="cliente-list">${clientes.map(renderCliente).join('')}</div>`;
+  renderPagination(totalClientes, page, PAGE_SIZE);
+}
+
+// ============================================================
+// RENDER CLIENTE CARD
+// ============================================================
+function renderCliente(c) {
+  const rutCompleto = `${c.cli_rut}-${c.cli_dv}`;
+  const descuento   = c.cli_disdes ? `${c.cli_disdes}%` : '0%';
+  const dir         = [c.cli_dir, c.cli_com, c.cli_ciu].filter(Boolean).join(', ');
+
+  return `<div class="cliente-card">
+    <div class="cli-main">
+      <div class="cli-rut" onclick="clickCliente('${esc(c.cli_rut)}','${esc(c.cli_dv)}','${esc(c.cli_sec)}','${esc(c.cli_razon_social).replace(/'/g,"\\'")}','${esc(c.cli_disdes||'0')}')" style="cursor:pointer">RUT: ${esc(rutCompleto)}</div>
+      <div class="cli-nombre" onclick="clickCliente('${esc(c.cli_rut)}','${esc(c.cli_dv)}','${esc(c.cli_sec)}','${esc(c.cli_razon_social).replace(/'/g,"\\'")}','${esc(c.cli_disdes||'0')}')" style="cursor:pointer">${esc(c.cli_razon_social)}</div>
+      <div class="cli-email">${esc(c.cli_eml || '')}</div>
+      <div class="cli-bottom">
+        <div class="cli-descuento">Descto %: <span>${esc(descuento)}</span></div>
+      </div>
+      <div class="cli-dir-full">${esc(dir)}</div>
+    </div>
+    <div class="cli-actions">
+      <button class="btn-info" title="Ver ficha del cliente"
+              onclick="verFichaCliente('${esc(c.cli_rut)}','${esc(c.cli_dv)}','${esc(c.cli_sec)}')">👤</button>
+      <button class="btn-carro"
+              onclick="verificarCarroPendiente('${esc(c.cli_rut)}','${esc(c.cli_dv)}','${esc(c.cli_sec)}','${esc(c.cli_razon_social).replace(/'/g,"\\'")}','${esc(c.cli_disdes||'0')}')">
+        🛒 Recuperar Carro
+      </button>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// CLICK EN RUT/NOMBRE → verificar cobranza atrasada
+// ============================================================
+async function clickCliente(rut, dv, sec, nombre, descuento) {
+  // Seleccionar cliente y limpiar carro anterior
+  sessionStorage.setItem('cli_activo', JSON.stringify({ rut, dv, sec, nombre, descuento }));
+  sessionStorage.removeItem('carro_pedi_id'); // nuevo cliente = nuevo carro
+  sessionStorage.removeItem('carro_dscto');
+
+  // Verificar cobranza atrasada
+  const res = await apiFetch(`${API}/cobranza.php?action=verificar_mora&rut=${encodeURIComponent(rut)}&sec=${encodeURIComponent(sec)}`);
+  const tieneMora = res.ok && res.data?.tiene_mora;
+
+  if (tieneMora) {
+    mostrarAlertaMora(nombre, rut, dv, sec, descuento, res.data?.documentos || []);
+  } else {
+    showToast(`Cliente seleccionado: ${nombre}`, 'success');
+    setTimeout(() => location.href = '../index.html', 800);
+  }
+}
+
+function mostrarAlertaMora(nombre, rut, dv, sec, descuento, docs) {
+  document.getElementById('moraNombre').textContent = nombre;
+
+  // Mostrar tabla de documentos vencidos
+  let docsHtml = '';
+  if (docs && docs.length) {
+    const colores = { rojo: '#c0392b', amarillo: '#f39c12', verde: '#27ae60' };
+    docsHtml = `<div style="margin:.75rem 0;max-height:200px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+        <thead><tr style="background:#f5f5f5">
+          <th style="padding:.3rem .5rem;text-align:left">Documento</th>
+          <th style="padding:.3rem .5rem;text-align:left">Vencimiento</th>
+          <th style="padding:.3rem .5rem;text-align:right">Saldo</th>
+          <th style="padding:.3rem .5rem;text-align:left">Empresa</th>
+        </tr></thead>
+        <tbody>${docs.map(d => `<tr style="border-bottom:1px solid #eee">
+          <td style="padding:.3rem .5rem">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;
+              background:${colores[d.ESTADO_FECHA]||'#888'};margin-right:4px"></span>
+            ${esc(d.DOCTO)}
+          </td>
+          <td style="padding:.3rem .5rem;color:${colores[d.ESTADO_FECHA]||'#888'};font-weight:600">${esc(d.VENCTO)}</td>
+          <td style="padding:.3rem .5rem;text-align:right;font-weight:700">$${Number(d.SALDO_CUOTA||0).toLocaleString('es-CL')}</td>
+          <td style="padding:.3rem .5rem;color:#888">${esc(d.EMPRESA_LABEL||d.EMPRESA)}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+  document.getElementById('moraDocsHtml').innerHTML = docsHtml;
+
+  document.getElementById('moraModal').classList.add('open');
+  document.getElementById('moraCheck').checked = false;
+  document.getElementById('moraCheckError').style.display = 'none';
+
+  document.getElementById('moraAceptar').onclick = () => {
+    if (!document.getElementById('moraCheck').checked) {
+      // Igual que Android: Toast "Debe marcar la casilla para continuar"
+      document.getElementById('moraCheckError').style.display = 'block';
+      return;
+    }
+    document.getElementById('moraModal').classList.remove('open');
+    // Ir a cobranza filtrada por este cliente
+    const cliMora = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+    window.location.replace(`cobranza.html?rut=${encodeURIComponent(cliMora.rut || '')}`);
+  };
+}
+
+// ============================================================
+// BOTÓN VER CARRO PENDIENTE
+// ============================================================
+async function verificarCarroPendiente(rut, dv, sec, nombre, descuento) {
+  sessionStorage.setItem('cli_activo', JSON.stringify({ rut, dv, sec, nombre, descuento }));
+  showToast('Verificando carro pendiente…', '');
+
+  const url = `https://www.autotec.cl/json/carro_pendiente_2.php?rut=${encodeURIComponent(rut)}-${encodeURIComponent(dv)}&sec=${encodeURIComponent(sec)}`;
+  try {
+    const r = await fetch(url);
+    const rawText = await r.text();
+    let json;
+    try {
+      json = JSON.parse(rawText);
+    } catch (parseErr) {
+      console.error('[verificarCarroPendiente] Respuesta no es JSON válido. Status:', r.status, 'Body:', rawText.slice(0, 500));
+      throw parseErr;
+    }
+
+    if (json.tiene_carro) {
+      document.getElementById('carroPendNombre').textContent = nombre;
+
+      // El endpoint legacy entrega los productos en "items": [{prod_id, cantidad, precio, descuento}]
+      const items = json.items || [];
+
+      // Traer nombres de producto para el preview (no bloqueante si falla)
+      let nombres = {};
+      if (items.length) {
+        try {
+          const idsStr = items.map(p => p.prod_id).join(',');
+          const rNom = await apiFetch(`${API}/carro.php?action=nombres&ids=${encodeURIComponent(idsStr)}`);
+          if (rNom.ok) nombres = rNom.data || {};
+        } catch(e) {}
+      }
+
+      let detalleHtml = '';
+      if (items.length) {
+        detalleHtml = `<table style="width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:1rem">
+          <thead><tr style="background:var(--gray-100)">
+            <th style="padding:.4rem .6rem;text-align:left">Producto</th>
+            <th style="padding:.4rem .6rem;text-align:center">Cant.</th>
+            <th style="padding:.4rem .6rem;text-align:right">Precio</th>
+          </tr></thead>
+          <tbody>${items.map(p => `
+            <tr style="border-bottom:1px solid var(--gray-200)">
+              <td style="padding:.4rem .6rem">${esc(nombres[p.prod_id] || p.prod_id || '')}</td>
+              <td style="padding:.4rem .6rem;text-align:center">${esc(p.cantidad)}</td>
+              <td style="padding:.4rem .6rem;text-align:right">${formatoPrecio(p.precio || 0)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+      } else if (json.html_carro) {
+        detalleHtml = `<div style="font-size:.82rem;margin-bottom:1rem">${json.html_carro}</div>`;
+      }
+      document.getElementById('carroPendDetalle').innerHTML = detalleHtml;
+      document.getElementById('carroPendModal').classList.add('open');
+
+      const btnRecuperar = document.getElementById('btnRecuperarCarro');
+      btnRecuperar.disabled = false;
+      btnRecuperar.textContent = '✅ Recuperar Carro';
+      btnRecuperar.onclick = async () => {
+        if (!items.length) {
+          document.getElementById('carroPendModal').classList.remove('open');
+          return;
+        }
+        btnRecuperar.disabled = true;
+        btnRecuperar.textContent = 'Recuperando…';
+
+        // 1. Crear el carro real (cabecera + detalle) en nuestra BD
+        const res = await apiFetch(`${API}/carro.php?action=recuperar`, 'POST', {
+          cli_rut: rut, cli_sec: sec, items
+        });
+
+        if (!res.ok) {
+          showToast(res.msg || 'Error al recuperar el carro', 'error');
+          btnRecuperar.disabled = false;
+          btnRecuperar.textContent = '✅ Recuperar Carro';
+          return;
+        }
+
+        // 2. Dejar el carro recuperado como el carro activo de la sesión
+        sessionStorage.setItem('carro_pedi_id', res.data.pedi_id);
+        document.getElementById('carroPendModal').classList.remove('open');
+
+        // 3. Limpiar el carro pendiente en el servidor legacy (no bloqueante)
+        fetch(`https://www.autotec.cl/json/borrar_carro_pendiente_2.php?rut=${encodeURIComponent(rut)}-${encodeURIComponent(dv)}&sec=${encodeURIComponent(sec)}`).catch(() => {});
+
+        showToast('Carro recuperado exitosamente', 'success');
+        setTimeout(() => location.href = 'carro.html', 800);
+      };
+      document.getElementById('btnDescartarCarro').onclick = () => {
+        document.getElementById('carroPendModal').classList.remove('open');
+        // Quedar en clientes, no redirigir
+      };
+    } else {
+      // Sin carro: solo aviso, NO redirigir
+      showToast(`${nombre} no tiene carro pendiente`, '');
+    }
+  } catch(e) {
+    console.error('[verificarCarroPendiente] Error:', e);
+    showToast('No se pudo verificar el carro', 'error');
+  }
+}
+
+// ============================================================
+// BOTÓN INFO → ficha externa del cliente (Análisis BI)
+// ============================================================
+function verFichaCliente(rut, dv, sec) {
+  location.href = `externo.html?tipo=analisis_cli&rut=${encodeURIComponent(rut)}&dv=${encodeURIComponent(dv)}&sec=${encodeURIComponent(sec)}`;
+}
+
+function closeModal() { document.getElementById('infoModal').classList.remove('open'); }
+document.getElementById('infoModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('infoModal')) closeModal();
+});
+
+// ============================================================
+// PAGINACIÓN
+// ============================================================
+function renderPagination(total, page, perPage) {
+  const pages = Math.ceil(total / perPage);
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  let html = '';
+  const start = Math.max(0, page - 2);
+  const end   = Math.min(pages - 1, page + 2);
+  if (start > 0)       html += `<button class="page-btn" onclick="gotoPage(0)">«</button>`;
+  if (start > 1)       html += `<button class="page-btn" onclick="gotoPage(${start-1})">…</button>`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="gotoPage(${i})">${i+1}</button>`;
+  }
+  if (end < pages - 2) html += `<button class="page-btn" onclick="gotoPage(${end+1})">…</button>`;
+  if (end < pages - 1) html += `<button class="page-btn" onclick="gotoPage(${pages-1})">»</button>`;
+  document.getElementById('pagination').innerHTML = html;
+}
+
+function gotoPage(page) {
+  currentPage = page;
+  buscar(page);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================
+// CARRO BADGE
+// ============================================================
+async function loadCarroBadge() {
+  const res = await apiFetch(`${API}/carro.php?action=ver`);
+  if (!res.ok) return;
+  document.getElementById('cartBadge').textContent = res.data.detalle?.length || 0;
+}
+
+function toggleCart() {
+  document.getElementById('cartDrawer').style.transform =
+    document.getElementById('cartDrawer').style.transform === 'translateX(0px)'
+      ? 'translateX(100%)' : 'translateX(0px)';
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  localStorage.removeItem('at_token');
+  sessionStorage.clear();
+  location.href = '../index.html';
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+async function apiFetch(url, method = 'GET', body = null) {
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Token': authToken } };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    return await r.json();
+  } catch(e) { return { ok: false, msg: 'Error de red' }; }
+}
+
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatoPrecio(n) {
+  return '$' + Number(n || 0).toLocaleString('es-CL');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+/* ==========================================================================
+   SAAS SHELL / APP SWITCHER CSS — GRUPO AUTOMARCO
+   Diseño modular ERP, responsive y armonizado con Design Tokens
+   ========================================================================== */
+
+.shell-header {
+    height: 56px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--color-border, #e2e8f0);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+    z-index: 1000;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+/* Marca / Logotipo ERP */
+.shell-brand-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+.shell-brand-badge {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.75rem;
+    padding: 4px 9px;
+    border-radius: 6px;
+    letter-spacing: 0.6px;
+    box-shadow: 0 2px 4px rgba(30, 58, 138, 0.2);
+}
+
+.shell-brand-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+}
+
+.shell-brand-title span {
+    color: #2563eb;
+    font-weight: 600;
+}
+
+/* App Switcher Tabs */
+.shell-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.shell-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #64748b;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.shell-tab:hover {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.shell-tab--active {
+    background: #ffffff !important;
+    color: #1e3a8a !important;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.shell-tab svg {
+    flex-shrink: 0;
+    color: currentColor;
+}
+
+.shell-tab-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-left: 2px;
+}
+
+.shell-tab--active .shell-tab-badge {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* Zona Derecha: Perfil, Temporizador, Config y Logout */
+.shell-right-zone {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.shell-user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #475569;
+    background: #f8fafc;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.shell-user-name {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.shell-role-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #e0f2fe;
+    color: #0369a1;
+    letter-spacing: 0.3px;
+}
+
+.shell-role-badge.role-admin {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.shell-role-badge.role-cc {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+
+.shell-role-badge.role-tesoreria {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* Botones de acción del Header */
+.shell-btn-config {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.shell-btn-config:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
+.shell-btn-logout {
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.shell-btn-logout:hover {
+    background: rgba(220, 38, 38, 0.08);
+    color: #dc2626;
+    border-color: rgba(220, 38, 38, 0.25);
+}
+
+/* Responsividad */
+@media (max-width: 960px) {
+    .shell-brand-title {
+        display: none;
+    }
+    .shell-tab span:not(.shell-tab-badge) {
+        display: none;
+    }
+    .shell-user-info span.user-label {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .shell-header {
+        padding: 0 10px;
+        height: auto;
+        min-height: 52px;
+        flex-wrap: wrap;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+    .shell-nav {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+}

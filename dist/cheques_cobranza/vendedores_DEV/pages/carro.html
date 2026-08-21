@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carro de Compras — Autotec</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--red:#c0392b;--red-dark:#a93226;--blue:#1a6faf;--blue-light:#eaf4fb;
+  --green:#27ae60;--yellow:#f39c12;
+  --gray-900:#1a1a2e;--gray-700:#444;--gray-500:#888;--gray-200:#e8e8e8;
+  --gray-100:#f5f5f5;--white:#fff;--shadow:0 2px 12px rgba(0,0,0,.10);--radius:8px;--nav-h:60px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--gray-700);background:var(--gray-100)}
+button{cursor:pointer;border:none;font-family:inherit}
+input,select,textarea{font-family:inherit}
+
+/* NAV */
+.navbar{position:sticky;top:0;z-index:1000;height:var(--nav-h);background:var(--white);
+  display:flex;align-items:center;padding:0 1.5rem;gap:1rem;
+  box-shadow:var(--shadow);border-bottom:2px solid var(--red)}
+.btn-volver{background:rgba(0,0,0,.06);color:var(--gray-700);padding:.4rem .9rem;border-radius:5px;font-size:.85rem;font-weight:600;transition:.15s}
+.btn-volver:hover{background:rgba(0,0,0,.12)}
+.nav-right{display:flex;align-items:center;gap:.75rem;margin-left:auto}
+.nav-user{color:var(--gray-700);font-size:.85rem}
+.btn-logout{background:none;color:var(--gray-500);font-size:.8rem;padding:.3rem .6rem;border-radius:4px}
+.btn-logout:hover{background:var(--gray-100);color:var(--gray-900)}
+
+/* LAYOUT */
+.page-wrap{max-width:1200px;margin:0 auto;padding:1.5rem 1rem;
+  display:grid;grid-template-columns:1fr 340px;gap:1.5rem;align-items:start}
+@media(max-width:900px){.page-wrap{grid-template-columns:1fr}}
+
+/* CLIENTE INFO */
+.cli-info-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:1rem 1.2rem;margin-bottom:1rem;border-left:4px solid var(--blue)}
+.cli-info-nombre{font-size:1rem;font-weight:700;color:var(--gray-900)}
+.cli-info-sub{font-size:.82rem;color:var(--gray-500);margin-top:.2rem}
+.cli-info-cond{font-size:.8rem;color:var(--blue);font-weight:600;margin-top:.3rem}
+
+/* TABLA CARRO */
+.carro-table-wrap{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.83rem;min-width:700px}
+thead tr{background:var(--gray-900);color:var(--white)}
+th{padding:.55rem .75rem;text-align:left;font-size:.76rem;white-space:nowrap}
+td{padding:.5rem .75rem;border-bottom:1px solid var(--gray-200);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--blue-light)}
+
+.qty-cell{display:flex;align-items:center;gap:.3rem}
+.qty-btn{width:26px;height:26px;border-radius:4px;background:var(--gray-100);
+  color:var(--gray-700);font-size:.95rem;display:flex;align-items:center;justify-content:center;transition:.15s}
+.qty-btn:hover{background:var(--gray-200)}
+.qty-val{width:44px;text-align:center;border:1.5px solid var(--gray-200);border-radius:4px;
+  padding:.25rem;font-size:.83rem}
+.dscto-val{width:44px;text-align:center;border:1.5px solid var(--gray-200);border-radius:4px;
+  padding:.25rem;font-size:.83rem}
+.btn-del{background:none;color:var(--red);font-size:1rem;padding:.2rem .4rem}
+.badge-promo{background:#fff3cd;color:#856404;font-size:.7rem;font-weight:700;
+  padding:.1rem .4rem;border-radius:10px;margin-left:.3rem}
+
+/* PANEL DERECHO */
+.panel-right{display:flex;flex-direction:column;gap:1rem;position:sticky;top:calc(var(--nav-h)+1rem)}
+
+.panel-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.1rem}
+.panel-box h3{font-size:.85rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;
+  letter-spacing:.05em;margin-bottom:.75rem;border-bottom:1px solid var(--gray-200);padding-bottom:.4rem}
+
+.form-row{margin-bottom:.7rem}
+.form-row label{display:block;font-size:.78rem;font-weight:600;color:var(--gray-700);margin-bottom:.25rem}
+.form-row select,.form-row input,.form-row textarea{
+  width:100%;padding:.45rem .6rem;border:1.5px solid var(--gray-200);
+  border-radius:5px;font-size:.83rem;transition:.15s}
+.form-row select:focus,.form-row input:focus,.form-row textarea:focus{
+  outline:none;border-color:var(--blue)}
+.form-row textarea{resize:vertical;min-height:60px}
+
+/* TOTALES */
+.total-row{display:flex;justify-content:space-between;font-size:.88rem;padding:.25rem 0}
+.total-row.grand{font-weight:800;font-size:1.05rem;color:var(--gray-900);
+  border-top:2px solid var(--gray-200);margin-top:.4rem;padding-top:.5rem}
+
+/* BOTONES ACCIÓN */
+.btn-enviar{width:100%;padding:.7rem;background:var(--blue);color:var(--white);
+  border-radius:6px;font-size:.92rem;font-weight:700;transition:.15s;margin-top:.5rem}
+.btn-enviar:hover{background:#155a8f}
+.btn-cotizar{width:100%;padding:.7rem;background:var(--green);color:var(--white);
+  border-radius:6px;font-size:.92rem;font-weight:700;transition:.15s;margin-top:.4rem}
+.btn-cotizar:hover{background:#1e8449}
+.btn-vaciar{width:100%;padding:.55rem;background:none;color:var(--red);
+  border:1.5px solid var(--red);border-radius:6px;font-size:.82rem;font-weight:600;
+  transition:.15s;margin-top:.4rem}
+.btn-vaciar:hover{background:var(--red);color:var(--white)}
+
+/* EMPTY */
+.state-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:3rem 2rem;text-align:center;color:var(--gray-500);grid-column:1/-1}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(0,0,0,.1);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* MODAL CONFIRMAR */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;
+  display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--white);border-radius:var(--radius);max-width:460px;width:100%;
+  padding:1.5rem;box-shadow:0 8px 40px rgba(0,0,0,.25)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.modal-title{font-size:1rem;font-weight:700;color:var(--gray-900)}
+.modal-close{background:none;font-size:1.2rem;color:var(--gray-500)}
+.modal-msg{font-size:.88rem;color:var(--gray-700);margin-bottom:1.2rem;line-height:1.5}
+.modal-btns{display:flex;gap:.75rem}
+.btn-modal-ok{flex:1;padding:.6rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700;font-size:.9rem}
+.btn-modal-cancel{flex:1;padding:.6rem;background:var(--gray-200);color:var(--gray-700);border-radius:6px;font-weight:700;font-size:.9rem}
+
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;background:var(--gray-900);
+  color:var(--white);padding:.7rem 1.2rem;border-radius:7px;font-size:.85rem;font-weight:500;
+  box-shadow:var(--shadow);transform:translateY(10px);opacity:0;transition:.3s;pointer-events:none;max-width:320px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-left:4px solid var(--green)}
+.toast.error{border-left:4px solid var(--red)}
+</style>
+</head>
+<body style="visibility:hidden">
+<div id="pageLoader" style="position:fixed;inset:0;background:#1a1a2e;visibility:visible;display:flex;align-items:center;justify-content:center;z-index:99999"><div class="spinner" style="border-color:rgba(255,255,255,.25);border-top-color:#fff"></div></div>
+
+<div id="sendingOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,26,46,.85);z-index:99998;align-items:center;justify-content:center;flex-direction:column;gap:1rem">
+  <div class="spinner" style="width:40px;height:40px;border-color:rgba(255,255,255,.25);border-top-color:#fff"></div>
+  <div style="color:#fff;font-size:1rem;font-weight:600" id="sendingOverlayText">Enviando…</div>
+</div>
+
+
+<nav class="navbar">
+  <img src="https://www.autotec.cl/bo/includes/images/img-logo.jpg" alt="Autotec"
+       style="height:36px;object-fit:contain;cursor:pointer" onclick="location.href='../index.html'">
+  <button class="btn-volver" onclick="location.href='../index.html'">← Seguir comprando</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUserName"></span>
+    <button class="btn-logout" onclick="doLogout()">Salir</button>
+  </div>
+</nav>
+
+<div class="page-wrap" id="pageWrap">
+  <div class="state-box"><div class="spinner"></div><p style="margin-top:.75rem">Cargando carro…</p></div>
+</div>
+
+<!-- MODAL CONFIRMAR ENVÍO -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="confirmTitle">Confirmar Pedido</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <p class="modal-msg" id="confirmMsg"></p>
+    <div id="confirmEmailWrap" style="display:none;margin:.3rem 0 1rem">
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.3rem">Correo del cliente (destinatario de la cotización)</label>
+      <input type="email" id="inp_email_cotizacion" placeholder="cliente@ejemplo.com"
+             style="width:100%;padding:.5rem .7rem;border:1.5px solid #ddd;border-radius:6px;font-size:.88rem;box-sizing:border-box">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-modal-ok" id="confirmOkBtn">Confirmar</button>
+      <button class="btn-modal-cancel" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API       = '../api';
+let authToken   = localStorage.getItem('at_token') || '';
+let currentUser = null;
+let carroData   = null;
+let formasPago  = [];
+let plazos      = [];
+let transportes = [];
+let formaDefault = '';
+let condDefault  = '';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const loaderTimeout = setTimeout(showPageLoaderTimeout, 8000);
+  if (!authToken) { location.href = '../index.html'; return; }
+  const res = await apiFetch(`${API}/auth.php?action=check`);
+  clearTimeout(loaderTimeout);
+  if (!res.ok) { location.href = '../index.html'; return; }
+  currentUser = res.data;
+  document.getElementById('navUserName').textContent = res.data.nombre || '';
+  revealPage();
+  // Si viene ?pedi_id=X cargar ese pedido específico
+  const urlParams = new URLSearchParams(location.search);
+  const pediIdUrl = urlParams.get('pedi_id');
+  window._pediIdForzado = pediIdUrl ? parseInt(pediIdUrl) : null;
+  await cargarCarro();
+});
+
+function revealPage() {
+  document.body.style.visibility = 'visible';
+  const loader = document.getElementById('pageLoader');
+  if (loader) loader.remove();
+}
+
+function showPageLoaderTimeout() {
+  const el = document.getElementById('pageLoader');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="text-align:center;color:#fff;padding:1rem">
+      <p style="margin-bottom:1rem;font-size:.9rem">Esto está tardando más de lo normal…</p>
+      <button onclick="location.reload()" style="padding:.6rem 1.5rem;background:#c0392b;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem">Reintentar</button>
+    </div>`;
+}
+
+// ============================================================
+// CARGAR CARRO
+// ============================================================
+let _cargando = false;
+async function cargarCarro() {
+  if (_cargando) return;
+  _cargando = true;
+  let verUrl = `${API}/carro.php?action=ver`;
+  if (window._pediIdForzado) {
+    // Editar pedido específico desde Mis Pedidos — ignorar sesión
+    verUrl += `&pedi_id=${window._pediIdForzado}`;
+  } else {
+    const pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+    if (pediIdSesion !== '0') verUrl += `&pedi_id_sesion=${pediIdSesion}`;
+  }
+
+  const [rCarro, rTrans] = await Promise.all([
+    apiFetch(verUrl),
+    apiFetch(`${API}/carro.php?action=transportes`),
+  ]);
+
+  if (!rCarro.ok) {
+    document.getElementById('pageWrap').innerHTML = `<div class="state-box"><p>${rCarro.msg}</p></div>`;
+    return;
+  }
+
+  carroData   = rCarro.data;
+  transportes = rTrans.data || [];
+
+  // Si estamos editando un pedido puntual (desde Mis Pedidos), dejarlo como
+  // el carro activo de la sesión para que "actualizar"/"vaciar"/"confirmar"
+  // operen sobre este mismo pedido y no sobre uno distinto o vacío.
+  if (window._pediIdForzado && rCarro.data?.cabecera?.pedi_id) {
+    sessionStorage.setItem('carro_pedi_id', rCarro.data.cabecera.pedi_id);
+  }
+
+  let cli = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+
+  // Si estamos editando un pedido específico, usar los datos del cliente de la cabecera
+  const cabecera = rCarro.data?.cabecera;
+  if (window._pediIdForzado && cabecera?.cli_rut) {
+    // Tomar rut/sec de la cabecera del pedido
+    const rutPedido = cabecera.cli_rut;
+    const secPedido = cabecera.cli_sec || '';
+    // Buscar nombre del cliente en la BD
+    const rCli = await apiFetch(`${API}/clientes.php?action=buscar&rut=${encodeURIComponent(rutPedido)}&nombre=&page=0`);
+    const cliData = rCli.data?.clientes?.[0];
+    cli = {
+      rut:       rutPedido,
+      dv:        cliData?.cli_dv        || '',
+      sec:       secPedido,
+      nombre:    cliData?.cli_razon_social || cabecera.cli_razon_social || rutPedido,
+      descuento: cliData?.cli_disdes    || 0,
+      eml:       cliData?.cli_eml       || '',
+    };
+    // Dejarlo como el cliente activo también en el resto del sitio (menú, Análisis, etc.)
+    sessionStorage.setItem('cli_activo', JSON.stringify(cli));
+  }
+
+  // Cargar formas de pago si hay cliente
+  if (cli.rut) {
+    const rFp = await apiFetch(`${API}/carro.php?action=formas_pago&cli_rut=${encodeURIComponent(cli.rut)}&cli_sec=${encodeURIComponent(cli.sec||'')}`);
+    if (rFp.ok) {
+      formasPago   = rFp.data.formas        || [];
+      formaDefault = rFp.data.forma_default || '';
+      condDefault  = rFp.data.cond_default  || '';
+    }
+  }
+
+  renderCarro(cli);
+
+  _cargando = false;
+}
+
+// ============================================================
+// RENDER CARRO COMPLETO
+// ============================================================
+function renderCarro(cli) {
+  const { cabecera, detalle } = carroData;
+
+  if (!detalle || !detalle.length) {
+    document.getElementById('pageWrap').innerHTML = `
+      <div class="state-box">
+        <div style="font-size:2.5rem;margin-bottom:.75rem">🛒</div>
+        <p style="font-size:.95rem;font-weight:600;margin-bottom:.5rem">El carro está vacío</p>
+        <p>Agregue productos desde el catálogo.</p>
+        <button onclick="location.href='../index.html'"
+          style="margin-top:1.2rem;padding:.55rem 1.5rem;background:var(--blue);color:var(--white);border-radius:6px;font-weight:700;font-size:.88rem">
+          Ir al Catálogo
+        </button>
+      </div>`;
+    return;
+  }
+
+  // Info cliente
+  const cliHtml = cli.nombre ? `
+    <div class="cli-info-box">
+      <div class="cli-info-nombre">${esc(cli.nombre)}</div>
+      <div class="cli-info-sub">RUT: ${esc(cli.rut)}-${esc(cli.dv)} / Sec: ${esc(cli.sec||'')}</div>
+      ${cli.descuento > 0 ? `<div class="cli-info-cond">Descuento asignado: ${cli.descuento}%</div>` : ''}
+    </div>` : '';
+
+  // Tabla productos
+  const tbody = detalle.map(d => {
+    const neto  = parseInt(d.ped_prod_neto || 0);
+    const cant  = parseInt(d.ped_prod_cantidad || 1);
+    const dscto = parseFloat(d.ped_prod_dscto || 0);
+    const total = Math.round(neto * cant * (1 - dscto/100));
+    return `<tr>
+      <td><strong>${esc(d.prod_id)}</strong><br>
+          <small style="color:var(--gray-500)">${esc(d.codigo_equivalente1||'')}</small></td>
+      <td>${esc(d.prod_nombre||'')}
+          ${d.ped_prod_flagP && d.ped_prod_flagP!='0' ? '<span class="badge-promo">PROMO</span>':''}</td>
+      <td>
+        <div class="qty-cell">
+          <button class="qty-btn" onclick="cambiarCant(${d.id},${cant},-1)">−</button>
+          <input type="number" class="qty-val" value="${cant}" min="1"
+                 onchange="setCant(${d.id},this.value)" onblur="setCant(${d.id},this.value)">
+          <button class="qty-btn" onclick="cambiarCant(${d.id},${cant},1)">+</button>
+        </div>
+      </td>
+      <td style="text-align:right">${formatoPrecio(neto)}</td>
+      <td>
+        ${d.prod_desc == 1
+          ? `<span style="color:var(--gray-500);font-size:.82rem">0% <small>(fijo)</small></span>`
+          : `<input type="number" class="dscto-val" value="${dscto}" min="0" max="100" step="1"
+                    onchange="setDscto(${d.id},this.value)">%`
+        }
+      </td>
+      <td style="text-align:right;font-weight:700">${formatoPrecio(total)}</td>
+      <td><button class="btn-del" onclick="eliminarItem(${d.id})" title="Eliminar">🗑</button></td>
+    </tr>`;
+  }).join('');
+
+  // Opciones forma de pago
+  const fpOpts = formasPago.map(f =>
+    `<option value="${esc(f.forma_id)}">${esc(f.forma_nombre)}</option>`
+  ).join('') || '<option value="">Sin formas de pago disponibles</option>';
+
+  // Opciones transporte
+  const transOpts = transportes.map(t =>
+    `<option value="${esc(t.tran_id)}">${esc(t.tran_nombre)}</option>`
+  ).join('') || '<option value="">Sin transporte</option>';
+
+  document.getElementById('pageWrap').innerHTML = `
+    <div>
+      ${cliHtml}
+      <div class="carro-table-wrap">
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Producto</th><th style="text-align:center">Cantidad</th>
+            <th style="text-align:right">P.Neto</th><th>Dscto</th>
+            <th style="text-align:right">Total</th><th></th>
+          </tr></thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel-right">
+
+      <!-- TOTALES -->
+      <div class="panel-box">
+        <h3>Resumen</h3>
+        <div class="total-row"><span>Subtotal neto:</span><span id="sumNeto">${formatoPrecio(cabecera.pedi_total_neto)}</span></div>
+        <div class="total-row"><span>IVA 19%:</span><span id="sumIva">${formatoPrecio(cabecera.pedi_total_iva)}</span></div>
+        <div class="total-row grand"><span>TOTAL:</span><span id="sumTotal">${formatoPrecio(cabecera.pedi_total)}</span></div>
+        <div style="font-size:.78rem;color:var(--gray-500);margin-top:.4rem">
+          ${detalle.length} ítem${detalle.length!==1?'s':''}
+        </div>
+      </div>
+
+      <!-- DESCUENTO GENERAL -->
+      <div class="panel-box">
+        <h3>Aplicar Descuento a Todos</h3>
+        <div style="display:flex;gap:.5rem;align-items:flex-end">
+          <div style="flex:1">
+            <label style="display:block;font-size:.78rem;font-weight:600;color:var(--gray-700);margin-bottom:.25rem">% Descuento (máx. 20%)</label>
+            <input type="number" id="inp_dscto_general" min="0" max="20" step="0.5" value="0"
+                   style="width:100%;padding:.5rem .7rem;border:1.5px solid #ddd;border-radius:6px;font-size:.9rem;box-sizing:border-box">
+          </div>
+          <button onclick="aplicarDescuentoGeneral()" style="padding:.55rem 1rem;background:var(--blue);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;white-space:nowrap">Aplicar a Todos</button>
+        </div>
+        <p style="font-size:.72rem;color:var(--gray-500);margin-top:.5rem">
+          No se aplica a productos sin descuento permitido ni a ciertos productos/categorías excluidas.
+        </p>
+      </div>
+
+      <!-- CONDICIONES -->
+      <div class="panel-box">
+        <h3>Condiciones de Pago</h3>
+        <div class="form-row">
+          <label>Forma de Pago</label>
+          <select id="sel_fpago" onchange="cargarPlazos()">${fpOpts}</select>
+        </div>
+        <div class="form-row">
+          <label>Plazo</label>
+          <select id="sel_plazo" onchange="verificarMontoCondicion()"><option value="">Seleccione plazo…</option></select>
+        </div>
+        <div id="avisoCredito" style="display:none;background:#fff3cd;color:#856404;padding:.5rem .7rem;border-radius:6px;font-size:.78rem;margin-bottom:.6rem;font-weight:600">
+          El plazo seleccionado está sujeto a aprobación de Crédito
+        </div>
+        <div class="form-row">
+          <label>Transporte</label>
+          <select id="sel_transporte">${transOpts}</select>
+        </div>
+      </div>
+
+      <!-- DATOS PEDIDO -->
+      <div class="panel-box">
+        <h3>Datos del Pedido</h3>
+        <div class="form-row">
+          <label>Orden de Compra</label>
+          <input type="text" id="inp_oc" placeholder="Número OC del cliente"
+                 value="${esc(cabecera.pedi_orden_compra||'')}">
+        </div>
+        <div class="form-row">
+          <label>Fecha OC</label>
+          <input type="date" id="inp_fecha_oc" value="${cabecera.pedi_fecha_oc||''}">
+        </div>
+        <div class="form-row">
+          <label>Observaciones</label>
+          <textarea id="inp_obs" rows="3" placeholder="Observaciones del pedido…">${esc(cabecera.pedi_observaciones||'')}</textarea>
+        </div>
+      </div>
+
+      <!-- ACCIONES -->
+      <div class="panel-box">
+        <button class="btn-enviar" onclick="confirmarEnvio('EN PROCESO')">
+          📤 Enviar Pedido
+        </button>
+        <button class="btn-cotizar" onclick="confirmarEnvio('COTIZACION EN ESPERA')">
+          📋 Enviar como Cotización
+        </button>
+        <button class="btn-vaciar" onclick="vaciarCarro()">
+          🗑 Vaciar Carro
+        </button>
+      </div>
+
+    </div>`;
+
+  // Cargar plazos para la forma de pago inicial (preseleccionando la propia del cliente)
+  if (formasPago.length) {
+    const selFp = document.getElementById('sel_fpago');
+    if (formaDefault && selFp && [...selFp.options].some(o => o.value === String(formaDefault))) {
+      selFp.value = String(formaDefault);
+    }
+    cargarPlazos();
+  }
+}
+
+// ============================================================
+// CARGAR PLAZOS según forma de pago seleccionada
+// ============================================================
+async function cargarPlazos() {
+  const formaId = document.getElementById('sel_fpago')?.value;
+  const sel = document.getElementById('sel_plazo');
+  if (!sel) return;
+
+  if (!formaId) {
+    sel.innerHTML = '<option value="">Seleccione plazo…</option>';
+    plazos = [];
+    verificarMontoCondicion();
+    return;
+  }
+
+  const res = await apiFetch(`${API}/carro.php?action=plazos&forma_id=${encodeURIComponent(formaId)}`);
+  plazos = res.data || [];
+  sel.innerHTML = plazos.map(p =>
+    `<option value="${esc(p.cond_id)}">${esc(p.cond_descripcion)}</option>`
+  ).join('') || '<option value="">Sin plazos</option>';
+
+  // Preseleccionar el plazo propio del cliente si aplica a esta forma de pago
+  if (condDefault && plazos.some(p => String(p.cond_id) === String(condDefault))) {
+    sel.value = String(condDefault);
+  }
+
+  verificarMontoCondicion();
+}
+
+// ============================================================
+// AVISO DE CRÉDITO — igual que Android: si el monto configurado
+// para la condición supera el total del pedido, se advierte que
+// el plazo está sujeto a aprobación de crédito.
+// ============================================================
+function verificarMontoCondicion() {
+  const aviso = document.getElementById('avisoCredito');
+  if (!aviso) return;
+
+  const condId = document.getElementById('sel_plazo')?.value;
+  const plazo  = plazos.find(p => String(p.cond_id) === String(condId));
+  if (!plazo) { aviso.style.display = 'none'; return; }
+
+  const montoCond = Number(plazo.cond_monto || 0);
+  const total     = Number(carroData?.cabecera?.pedi_total || 0);
+
+  aviso.style.display = (montoCond > total) ? 'block' : 'none';
+}
+
+// ============================================================
+// MODIFICAR ÍTEMS
+// ============================================================
+async function cambiarCant(itemId, cantActual, delta) {
+  const nueva = Math.max(1, cantActual + delta);
+  await apiFetch(`${API}/carro.php?action=actualizar`, 'POST', { item_id: itemId, cantidad: nueva });
+  await cargarCarro();
+}
+
+async function setCant(itemId, val) {
+  const nueva = Math.max(1, parseInt(val) || 1);
+  await apiFetch(`${API}/carro.php?action=actualizar`, 'POST', { item_id: itemId, cantidad: nueva });
+  await cargarCarro();
+}
+
+async function setDscto(itemId, val) {
+  const dscto = Math.max(0, Math.min(100, parseFloat(val) || 0));
+  await apiFetch(`${API}/carro.php?action=actualizar`, 'POST', { item_id: itemId, dscto });
+  await cargarCarro();
+}
+
+async function eliminarItem(itemId) {
+  await apiFetch(`${API}/carro.php?action=actualizar`, 'POST', { item_id: itemId, cantidad: 0 });
+  await cargarCarro();
+}
+
+async function vaciarCarro() {
+  if (!confirm('¿Está seguro que desea vaciar el carro?')) return;
+  const pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+  await apiFetch(`${API}/carro.php?action=vaciar`, 'POST', { pedi_id_sesion: pediIdSesion });
+  await cargarCarro();
+}
+
+async function aplicarDescuentoGeneral() {
+  const dscto = parseFloat(document.getElementById('inp_dscto_general')?.value || 0);
+  if (isNaN(dscto) || dscto < 0 || dscto > 20) {
+    showToast('El descuento no puede ser superior al 20%', 'error');
+    return;
+  }
+  const pediIdSesion = sessionStorage.getItem('carro_pedi_id') || '0';
+  const res = await apiFetch(`${API}/carro.php?action=aplicar_descuento_general`, 'POST', {
+    pedi_id_sesion: pediIdSesion, dscto,
+  });
+  if (!res.ok) { showToast(res.msg || 'Error al aplicar el descuento', 'error'); return; }
+  showToast(res.msg || 'Descuento aplicado', 'success');
+  await cargarCarro();
+}
+
+// ============================================================
+// CONFIRMAR ENVÍO
+// ============================================================
+function confirmarEnvio(estado) {
+  const esCot = estado === 'COTIZACION EN ESPERA';
+  document.getElementById('confirmTitle').textContent = esCot ? 'Enviar Cotización' : 'Confirmar Pedido';
+  document.getElementById('confirmMsg').textContent   = esCot
+    ? '¿Desea enviar este carro como Cotización en Espera?'
+    : '¿Desea confirmar y enviar este pedido?';
+
+  const emailWrap = document.getElementById('confirmEmailWrap');
+  const emailInp  = document.getElementById('inp_email_cotizacion');
+  if (esCot) {
+    emailWrap.style.display = 'block';
+    // Precargar el correo del cliente si lo tenemos guardado
+    const cli = JSON.parse(sessionStorage.getItem('cli_activo') || '{}');
+    emailInp.value = cli.eml || '';
+  } else {
+    emailWrap.style.display = 'none';
+  }
+
+  document.getElementById('confirmOkBtn').onclick = () => {
+    if (esCot) {
+      const email = emailInp.value.trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('Ingrese un correo de destino válido para la cotización', 'error');
+        return;
+      }
+      enviarPedido(estado, email);
+    } else {
+      enviarPedido(estado);
+    }
+  };
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+async function enviarPedido(estado, emailDestino) {
+  closeModal();
+  const trans  = document.getElementById('sel_transporte')?.value || '';
+  const plazo  = document.getElementById('sel_plazo')?.value     || '';
+  const forma  = document.getElementById('sel_fpago')?.value     || '';
+  const oc     = document.getElementById('inp_oc')?.value        || '';
+  const fechaOc= document.getElementById('inp_fecha_oc')?.value  || '';
+  const obs    = document.getElementById('inp_obs')?.value       || '';
+
+  const overlay = document.getElementById('sendingOverlay');
+  document.getElementById('sendingOverlayText').textContent =
+    estado === 'COTIZACION EN ESPERA' ? 'Enviando cotización…' : 'Enviando pedido…';
+  overlay.style.display = 'flex';
+
+  let res;
+  try {
+    res = await apiFetch(`${API}/carro.php?action=confirmar`, 'POST', {
+      estado, tran_id: trans, cond_id: plazo, forma_id: forma,
+      orden_compra: oc, pedi_fecha_oc: fechaOc, observaciones: obs,
+      email_destino: emailDestino || '',
+      pedi_id_sesion: sessionStorage.getItem('carro_pedi_id') || '0',
+    });
+  } finally {
+    overlay.style.display = 'none';
+  }
+
+  if (res.ok) {
+    showToast(res.msg || 'Pedido enviado correctamente', 'success');
+
+    // Log completo de la traza SOAP (request/response de cada paso) — útil
+    // para diagnosticar sin tener que ir al log del servidor.
+    if (res.data?.webservice) {
+      console.log('[Webservice] Resultado:', res.data.webservice.ok ? 'OK' : 'FALLÓ');
+      console.log('[Webservice] Mensaje:', res.data.webservice.msg);
+      console.log('[Webservice] Traza completa (request/response por paso):', res.data.webservice.trace);
+    }
+
+    // Avisar si el correo de cotización o la inyección al webservice fallaron,
+    // sin bloquear la confirmación del pedido (que ya quedó guardada).
+    if (res.data?.correo && !res.data.correo.ok) {
+      setTimeout(() => showToast('Pedido guardado, pero el correo no se pudo enviar: ' + (res.data.correo.msg || ''), 'error'), 1200);
+    }
+    if (res.data?.webservice && !res.data.webservice.ok) {
+      setTimeout(() => showToast('Pedido guardado, pero falló el envío al sistema central: ' + (res.data.webservice.msg || ''), 'error'), 1200);
+      // No redirigir automáticamente si falló, así hay tiempo de revisar la consola (F12)
+      return;
+    }
+
+    setTimeout(() => location.href = '../index.html', 2200);
+  } else {
+    showToast(res.msg || 'Error al enviar', 'error');
+  }
+}
+
+function closeModal() { document.getElementById('confirmModal').classList.remove('open'); }
+
+// ============================================================
+// HELPERS
+// ============================================================
+async function doLogout() {
+  await apiFetch(`${API}/auth.php?action=logout`, 'POST');
+  localStorage.removeItem('at_token'); sessionStorage.clear(); location.href = '../index.html';
+}
+async function apiFetch(url, method='GET', body=null) {
+  try {
+    const opts = { method, headers: {'Content-Type':'application/json','X-Token':authToken} };
+    if (body) opts.body = JSON.stringify(body);
+    return await (await fetch(url, opts)).json();
+  } catch(e) { return {ok:false,msg:'Error de red'}; }
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatoPrecio(n) { return '$'+Number(n||0).toLocaleString('es-CL'); }
+function showToast(msg,type='') {
+  const t=document.getElementById('toast'); t.textContent=msg; t.className=`toast show ${type}`;
+  setTimeout(()=>t.classList.remove('show'),4000);
+}
+</script>
+</body>
+</html>
