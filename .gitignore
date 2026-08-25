@@ -10,6 +10,7 @@ Thumbs.db
 
 # Credenciales sensibles, API keys y JSONs
 config/env.php
+conexion.php
 *.json
 *.pem
 *.key

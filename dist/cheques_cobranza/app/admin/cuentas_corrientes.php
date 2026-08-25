@@ -6,36 +6,19 @@
  */
 
 require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../config/auth.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'domain' => '',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'Strict'
-    ]);
-    session_start();
-}
-
-// Redirección si no está autenticado o no tiene rol autorizado
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: login.php');
-    exit;
-}
-
-$rolUsuario = $_SESSION['admin_user_rol'] ?? '';
-if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA'])) {
-    header('Location: login.php');
-    exit;
-}
+$adminUser = requireAdminPage('cc.view');
+$rolUsuario = $adminUser['rol'];
+$canManageCc = userHasPermission($rolUsuario, 'cc.manage');
+$csrfToken = getCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>Portal Cuentas Corrientes — Gestión y Distribución</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +27,7 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA'])) {
     <link rel="stylesheet" href="css/shell.css?v=1">
     <link rel="stylesheet" href="css/modal_config_cc.css">
 </head>
-<body>
+<body data-can-manage-cc="<?php echo $canManageCc ? '1' : '0'; ?>">
 
     <!-- HEADER MODULAR COMPARTIDO (SAAS SHELL) -->
     <?php 
@@ -53,6 +36,11 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA'])) {
     ?>
 
     <div class="container-cc">
+        <?php if (!$canManageCc): ?>
+        <div class="cc-readonly-notice" role="status">
+            Modo consulta: puede revisar la cola, los cheques y la trazabilidad, pero no cambiar configuración ni despachar informes.
+        </div>
+        <?php endif; ?>
         
         <!-- RESUMEN EJECUTIVO (KPI STRIP ALINEADO) -->
         <div class="kpi-strip">
@@ -67,7 +55,7 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA'])) {
                 <span class="kpi-subtext" id="kpiDetails">0 Clientes Afectados</span>
             </div>
             <div class="kpi-card kpi-card-action">
-                <button type="button" class="btn-action btn-success" id="btnDespacharResumen" onclick="confirmarDespachoModal()" style="width: 100%; height: 46px; font-size: 0.9rem;" disabled>
+                <button type="button" class="btn-action btn-success" id="btnDespacharResumen" onclick="confirmarDespachoModal()" style="width: 100%; height: 46px; font-size: 0.9rem;" disabled<?php echo $canManageCc ? '' : ' hidden'; ?>>
                     Despachar Resumen Ahora
                 </button>
             </div>
@@ -151,7 +139,9 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA'])) {
 
     </div>
 
+    <?php if ($canManageCc): ?>
     <?php include __DIR__ . '/components/modal_config_cc.php'; ?>
+    <?php endif; ?>
 
     <!-- MODAL DE CONFIRMACIÓN DE DESPACHO SEGURO -->
     <div id="modalConfirmarDespacho" class="modal-cc">

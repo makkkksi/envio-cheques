@@ -18,13 +18,18 @@ empresas ──< cobranzas >── usuarios
                 └──< cheques
                 │
                 └──< historial_estados >── usuarios
+
+empresas ──< presupuestos_vendedores ──< rendiciones_gastos
+                                                │
+                                                ├──< rendicion_documentos
+                                                └──< rendicion_historial_estados
 ```
 
 ### 1.2 ENUMs globales
 
 ```sql
 -- Rol de usuario
-ENUM('VENDEDOR', 'TESORERIA', 'ADMINISTRADOR')
+ENUM('VENDEDOR', 'TESORERIA', 'ADMINISTRADOR', 'SUPERVISORA_CC')
 
 -- Tipo de entrega logística
 ENUM('CHILEXPRESS', 'PRESENCIAL_SANTIAGO')
@@ -45,7 +50,7 @@ CREATE TABLE empresas (
   nombre                  VARCHAR(100) NOT NULL,
   nombre_bd               VARCHAR(100) NOT NULL UNIQUE,  -- nombre real en MySQL
   email_tesoreria_defecto VARCHAR(150) NOT NULL,
-  google_sheet_id         VARCHAR(150) NULL,
+  google_sheet_id         VARCHAR(255) NULL,
   dias_maximos_envio      INT DEFAULT 3,
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -57,7 +62,7 @@ CREATE TABLE empresas (
 | `nombre` | VARCHAR(100) | Nombre comercial mostrado en la UI |
 | `nombre_bd` | VARCHAR(100) UNIQUE | Nombre exacto de la BD ERP en MySQL |
 | `email_tesoreria_defecto` | VARCHAR(150) | Email al que se notifica al guardar cobranza |
-| `google_sheet_id` | VARCHAR(150) NULL | ID del documento de Google Sheets para Tesorería |
+| `google_sheet_id` | VARCHAR(255) NULL | ID del documento de Google Sheets para Tesorería. Sólo `ADMINISTRADOR` puede visualizarlo o editarlo. |
 | `dias_maximos_envio` | INT | Días tolerados en tránsito antes de alerta |
 
 **Datos semilla:**
@@ -82,7 +87,7 @@ CREATE TABLE usuarios (
   email                    VARCHAR(150) NOT NULL UNIQUE,
   password_hash            VARCHAR(255),
   api_token                VARCHAR(64) NULL,            -- token Bearer para app Android
-  rol                      ENUM('VENDEDOR','TESORERIA','ADMINISTRADOR') DEFAULT 'TESORERIA',
+  rol                      ENUM('VENDEDOR','TESORERIA','ADMINISTRADOR','SUPERVISORA_CC') DEFAULT 'TESORERIA',
   dias_alerta_personalizado INT NULL,                   -- override de dias_maximos_envio
   activo                   BOOLEAN DEFAULT TRUE,
   created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -201,6 +206,79 @@ CREATE TABLE historial_estados (
 
 > `estado_anterior = NULL` indica el registro inicial (creación de la cobranza).
 
+### 1.8 Subsistema: Rendiciones de Gastos y Viáticos
+
+El DDL completo está disponible en [`config/setup_rendiciones.sql`](../config/setup_rendiciones.sql). Ese archivo es también la migración aditiva que debe ejecutarse en phpMyAdmin para incorporar el módulo a una instalación productiva existente.
+
+#### Identidad de vendedor
+
+`vendedor_id` almacena el código nativo `vend_cod` / `cli_vendedor` del ERP. Como esos códigos pueden repetirse entre empresas, la identidad operativa siempre se valida mediante el par `(empresa_id, vendedor_id)`. Estas columnas no referencian `usuarios.id`; los actores administrativos sí lo hacen.
+
+#### Tabla: `presupuestos_vendedores`
+
+| Campo | Regla |
+|-------|-------|
+| `tipo_presupuesto` | `MENSUAL` o `GIRA`. |
+| `periodo_mes` | Periodo contable `YYYY-MM`; el saldo mensual no se acumula. |
+| `monto_asignado` | Cupo autorizado por Tesorería. |
+| `monto_utilizado` | Monto comprometido por rendiciones activas; se actualiza dentro de transacciones con bloqueo de fila. |
+| `periodo_clave` | Clave canónica única que impide duplicar un presupuesto equivalente. |
+| `activo` | Baja lógica. Nunca se elimina físicamente un presupuesto. |
+
+El saldo disponible se deriva siempre como `monto_asignado - monto_utilizado`; no se persiste como un tercer valor mutable.
+
+Para presentación al vendedor, `monto_aprobado` se deriva de `rendiciones_gastos.monto_total_aprobado` en estados `APROBADA`, `APROBADA_PARCIAL` o `PAGADA`; el monto pendiente se calcula como `monto_utilizado - monto_aprobado`. Son valores derivados y no requieren columnas adicionales.
+
+#### Tabla: `rendiciones_gastos`
+
+Cabecera consolidada vinculada obligatoriamente a un presupuesto. Mantiene snapshots del presupuesto y saldo disponibles al momento del envío, montos rendido/aprobado y toda la información del flujo de exceso.
+
+| Campo | Regla |
+|-------|-------|
+| `nota_vendedor` | Observación opcional de hasta 500 caracteres, enviada al consolidar la rendición. Se almacena en la cabecera y en la bitácora `ENVIAR_RENDICION`; Tesorería la visualiza en el detalle. |
+
+Estados válidos:
+
+```text
+BORRADOR
+ENVIADA
+PENDIENTE_APROBACION_EXCESO
+EN_REVISION_TESORERIA
+DOCUMENTOS_FISICOS_RECIBIDOS
+APROBADA
+APROBADA_PARCIAL
+RECHAZADA
+PAGADA
+```
+
+El Magic Token nunca se almacena en texto plano. `token_aprobacion_exceso_hash` contiene exclusivamente SHA-256; `token_exceso_expira` y `token_exceso_usado_at` controlan las 48 horas de vigencia y el uso único.
+
+#### Tabla: `rendicion_documentos`
+
+Un documento con `rendicion_id = NULL` y `estado_item = 'BORRADOR'` pertenece a la bolsa del vendedor. Quitar un documento cambia su estado a `DESCARTADO`, fija `activo = 0` y conserva el registro y la fotografía.
+
+`document_hash CHAR(64) UNIQUE` aplica las reglas:
+
+```text
+Documento normal: SHA256(RUT_PROVEEDOR|TIPO_DOCUMENTO|NUMERO_DOCUMENTO)
+Peaje:           SHA256(PEAJE|FECHA|MONTO|VENDEDOR_ID|EMPRESA_ID)
+```
+
+Para `CENA_CLIENTE` son obligatorios nombre, RUT, empresa, cargo y propósito comercial. Para `PEAJES` sólo son obligatorios fecha, monto y fotografía.
+
+#### Tabla: `rendicion_historial_estados`
+
+Bitácora append-only de cabeceras e ítems. Registra actor, acción, estados, comentario, IP, user-agent y metadatos. Todas sus claves foráneas usan `ON DELETE RESTRICT`.
+
+#### Índices críticos
+
+```sql
+UNIQUE KEY uq_presupuesto_periodo_clave (periodo_clave);
+UNIQUE KEY uq_rendicion_codigo (codigo_rendicion);
+UNIQUE KEY uq_rendicion_token_hash (token_aprobacion_exceso_hash);
+UNIQUE KEY uq_rendicion_document_hash (document_hash);
+```
+
 > **Entorno actual:** como no hay datos reales, al alinear el esquema con el flujo dividido se recreará la base local desde `config/setup.sql`; no se requiere migración de preservación de datos.
 
 ---
@@ -233,6 +311,8 @@ Cuatro bases de datos independientes con estructuras idénticas correspondientes
 > ⚠️ **Manejo de Colisión de IDs de Vendedor Multi-Empresa:**  
 > Como cada ERP tiene sus propios autoincrementales en `tbl_vendedores`, un mismo vendedor puede tener IDs numéricos distintos según la empresa (ej: *Angel Fereira* es ID `25` en Automarco LTDA y es ID `1` en Gabtec S.A).  
 > **Estrategia de Homologación:** El backend utiliza el correo electrónico del vendedor (`ven_mail`) como identificador universal. Al consultar los clientes asignados en `api/get_clientes.php`, el sistema busca el correo de la persona y unifica dinámicamente todos los folios asociados a sus distintos IDs de vendedor en las 4 empresas.
+
+La administración de presupuestos aplica la misma regla mediante `ErpSellerDirectoryService`: la UI nunca permite escribir libremente código, nombre o correo. Al guardar, el backend vuelve a consultar el ERP de la empresa seleccionada y persiste el nombre/correo canónicos junto al `cli_vendedor` local. El directorio holding es sólo una vista homologada por `ven_mail`; `presupuestos_vendedores.vendedor_id` continúa almacenando el código local de la empresa y el esquema no cambia.
 
 ### 2.3 Tabla: `tbl_ventas_devoluciones` (Historial de Transacciones por Empresa)
 

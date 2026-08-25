@@ -7,37 +7,18 @@
  */
 
 require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../config/auth.php';
 
-// Configuración de sesión segura
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'domain' => '',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'Strict'
-    ]);
-    session_start();
-}
-
-// Redirección si no está autenticado
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: login.php');
-    exit;
-}
-
-$rolUsuario = $_SESSION['admin_user_rol'] ?? '';
-if (!in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC'])) {
-    header('Location: login.php');
-    exit;
-}
+$adminUser = requireAdminPage('cheques.view');
+$rolUsuario = $adminUser['rol'];
+$csrfToken = getCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>Portal de Tesorería — Gestión de Cheques</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +27,7 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC'])) {
     <link rel="stylesheet" href="css/shell.css?v=1">
     <link rel="stylesheet" href="css/modal_config_cc.css">
 </head>
-<body>
+<body data-can-manage-cheques="<?php echo userHasPermission($rolUsuario, 'cheques.manage') ? '1' : '0'; ?>">
 
     <div class="app-viewport">
 
@@ -231,6 +212,8 @@ if (!in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC'])) {
     <script src="js/shared_ui.js?v=1"></script>
     <script src="admin.js?v=11"></script>
     <script src="js/modal_config_cc.js?v=10"></script>
+    <?php if (userHasPermission($rolUsuario, 'cc.manage') || userHasPermission($rolUsuario, 'companies.manage')): ?>
     <?php include __DIR__ . '/components/modal_config_cc.php'; ?>
+    <?php endif; ?>
 </body>
 </html>

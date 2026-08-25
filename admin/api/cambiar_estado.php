@@ -28,7 +28,8 @@ try {
     $pdo = Database::getCobranzasConnection();
     
     // RBAC estricto en el servidor
-    $user = requireAuth($pdo, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC']);
+    $user = requirePermission($pdo, 'cheques.manage');
+    requireCsrfToken();
     $usuario_id = $user['id'];
 
     $cobranza_id = filter_input(INPUT_POST, 'cobranza_id', FILTER_VALIDATE_INT) ?: filter_var($_POST['cobranza_id'] ?? null, FILTER_VALIDATE_INT);
@@ -90,6 +91,18 @@ try {
 
     $estado_anterior = $cobranza['estado'];
     $empresaFallback = $cobranza['empresa_nombre'] ?: 'Automarco LTDA';
+
+    $transicionesPermitidas = [
+        'EN_TRANSITO' => ['RECIBIDO_TESORERIA'],
+        'ENTREGADO_SANTIAGO' => ['RECIBIDO_TESORERIA'],
+        'RECIBIDO_TESORERIA' => ['DEPOSITADO', 'RECHAZADO'],
+    ];
+    if (!isset($transicionesPermitidas[$estado_anterior])
+        || !in_array($nuevo_estado, $transicionesPermitidas[$estado_anterior], true)) {
+        http_response_code(409);
+        echo json_encode(['success' => false, 'message' => 'La transición de estado solicitada no está permitida.']);
+        exit;
+    }
 
     // Iniciar transacción atómica
     $pdo->beginTransaction();

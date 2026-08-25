@@ -36,7 +36,7 @@ try {
     $pdo = Database::getCobranzasConnection();
 
     // Control de acceso: solo roles administrativos pueden ver el detalle completo
-    requireAuth($pdo, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC']);
+    requirePermission($pdo, 'cheques.view');
 
     // 1. Obtener cobranza
     $stmt = $pdo->prepare("SELECT 

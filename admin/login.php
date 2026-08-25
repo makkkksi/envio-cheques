@@ -8,19 +8,9 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../services/AuditService.php';
 
-// Configuración de sesión segura
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'domain' => '',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'Strict'
-    ]);
-    session_start();
-}
+startSecureSession();
 
 // Redireccionar si ya está logueado
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
@@ -32,18 +22,16 @@ $error = '';
 $email = '';
 
 // Generar CSRF Token si no existe
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+$csrfToken = getCsrfToken();
 
 // Procesar el POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
-    $password = trim($_POST['password'] ?? '');
-    $csrfToken = $_POST['csrf_token'] ?? '';
+    $email = strtolower(trim($_POST['email'] ?? ''));
+    $password = (string)($_POST['password'] ?? '');
+    $submittedCsrfToken = $_POST['csrf_token'] ?? '';
 
     // 1. Validar CSRF
-    if (empty($csrfToken) || !hash_equals($_SESSION['csrf_token'], $csrfToken)) {
+    if ($submittedCsrfToken === '' || !hash_equals($_SESSION['csrf_token'], $submittedCsrfToken)) {
         http_response_code(403);
         $error = 'Solicitud no válida (Falta o discrepancia en token de seguridad)';
     } else {
@@ -75,7 +63,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['admin_logged_in'] = true;
                         $_SESSION['admin_user_id'] = $user['id'];
                         $_SESSION['admin_user_nombre'] = $user['nombre'];
+                        $_SESSION['admin_user_email'] = $user['email'];
                         $_SESSION['admin_user_rol'] = $user['rol'];
+                        $_SESSION['admin_last_activity'] = time();
+                        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+                        AuditService::log(
+                            $pdo,
+                            (int)$user['id'],
+                            $user['email'],
+                            'LOGIN_ADMIN_EXITOSO',
+                            'Inicio de sesión administrativa.'
+                        );
 
                         if ($user['rol'] === 'SUPERVISORA_CC') {
                             header('Location: cuentas_corrientes.php');
@@ -129,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <form method="POST" action="login.php">
-            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
             <div class="form-group">
                 <label for="email">Correo Electrónico</label>

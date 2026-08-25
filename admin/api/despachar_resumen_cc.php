@@ -2,49 +2,25 @@
 require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../../config/auth.php';
 require_once __DIR__ . '/../../services/MailService.php';
+require_once __DIR__ . '/../../services/AuditService.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+    exit;
+}
+
 try {
-    // Este endpoint puede ser llamado por cron (sin sesión) o manualmente (con sesión Admin)
-    if (session_status() === PHP_SESSION_NONE) {
-        session_set_cookie_params([
-            'lifetime' => 0,
-            'path'     => '/',
-            'domain'   => '',
-            'secure'   => true,
-            'httponly' => true,
-            'samesite' => 'Strict'
-        ]);
-        session_start();
-    }
-    $isManual = isset($_SESSION['admin_user_id']);
-    if ($isManual) {
-        requireRole(['ADMINISTRADOR', 'SUPERVISORA_CC']);
-    }
-
     $pdo = Database::getCobranzasConnection();
+    $user = requirePermission($pdo, 'cc.manage');
+    requireCsrfToken();
 
-    // Obtener la hora configurada si se llama por cron
+    // La automatización usa cron/resumen_diario_cuentas_corrientes.php; esta API es sólo manual.
     $stmtConfig = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'hora_despacho_diario'");
     $stmtConfig->execute();
     $hora_despacho_diario = $stmtConfig->fetchColumn() ?: '16:00';
-
-    if (!$isManual) {
-        $stmtAutoConfig = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'despacho_automatico_activado'");
-        $stmtAutoConfig->execute();
-        $auto_dispatch_val = $stmtAutoConfig->fetchColumn();
-        if ($auto_dispatch_val !== false && $auto_dispatch_val === '0') {
-            echo json_encode(['success' => false, 'message' => 'El despacho automático por hora está desactivado en la configuración.']);
-            exit;
-        }
-        $current_time = date('H:i');
-        // Tolerancia de 5 minutos
-        if ($current_time < $hora_despacho_diario) {
-            echo json_encode(['success' => false, 'message' => "Aún no es la hora de despacho ($hora_despacho_diario). Actual: $current_time"]);
-            exit;
-        }
-    }
 
     // Correo supervisor
     $stmtSup = $pdo->prepare("SELECT email FROM usuarios WHERE rol = 'SUPERVISORA_CC' LIMIT 1");
@@ -145,8 +121,8 @@ try {
     // Agrupar por empresa (basado en cheques)
     $agrupado = [];
     foreach ($cobranzasHoy as $c) {
-        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = ?");
-        $stmtCheques->execute([$c['id']]);
+        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :cobranza_id");
+        $stmtCheques->execute([':cobranza_id' => $c['id']]);
         $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($cheques)) {
@@ -232,26 +208,49 @@ try {
         // Registrar en bitácora con snapshot (payload_json) de lo enviado
         $payload_json = json_encode($data['cobranzas']);
 
+        $pdo->beginTransaction();
         $stmtLog = $pdo->prepare("
             INSERT INTO log_envios_informes 
             (empresa_id, tipo_informe, destinatario, copia_cc, asunto, estado_envio, error_mensaje, cantidad_cobranzas, payload_json)
-            VALUES (?, 'RESUMEN_DIARIO_16HRS', ?, ?, ?, ?, ?, ?, ?)
+            VALUES (:empresa_id, 'RESUMEN_DIARIO_16HRS', :destinatario, :copia_cc, :asunto, :estado_envio, :error_mensaje, :cantidad_cobranzas, :payload_json)
         ");
         $stmtLog->execute([
-            $empId, $destinatario, $ccEmail, $asunto, $estado, $errorMensaje, $totalCobranzas, $payload_json
+            ':empresa_id' => $empId,
+            ':destinatario' => $destinatario,
+            ':copia_cc' => $ccEmail,
+            ':asunto' => $asunto,
+            ':estado_envio' => $estado,
+            ':error_mensaje' => $errorMensaje,
+            ':cantidad_cobranzas' => $totalCobranzas,
+            ':payload_json' => $payload_json,
         ]);
 
         // Si el envío fue exitoso, actualizar estado final a DEPOSITADO e insertar historial de auditoría
         if ($enviado) {
-            $stmtUpd = $pdo->prepare("UPDATE cobranzas SET estado = 'DEPOSITADO', updated_at = NOW() WHERE id = ?");
-            $stmtHist = $pdo->prepare("INSERT INTO historial_estados (cobranza_id, usuario_id, estado_anterior, estado_nuevo, comentario) VALUES (?, ?, 'RECIBIDO_TESORERIA', 'DEPOSITADO', ?)");
-            $userAuditId = $_SESSION['admin_user_id'] ?? 1;
+            $stmtUpd = $pdo->prepare("UPDATE cobranzas SET estado = 'DEPOSITADO', updated_at = NOW() WHERE id = :id AND estado = 'RECIBIDO_TESORERIA'");
+            $stmtHist = $pdo->prepare("INSERT INTO historial_estados (cobranza_id, usuario_id, estado_anterior, estado_nuevo, comentario) VALUES (:cobranza_id, :usuario_id, 'RECIBIDO_TESORERIA', 'DEPOSITADO', :comentario)");
+            $userAuditId = (int)$user['id'];
 
             foreach ($data['cobranzas'] as $cobranza) {
-                $stmtUpd->execute([$cobranza['id']]);
-                $stmtHist->execute([$cobranza['id'], $userAuditId, 'Liberado por Cuentas Corrientes y despachado a digitadora para ingreso en Optimus ERP']);
+                $stmtUpd->execute([':id' => $cobranza['id']]);
+                if ($stmtUpd->rowCount() === 1) {
+                    $stmtHist->execute([
+                        ':cobranza_id' => $cobranza['id'],
+                        ':usuario_id' => $userAuditId,
+                        ':comentario' => 'Liberado por Cuentas Corrientes y despachado a digitadora para ingreso en Optimus ERP',
+                    ]);
+                }
             }
         }
+
+        AuditService::log(
+            $pdo,
+            (int)$user['id'],
+            $user['email'],
+            'DESPACHO_MANUAL_CC',
+            "Empresa ID {$empId}; destino {$destinatario}; estado {$estado}; cobranzas {$totalCobranzas}."
+        );
+        $pdo->commit();
 
         $resultados[] = [
             'empresa' => $data['nombre'],
@@ -266,8 +265,10 @@ try {
     ]);
 
 } catch (Exception $e) {
-    echo json_encode([
-        'success' => false,
-        'message' => $e->getMessage()
-    ]);
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('[admin/api/despachar_resumen_cc.php] ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'No fue posible completar el despacho.']);
 }

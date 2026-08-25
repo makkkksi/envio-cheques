@@ -9,6 +9,7 @@ let estadoActualFilter = 'BANDEJA_TRABAJO';
 let cobranzaSeleccionadaId = null;
 let cobranzasCache = [];
 window.chequesActivos = [];
+const CAN_MANAGE_CHEQUES = document.body.dataset.canManageCheques === '1';
 
 const EMPRESAS_NOMBRES = {
     'EMP01': 'Automarco LTDA',
@@ -159,8 +160,7 @@ function cargarCobranzas() {
             cobranzasCache = data.data || [];
             aplicarOrdenamientoYRenderizar();
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             showToast('Error de conexión con el servidor', 'error');
         });
 }
@@ -302,8 +302,7 @@ function seleccionarCobranza(id) {
             window.cobranzaActiva = data.data.cobranza || {};
             renderSidePanelDetail(data.data);
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             showToast('Error al obtener el detalle de la cobranza', 'error');
         });
 }
@@ -501,7 +500,7 @@ function renderSidePanelDetail(data) {
     } else {
         // Botón editar datos (solo estados no finales)
         const estadoFinal = ['DEPOSITADO', 'RECHAZADO'].includes(cob.estado);
-        const btnEditar = !estadoFinal
+        const btnEditar = CAN_MANAGE_CHEQUES && !estadoFinal
             ? `<button type="button" onclick="activarModoEdicion(${cob.id})" style="font-size:0.78rem; padding:4px 10px; border-radius:5px; border:1px solid #e2e8f0; background:#f8fafc; color:#475569; cursor:pointer; margin-bottom:10px;">Corregir datos de cheques</button>`
             : '';
 
@@ -566,10 +565,15 @@ function renderStickyActionButtons(cob) {
     // Stepper Horizontal Compacto (Ley de Zeigarnik — sobre CTA)
     const stepperHtml = renderHorizontalStepper(cob);
 
+    if (!CAN_MANAGE_CHEQUES) {
+        container.innerHTML = `${stepperHtml}<div class="readonly-action-note">Modo consulta: este rol no puede modificar la cobranza.</div>`;
+        return;
+    }
+
     let ctaHtml = '';
 
     // Si está en EN_TRANSITO, ENTREGADO_SANTIAGO o PENDIENTE_ENVIO: Mostrar "Validar y Enviar a Cuentas Corrientes" + "Rechazar"
-    if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO' || cob.estado === 'PENDIENTE_ENVIO') {
+    if (cob.estado === 'EN_TRANSITO' || cob.estado === 'ENTREGADO_SANTIAGO') {
         ctaHtml = `
             <button type="button" class="btn-b2b btn-b2b-success" style="flex: 1;" onclick="pedirConfirmacionRecepcion(${cob.id}, '${cob.numero_factura}')">
                 VALIDAR / MANDAR A C.CORRIENTES
@@ -768,10 +772,6 @@ function pedirConfirmacionRecepcion(id, numFactura) {
         
         if (!valid) return;
         
-        if (!confirm('¿Desea mandar esta información final para que Tesorería la confirme y proceda a validar los cheques?')) {
-            return;
-        }
-        
         const extraData = {
             cheques_completados: JSON.stringify(chequesData)
         };
@@ -920,6 +920,7 @@ function ejecutarCambioEstado(id, nuevoEstado, extraData = {}) {
 
     fetch('api/cambiar_estado.php', {
         method: 'POST',
+        headers: { 'X-CSRF-Token': getAdminCsrfToken() },
         body: formData
     })
     .then(res => res.json())
@@ -957,8 +958,7 @@ function ejecutarCambioEstado(id, nuevoEstado, extraData = {}) {
             seleccionarCobranza(id);
         }
     })
-    .catch(err => {
-        console.error(err);
+    .catch(() => {
         showToast('Error de conexión al guardar el cambio', 'error');
     });
 }
@@ -1054,8 +1054,7 @@ function cargarDatosGestionCC() {
             }
 
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             showToast('Error al conectar con la API de gestión C.Corr', 'error');
         });
 }
@@ -1082,9 +1081,7 @@ function guardarConfiguracionGlobalCC() {
 
     fetch('api/guardar_configuracion_cc.php', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: getAdminJsonHeaders(),
         body: JSON.stringify(payload)
     })
     .then(res => res.json())
@@ -1096,8 +1093,7 @@ function guardarConfiguracionGlobalCC() {
         showToast('Configuración guardada correctamente.', 'success');
         cargarDatosGestionCC();
     })
-    .catch(err => {
-        console.error(err);
+    .catch(() => {
         showToast('Error al guardar configuración global', 'error');
     });
 }
@@ -1105,10 +1101,6 @@ function guardarConfiguracionGlobalCC() {
 let despachandoResumenManual = false;
 function despacharResumenManualCC(btnEl) {
     if (despachandoResumenManual) return;
-    if (!confirm('¿Está seguro de despachar el resumen diario consolidado ahora manualmente? Se enviará correo a las digitadoras respectivas.')) {
-        return;
-    }
-
     despachandoResumenManual = true;
     let oldText = '⚡ Despachar Resumen Ahora';
     if (btnEl) {
@@ -1118,7 +1110,8 @@ function despacharResumenManualCC(btnEl) {
     }
 
     fetch('api/despachar_resumen_cc.php', {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'X-CSRF-Token': getAdminCsrfToken() }
     })
     .then(res => res.json())
     .then(data => {
@@ -1129,8 +1122,7 @@ function despacharResumenManualCC(btnEl) {
         showToast(data.message || 'Resumen despachado con éxito.', 'success');
         cargarDatosGestionCC();
     })
-    .catch(err => {
-        console.error(err);
+    .catch(() => {
         showToast('Error al conectar con el despachador', 'error');
     })
     .finally(() => {
@@ -1143,19 +1135,14 @@ function despacharResumenManualCC(btnEl) {
 }
 
 function reenviarBitacoraCC(logId) {
-    const nuevoCorreo = prompt('¿Desea reenviar a un correo alternativo? Dejar en blanco para usar el correo original registrado:');
-    if (nuevoCorreo === null) return; // Clic en cancelar
-
     const payload = {
         log_id: logId,
-        nuevo_correo: nuevoCorreo.trim()
+        nuevo_correo: ''
     };
 
     fetch('api/reenviar_informe_cc.php', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: getAdminJsonHeaders(),
         body: JSON.stringify(payload)
     })
     .then(res => res.json())
@@ -1167,8 +1154,7 @@ function reenviarBitacoraCC(logId) {
         showToast(data.message || 'Informe reenviado correctamente.', 'success');
         cargarDatosGestionCC();
     })
-    .catch(err => {
-        console.error(err);
+    .catch(() => {
         showToast('Error de red al reenviar informe', 'error');
     });
 }
@@ -1272,7 +1258,7 @@ async function guardarEdicionTesoreria(cobranzaId, count) {
     try {
         const res = await fetch('api/editar_cobranza_tesoreria.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAdminJsonHeaders(),
             body: JSON.stringify({ cobranza_id: cobranzaId, cheques })
         });
         const data = await res.json();
@@ -1283,7 +1269,6 @@ async function guardarEdicionTesoreria(cobranzaId, count) {
         showToast(data.message || 'Datos actualizados correctamente.', 'success');
         seleccionarCobranza(cobranzaId);
     } catch (err) {
-        console.error(err);
         showToast('Error de conexión al guardar cambios', 'error');
     }
 }

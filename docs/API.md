@@ -521,3 +521,122 @@ const result = await response.json();
 ```
 
 El token se obtiene una vez con `POST /api/auth/login.php` y se persiste en el almacenamiento de la app Android para reutilizarlo en cada sesión.
+
+---
+
+## Endpoints de Administración de Usuarios (`ADMINISTRADOR`)
+
+Todos requieren sesión administrativa activa. Los endpoints `POST` requieren además el header `X-CSRF-Token` generado por la vista del Shell.
+
+### GET `/admin/api/get_usuarios.php`
+
+Lista cuentas con rol `ADMINISTRADOR`, `TESORERIA` o `SUPERVISORA_CC`. No retorna hashes, tokens ni credenciales.
+
+```json
+{ "success": true, "data": [{ "id": 3, "nombre": "Tesorería", "email": "tesoreria@automarco.cl", "rol": "TESORERIA", "activo": 1 }] }
+```
+
+### POST `/admin/api/guardar_usuario.php`
+
+Crea o actualiza una cuenta administrativa. Para creación, `password` debe tener al menos 10 caracteres y se almacena con `password_hash(..., PASSWORD_BCRYPT)`. La desactivación usa `activo = 0`; nunca elimina físicamente la cuenta.
+
+```json
+{ "id": 0, "nombre": "Nombre Apellido", "email": "usuario@automarco.cl", "rol": "TESORERIA", "activo": 1, "password": "contraseña-inicial" }
+```
+
+### POST `/admin/api/resetear_password_usuario.php`
+
+Restablece el hash y revoca cualquier token Bearer existente del usuario objetivo.
+
+```json
+{ "id": 3, "password": "nueva-contraseña" }
+```
+
+---
+
+## Módulo 3 — Rendiciones de Gastos
+
+Todas las respuestas usan `{ "success": true/false, ... }`. Las mutaciones con sesión requieren `X-CSRF-Token`. Ningún endpoint de vendedor acepta `vendedor_id` o `empresa_id`: ambos se obtienen exclusivamente de `$_SESSION['vendedor_auth']`.
+
+### POST `/api/rendiciones/guardar_documento_bolsa.php`
+
+`multipart/form-data` con `tipo_documento`, `categoria_gasto`, `fecha_emision`, `monto` y `foto_documento`. Documentos normales exigen `rut_proveedor` y `numero_documento`; `CENA_CLIENTE` exige los cinco campos tributarios; `PEAJE` sólo exige fecha, monto y fotografía.
+
+Responde `409` si `document_hash` ya existe en el holding.
+
+### GET `/api/rendiciones/get_bolsa_gastos.php`
+
+Devuelve `documentos`, `presupuestos` activos con saldo calculado y `csrf_token` para las mutaciones posteriores. Cada presupuesto diferencia `monto_aprobado` (rendiciones aprobadas, aprobadas parcialmente o pagadas), `monto_pendiente` (fondos comprometidos aún no aprobados), `monto_utilizado` (compromiso total) y `saldo_disponible` (cupo todavía libre).
+
+### POST `/api/rendiciones/eliminar_documento_bolsa.php`
+
+```json
+{ "documento_id": 18 }
+```
+
+Sólo admite documentos propios en `BORRADOR`. Realiza baja lógica `DESCARTADO`; no elimina registros ni fotografías.
+
+### POST `/api/rendiciones/guardar_rendicion.php`
+
+```json
+{
+  "presupuesto_id": 4,
+  "documento_ids": [18, 19, 20],
+  "nota_vendedor": "Opcional; máximo 500 caracteres"
+}
+```
+
+Bloquea presupuesto y documentos, recalcula montos y compromete el fondo dentro de una única transacción. Sin exceso pasa a `EN_REVISION_TESORERIA`; con exceso pasa a `PENDIENTE_APROBACION_EXCESO`. Si se informa `nota_vendedor`, se persiste en `rendiciones_gastos.nota_vendedor` y queda incluida en el evento inmutable `ENVIAR_RENDICION`.
+
+### GET `/api/rendiciones/get_mis_rendiciones.php`
+
+Filtros opcionales: `estado`, `pagina`, `limite`. Retorna sólo rendiciones del vendedor y empresa de la sesión.
+
+### POST `/api/rendiciones/aprobar_exceso.php`
+
+Endpoint público de capacidad limitada. La vista `/rendiciones/aprobar_exceso.php` obtiene confirmación humana y envía:
+
+```json
+{ "token": "64-caracteres-hex", "decision": "APROBADO", "comentario": "Opcional" }
+```
+
+El token expira a las 48 horas y sólo puede consumirse una vez. Aprobar mueve la rendición a `EN_REVISION_TESORERIA`; rechazar la mueve a `RECHAZADA` y libera el presupuesto comprometido.
+
+### GET `/admin/api/rendiciones/get_rendiciones.php`
+
+Requiere `rendiciones.view`. Filtros: `estado`, `mes`, `vendedor_id`, `empresa_id`, `tipo`, `pagina`, `limite`.
+
+### GET `/admin/api/rendiciones/get_detalle_rendicion.php?id={id}`
+
+Requiere `rendiciones.view`. Devuelve cabecera, documentos con datos SII e historial inmutable.
+
+### GET `/admin/api/rendiciones/buscar_vendedores.php`
+
+Requiere `rendiciones.manage`. Consulta en modo de sólo lectura el catálogo `tbl_vendedores` de los ERP autorizados.
+
+- Con `empresa_id`: retorna hasta 100 coincidencias de esa empresa. `busqueda` es opcional y filtra por nombre, correo o `cli_vendedor`.
+- Sin `empresa_id`: retorna el directorio del holding homologado por `ven_mail`, incluyendo los códigos locales del vendedor en cada empresa.
+- Gabtec usa internamente `ven_nombre`; la respuesta conserva el contrato común `vendedor_nombre`.
+
+```json
+{
+  "success": true,
+  "data": [{
+    "empresa_id": 1,
+    "empresa_nombre": "Automarco LTDA",
+    "vendedor_id": 25,
+    "vendedor_nombre": "Vendedor ERP",
+    "vendedor_email": "vendedor@empresa.cl"
+  }],
+  "empresas": [{ "empresa_id": 1, "empresa_nombre": "Automarco LTDA" }],
+  "alcance": "EMPRESA"
+}
+```
+
+### POST `/admin/api/rendiciones/cambiar_estado.php`
+
+Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `APROBAR_TOTAL`, `APROBAR_PARCIAL`, `RECHAZAR`, `MARCAR_PAGADA` y `REENVIAR_EXCESO`. La aprobación parcial exige una decisión para cada documento; el reenvío rota el Magic Token anterior.
+
+### GET|POST `/admin/api/rendiciones/gestion_presupuestos.php`
+
+Requiere `rendiciones.manage`. `POST` admite `CREAR`, `ACTUALIZAR` y `DESACTIVAR`; no existe operación física de eliminación. En crear y actualizar, el servidor ignora cualquier nombre o correo aportado por el cliente y vuelve a resolver ambos campos mediante `(empresa_id, vendedor_id)` en el ERP correspondiente.

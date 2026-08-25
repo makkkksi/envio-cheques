@@ -40,12 +40,16 @@ input{font-family:inherit}
 .btn-buscar:hover{background:#155a8f}
 .btn-recaudacion{background:#27ae60;color:var(--white);padding:.55rem 1.4rem;border-radius:6px;font-size:.88rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
 .btn-recaudacion:hover{background:#219150}
+.portal-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+.btn-rendiciones{background:#0b3a5b;color:var(--white);padding:.55rem 1.4rem;border-radius:6px;font-size:.88rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
+.btn-rendiciones:hover{background:#165b82}
 
 @media(max-width:768px){
   .search-form-grid{grid-template-columns:1fr}
   .search-actions{flex-direction:column;align-items:stretch;gap:.6rem}
   .search-actions-left{width:100%}
-  .btn-buscar, .btn-recaudacion{width:100%;padding:.65rem 1rem}
+  .portal-actions{width:100%;flex-direction:column}
+  .btn-buscar, .btn-recaudacion, .btn-rendiciones{width:100%;padding:.65rem 1rem}
 }
 
 /* TABLA */
@@ -123,7 +127,10 @@ tr:hover td{background:var(--blue-light)}
       <div class="search-actions-left">
         <button class="btn-buscar" onclick="buscar()">Buscar</button>
       </div>
-      <button type="button" class="btn-recaudacion" onclick="irARecaudacionCheques()" title="Registrar cheques y comprobantes de cobranza">Subir Cheques / Recaudación</button>
+      <div class="portal-actions">
+        <button type="button" class="btn-rendiciones" onclick="irARendicionGastos()" title="Registrar gastos, peajes y viáticos">Rendir Gastos / Viáticos</button>
+        <button type="button" class="btn-recaudacion" onclick="irARecaudacionCheques()" title="Registrar cheques y comprobantes de cobranza">Subir Cheques / Recaudación</button>
+      </div>
     </div>
   </div>
 
@@ -300,8 +307,6 @@ function showToast(msg,type='') {
 }
 
 function irARecaudacionCheques() {
-  // Si el usuario eligió una empresa en el selector, respetamos su selección manual.
-  // Si no seleccionó ninguna ("Todas"), auto-detectamos por su sesión de login o dominio actual:
   const filtroEmp = document.getElementById('filtEmpresa').value;
   const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
 
@@ -309,7 +314,28 @@ function irARecaudacionCheques() {
     showToast('No se detectó un código de vendedor válido en su sesión', 'error');
     return;
   }
-  const urlDestino = `https://www.autotec.cl/cobranza_cheques/app/index.html?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
+  const baseUrl = isLocal
+    ? `${window.location.origin}/form/index.html`
+    : `https://www.autotec.cl/cobranza_cheques/app/index.html`;
+  const urlDestino = `${baseUrl}?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
+  window.location.href = urlDestino;
+}
+
+function irARendicionGastos() {
+  const filtroEmp = document.getElementById('filtEmpresa').value;
+  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
+  if (!currentVendCod) {
+    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
+    return;
+  }
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
+  const baseUrl = isLocal
+    ? `${window.location.origin}/form/rendiciones/vendedor.php`
+    : `https://www.autotec.cl/cobranza_cheques/app/rendiciones/vendedor.php`;
+  const urlDestino = `${baseUrl}?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
   window.location.href = urlDestino;
 }
 </script>

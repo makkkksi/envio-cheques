@@ -204,6 +204,58 @@ function requirePermission(PDO $pdo, string $permission): array
     return $user;
 }
 
+/**
+ * Obtiene la identidad canónica del vendedor desde la sesión del WebView.
+ * Nunca acepta vendedor_id ni empresa_id desde el payload del endpoint.
+ */
+function requireSellerContext(PDO $pdo): array
+{
+    startSecureSession();
+    $sessionSeller = $_SESSION['vendedor_auth'] ?? null;
+    if (!is_array($sessionSeller) || empty($sessionSeller['vendedor_id'])) {
+        jsonAuthError(401, 'Sesión de vendedor no iniciada.');
+    }
+
+    $sellerId = (int)$sessionSeller['vendedor_id'];
+    $empresaId = (int)($sessionSeller['empresa_id'] ?? 0);
+    if ($empresaId <= 0) {
+        $origin = strtoupper(trim((string)($sessionSeller['empresa_origen'] ?? '')));
+        $databaseByOrigin = [
+            'EMP01' => 'automarc_automarco',
+            'AUTOMARCO' => 'automarc_automarco',
+            'EMP03' => 'autotec_ecom',
+            'AUTOTEC' => 'autotec_ecom',
+            'EMP24' => 'autotec_ecom',
+            'TOP_REPUESTOS' => 'autotec_ecom',
+            'EMP06' => 'autohd_automarcohd',
+            'HD' => 'autohd_automarcohd',
+            'EMP10' => 'gabteccl_sitbdd1978',
+            'GABTEC' => 'gabteccl_sitbdd1978',
+        ];
+        $databaseName = $databaseByOrigin[$origin] ?? '';
+        if ($databaseName !== '') {
+            $stmt = $pdo->prepare('SELECT id FROM empresas WHERE nombre_bd = :nombre_bd LIMIT 1');
+            $stmt->execute([':nombre_bd' => $databaseName]);
+            $empresaId = (int)$stmt->fetchColumn();
+            if ($empresaId > 0) {
+                $_SESSION['vendedor_auth']['empresa_id'] = $empresaId;
+            }
+        }
+    }
+
+    if ($sellerId <= 0 || $empresaId <= 0) {
+        jsonAuthError(401, 'La sesión no contiene un vendedor y empresa válidos.');
+    }
+
+    return [
+        'vendedor_id' => $sellerId,
+        'empresa_id' => $empresaId,
+        'nombre' => trim((string)($sessionSeller['nombre'] ?? 'Vendedor')),
+        'email' => trim((string)($sessionSeller['email'] ?? '')),
+        'rol' => 'VENDEDOR',
+    ];
+}
+
 function requireAdminPage(string $permission): array
 {
     startSecureSession();

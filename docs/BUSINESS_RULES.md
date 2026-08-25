@@ -194,18 +194,20 @@ empresas.dias_maximos_envio (valor por defecto de la empresa)
 
 ## 7. Permisos por Rol
 
-| Acción | VENDEDOR | TESORERIA | ADMINISTRADOR |
-|--------|----------|-----------|---------------|
-| Registrar cobranza | ✅ | ❌ | ✅ |
-| Ver historial propio | ✅ | ❌ | ✅ |
-| Ver todas las cobranzas | ❌ | ✅ | ✅ |
-| Completar envío pendiente | ✅ | ❌ | ✅ |
-| Cambiar estados posteriores a la entrega | ❌ | ✅ | ✅ |
-| Registrar papeleta depósito | ❌ | ✅ | ✅ |
-| Gestionar usuarios | ❌ | ❌ | ✅ |
-| Configurar empresas | ❌ | ❌ | ✅ |
+| Acción | VENDEDOR | TESORERIA | SUPERVISORA_CC | ADMINISTRADOR |
+|--------|----------|-----------|----------------|---------------|
+| Registrar cobranza | ✅ | ❌ | ❌ | ✅ |
+| Ver historial propio | ✅ | ❌ | ❌ | ✅ |
+| Ver todas las cobranzas y cheques | ❌ | ✅ | ✅ (consulta) | ✅ |
+| Completar envío pendiente | ✅ | ❌ | ❌ | ✅ |
+| Cambiar estados / corregir cheques | ❌ | ✅ | ❌ | ✅ |
+| Consultar Cuentas Corrientes | ❌ | ✅ | ✅ | ✅ |
+| Configurar y despachar Cuentas Corrientes | ❌ | ❌ | ✅ | ✅ |
+| Acceder a Rendiciones | ❌ | ✅ | ❌ | ✅ |
+| Gestionar usuarios administrativos | ❌ | ❌ | ❌ | ✅ |
+| Configurar IDs de Google Sheets | ❌ | ❌ | ❌ | ✅ |
 
-> Los roles `TESORERIA` y `ADMINISTRADOR` solo acceden desde el portal `/admin/` (Fase 2). La app vendedor no expone estas acciones.
+> Los roles administrativos sólo acceden desde `/admin/`. La autorización se valida en la vista y nuevamente en cada endpoint mediante la matriz central de `config/auth.php`; ocultar un control en la interfaz nunca reemplaza la validación backend.
 
 ---
 
@@ -237,3 +239,53 @@ Para priorizar la operatividad del vendedor, la vista de seguimiento está divid
 ### 8.4 Comportamiento en Dispositivos Táctiles / Tablets
 - **Bloqueo de Desplazamiento del Fondo:** Al abrir cualquier modal overlay, el scroll del fondo de la aplicación (`<body>`) se congela automáticamente para evitar desplazamientos accidentales de la página trasera y mejorar la usabilidad táctil del modal activo.
 
+---
+
+## 9. Rendiciones de Gastos y Viáticos
+
+### 9.1 Bolsa y propiedad
+
+- La identidad del vendedor es `(empresa_id, vendedor_id ERP)` y siempre proviene de sesión.
+- Un documento sólo puede consolidarse si pertenece a esa identidad, está activo, en `BORRADOR` y sin `rendicion_id`.
+- Quitar un borrador cambia su estado a `DESCARTADO`; no elimina el registro ni libera su `document_hash` para reutilización.
+
+### 9.2 Antifraude
+
+- Documento normal: `SHA256(RUT_NORMALIZADO|TIPO_DOCUMENTO|FOLIO_NORMALIZADO)`.
+- Peaje: `SHA256(PEAJE|FECHA|MONTO|VENDEDOR_ID|EMPRESA_ID)`.
+- El índice único bloquea duplicados incluso si el registro histórico fue descartado o rechazado.
+
+### 9.3 Presupuestos
+
+- `monto_utilizado` representa fondos comprometidos, no solamente pagados.
+- En la vista del vendedor, el compromiso se desglosa en monto aprobado y monto pendiente de Tesorería. Ambos reducen el saldo disponible para impedir que un fondo pendiente se impute dos veces.
+- La consolidación usa `SELECT ... FOR UPDATE`; dos solicitudes concurrentes no pueden consumir el mismo saldo sin detectar el exceso.
+- Un rechazo total libera el monto comprometido. Una aprobación parcial libera la diferencia entre el total rendido y el aprobado.
+- No se puede desactivar un presupuesto con fondos comprometidos ni reducirlo por debajo de ese monto.
+- Los fondos de una gira nunca se descuentan del presupuesto mensual.
+
+### 9.4 Estados permitidos
+
+```text
+ENVIADA → PENDIENTE_APROBACION_EXCESO | EN_REVISION_TESORERIA
+PENDIENTE_APROBACION_EXCESO → EN_REVISION_TESORERIA | RECHAZADA
+EN_REVISION_TESORERIA → DOCUMENTOS_FISICOS_RECIBIDOS | RECHAZADA
+DOCUMENTOS_FISICOS_RECIBIDOS → APROBADA | APROBADA_PARCIAL | RECHAZADA
+APROBADA | APROBADA_PARCIAL → PAGADA
+```
+
+No se admiten regresiones desde estados finales ni estados arbitrarios enviados por el frontend.
+
+### 9.5 Magic Token
+
+- Se generan 32 bytes aleatorios y en la BD sólo se almacena SHA-256.
+- Vigencia predeterminada: 48 horas.
+- La mutación ocurre mediante `POST` después de una confirmación humana; un `GET` del correo nunca consume el token.
+- El primer uso se registra atómicamente. Los usos posteriores son rechazados.
+
+### 9.6 Revisión parcial
+
+- Tesorería debe resolver todos los documentos del lote.
+- Cada rechazo requiere motivo.
+- `monto_validado` puede reducir el monto declarado, pero no aumentarlo sin una nueva aprobación formal de exceso.
+- Cada decisión genera una entrada individual y una transición de cabecera en `rendicion_historial_estados`.

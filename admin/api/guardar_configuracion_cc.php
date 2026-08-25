@@ -1,18 +1,29 @@
 <?php
 require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../../config/auth.php';
+require_once __DIR__ . '/../../services/AuditService.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+    exit;
+}
+
 try {
-    requireRole(['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA']);
     $pdo = Database::getCobranzasConnection();
+    $user = requirePermission($pdo, 'cc.manage');
+    requireCsrfToken();
+    $canManageSheetIds = userHasPermission($user['rol'], 'companies.manage');
 
     // Recibir datos JSON
     $input = json_decode(file_get_contents('php://input'), true);
 
     if (!$input) {
-        throw new Exception("No se enviaron datos válidos.");
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'No se enviaron datos válidos.']);
+        exit;
     }
 
     $pdo->beginTransaction();
@@ -78,6 +89,11 @@ try {
     if (isset($input['asignaciones_empresas']) && is_array($input['asignaciones_empresas'])) {
         $stmtEmpresa = $pdo->prepare("
             UPDATE empresas 
+            SET email_tesoreria_defecto = :email
+            WHERE id = :id
+        ");
+        $stmtEmpresaAdmin = $pdo->prepare("
+            UPDATE empresas
             SET email_tesoreria_defecto = :email,
                 google_sheet_id = :sheet_id
             WHERE id = :id
@@ -86,16 +102,43 @@ try {
             if (isset($asignacion['id']) && isset($asignacion['email'])) {
                 $email = trim($asignacion['email']);
                 $sheetId = isset($asignacion['google_sheet_id']) ? trim($asignacion['google_sheet_id']) : null;
-                
-                if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $stmtEmpresa->bindParam(':email', $email);
-                    $stmtEmpresa->bindParam(':sheet_id', $sheetId);
-                    $stmtEmpresa->bindParam(':id', $asignacion['id'], PDO::PARAM_INT);
-                    $stmtEmpresa->execute();
+
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $pdo->rollBack();
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'La asignación contiene un correo no válido.']);
+                    exit;
+                }
+                if ($canManageSheetIds && $sheetId !== null && $sheetId !== '' && !preg_match('/^[A-Za-z0-9_-]{10,255}$/', $sheetId)) {
+                    $pdo->rollBack();
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'El ID de Google Sheets contiene caracteres no válidos.']);
+                    exit;
+                }
+
+                $empresaId = (int)$asignacion['id'];
+                if ($canManageSheetIds) {
+                    $stmtEmpresaAdmin->execute([
+                        ':email' => $email,
+                        ':sheet_id' => $sheetId !== '' ? $sheetId : null,
+                        ':id' => $empresaId,
+                    ]);
+                } else {
+                    $stmtEmpresa->execute([':email' => $email, ':id' => $empresaId]);
                 }
             }
         }
     }
+
+    AuditService::log(
+        $pdo,
+        (int)$user['id'],
+        $user['email'],
+        'CONFIGURACION_CC_ACTUALIZADA',
+        $canManageSheetIds
+            ? 'Configuración CC y Google Sheet IDs actualizada.'
+            : 'Configuración operativa de Cuentas Corrientes actualizada.'
+    );
 
     $pdo->commit();
 
@@ -108,8 +151,7 @@ try {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    echo json_encode([
-        'success' => false,
-        'message' => $e->getMessage()
-    ]);
+    error_log('[admin/api/guardar_configuracion_cc.php] ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'No fue posible guardar la configuración.']);
 }

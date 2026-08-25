@@ -6,17 +6,8 @@
  * Renderiza el header compartido, pestañas de navegación y modal de cierre de sesión.
  */
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'domain' => '',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'Strict'
-    ]);
-    session_start();
-}
+require_once __DIR__ . '/../../config/auth.php';
+startSecureSession();
 
 $rolUsuario = $_SESSION['admin_user_rol'] ?? '';
 $nombreUsuario = $_SESSION['admin_user_nombre'] ?? 'Usuario';
@@ -42,7 +33,7 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
     <!-- APP SWITCHER TABS (TODOS LOS MÓDULOS DE LA SUITE DISPONIBLES) -->
     <nav class="shell-nav" aria-label="Módulos del Sistema">
         
-        <?php if (in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC'])): ?>
+        <?php if (userHasPermission($rolUsuario, 'cheques.view')): ?>
         <a href="index.php" class="shell-tab <?php echo ($currentModule === 'cheques') ? 'shell-tab--active' : ''; ?>">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="4" width="20" height="16" rx="2"></rect>
@@ -53,7 +44,7 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
         </a>
         <?php endif; ?>
 
-        <?php if (in_array($rolUsuario, ['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA'])): ?>
+        <?php if (userHasPermission($rolUsuario, 'cc.view')): ?>
         <a href="cuentas_corrientes.php" class="shell-tab <?php echo ($currentModule === 'cuentas_corrientes') ? 'shell-tab--active' : ''; ?>">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 21h18"></path>
@@ -69,7 +60,7 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
         </a>
         <?php endif; ?>
 
-        <?php if (in_array($rolUsuario, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC'])): ?>
+        <?php if (userHasPermission($rolUsuario, 'rendiciones.view')): ?>
         <a href="rendiciones.php" class="shell-tab <?php echo ($currentModule === 'rendiciones') ? 'shell-tab--active' : ''; ?>">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -79,7 +70,18 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
                 <polyline points="10 9 9 9 8 9"></polyline>
             </svg>
             <span>Rendición Gastos</span>
-            <span class="shell-tab-badge">Próx.</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if (userHasPermission($rolUsuario, 'users.manage')): ?>
+        <a href="usuarios.php" class="shell-tab <?php echo ($currentModule === 'usuarios') ? 'shell-tab--active' : ''; ?>">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Usuarios</span>
         </a>
         <?php endif; ?>
 
@@ -89,7 +91,7 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
     <div class="shell-right-zone">
         
         <?php if ($currentModule === 'cuentas_corrientes'): ?>
-        <div class="cutoff-timer" id="txtCutoffTimer" style="margin: 0;">
+        <div class="cutoff-timer shell-cutoff-timer" id="txtCutoffTimer">
             Corte Hoy: <strong id="lblCutoffHour">--:--</strong> - <strong id="lblCutoffRemaining">Faltan --h --m</strong>
         </div>
         <?php endif; ?>
@@ -100,13 +102,15 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
             <span class="shell-role-badge <?php echo htmlspecialchars($roleBadgeData['class']); ?>"><?php echo htmlspecialchars($roleBadgeData['label']); ?></span>
         </div>
 
-        <button type="button" id="btnHeaderConfig" onclick="abrirModalConfigCC()" class="shell-btn-config" title="Configurar parámetros de corte y digitadoras">
+        <?php if (userHasPermission($rolUsuario, 'cc.manage') || userHasPermission($rolUsuario, 'companies.manage')): ?>
+        <button type="button" id="btnHeaderConfig" class="shell-btn-config" title="Configurar parámetros de corte, digitadoras y empresas">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
             Configuración
         </button>
+        <?php endif; ?>
 
         <button type="button" id="btnAbrirModalLogout" class="shell-btn-logout" title="Cerrar sesión segura">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -122,13 +126,13 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
 </header>
 
 <!-- MODAL LOGOUT UNIVERSAL -->
-<div id="modalLogout" class="modal-logout-overlay" style="display: none;">
+<div id="modalLogout" class="modal-logout-overlay" hidden>
     <div class="modal-logout-card">
         <h3 class="modal-logout-title">Cerrar Sesión</h3>
         <p class="modal-logout-text">¿Está seguro que desea cerrar su sesión de trabajo?</p>
         <div class="modal-logout-actions">
             <button type="button" id="btnCancelarLogout" class="modal-logout-btn-cancel">Cancelar</button>
-            <a href="api/auth/logout.php" class="modal-logout-btn-confirm">Sí, cerrar sesión</a>
+            <button type="button" id="btnConfirmarLogout" class="modal-logout-btn-confirm" data-logout-url="api/auth/logout.php">Sí, cerrar sesión</button>
         </div>
     </div>
 </div>

@@ -36,6 +36,9 @@ input{font-family:inherit}
 .search-field input:focus{outline:none;border-color:var(--blue)}
 .btn-buscar{background:var(--blue);color:var(--white);padding:.52rem 1.2rem;border-radius:6px;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:.4rem;transition:.15s}
 .btn-buscar:hover{background:#155a8f}
+.btn-rendiciones{min-height:42px;background:#0b3a5b;color:var(--white);padding:.52rem 1.2rem;border-radius:6px;font-size:.88rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
+.btn-rendiciones:hover{background:#165b82}
+@media(max-width:620px){.search-fields{align-items:stretch}.search-field,.search-field input,.search-field select,.btn-buscar,.btn-rendiciones{width:100%!important}}
 
 /* TABLA */
 .results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem}
@@ -108,6 +111,7 @@ tr:hover td{background:var(--blue-light)}
         </select>
       </div>
       <button class="btn-buscar" onclick="buscar()">🔍 Buscar</button>
+      <button type="button" class="btn-rendiciones" onclick="irARendicionGastos()">Rendir Gastos / Viáticos</button>
     </div>
   </div>
 
@@ -128,7 +132,19 @@ tr:hover td{background:var(--blue-light)}
 const API     = '../api';
 let authToken = localStorage.getItem('at_token') || '';
 let currentPage = 0;
+let currentVendCod = '';
+let currentVendNombre = '';
+let currentEmpresaCod = '';
 const PAGE_SIZE = 50;
+
+function detectarEmpresaPorHost() {
+  const host = window.location.hostname.toLowerCase();
+  if (host.includes('gabtec')) return 'EMP10';
+  if (host.includes('automarcohd') || host.includes('hdautomarco')) return 'EMP06';
+  if (host.includes('automarco')) return 'EMP01';
+  if (host.includes('autotec')) return 'EMP03';
+  return 'EMP03';
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   const loaderTimeout = setTimeout(showPageLoaderTimeout, 8000);
@@ -136,6 +152,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const res = await apiFetch(`${API}/auth.php?action=check`);
   clearTimeout(loaderTimeout);
   if (!res.ok) { location.href = '../index.html'; return; }
+  currentVendCod = res.data.vend_cod || '';
+  currentVendNombre = res.data.nombre || '';
+  currentEmpresaCod = res.data.empresa_codigo || detectarEmpresaPorHost();
   document.getElementById('navUserName').textContent = res.data.nombre || '';
   revealPage();
 
@@ -266,6 +285,22 @@ function formatoPrecio(n) { return '$'+Number(n||0).toLocaleString('es-CL'); }
 function showToast(msg,type='') {
   const t=document.getElementById('toast'); t.textContent=msg; t.className=`toast show ${type}`;
   setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function irARendicionGastos() {
+  const filtroEmp = document.getElementById('filtEmpresa').value;
+  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
+  if (!currentVendCod) {
+    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
+    return;
+  }
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
+  const baseUrl = isLocal
+    ? `${window.location.origin}/form/rendiciones/vendedor.php`
+    : `https://www.autotec.cl/cobranza_cheques/app/rendiciones/vendedor.php`;
+  const urlDestino = `${baseUrl}?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
+  window.location.href = urlDestino;
 }
 </script>
 </body>

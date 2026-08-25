@@ -35,7 +35,7 @@ try {
     $pdo = Database::getCobranzasConnection();
 
     // Control de acceso: solo roles administrativos pueden listar todas las cobranzas
-    requireAuth($pdo, ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC']);
+    requirePermission($pdo, 'cheques.view');
 
     // 1. Obtener métricas globales para las tarjetas superiores
     $stmtMetrics = $pdo->query("SELECT estado, COUNT(*) as cantidad FROM cobranzas GROUP BY estado");
@@ -113,8 +113,15 @@ try {
     }
 
     // 3. Traer los cheques y las facturas asociadas
-    $cobranzasIds = array_column($cobranzas, 'id');
-    $placeholders = implode(',', array_fill(0, count($cobranzasIds), '?'));
+    $cobranzasIds = array_map('intval', array_column($cobranzas, 'id'));
+    $idPlaceholders = [];
+    $idParams = [];
+    foreach ($cobranzasIds as $index => $cobranzaId) {
+        $placeholder = ':cobranza_id_' . $index;
+        $idPlaceholders[] = $placeholder;
+        $idParams[$placeholder] = $cobranzaId;
+    }
+    $placeholders = implode(',', $idPlaceholders);
 
     // Facturas en cobranza_facturas
     $stmtFacturas = $pdo->prepare("SELECT 
@@ -129,7 +136,7 @@ try {
                                 FROM cobranza_facturas
                                 WHERE cobranza_id IN ($placeholders)
                                 ORDER BY id ASC");
-    $stmtFacturas->execute($cobranzasIds);
+    $stmtFacturas->execute($idParams);
     $todasFacturas = $stmtFacturas->fetchAll(PDO::FETCH_ASSOC);
 
     $facturasPorCobranza = [];
@@ -154,7 +161,7 @@ try {
                                 FROM cheques 
                                 WHERE cobranza_id IN ($placeholders)
                                 ORDER BY id ASC");
-    $stmtCheques->execute($cobranzasIds);
+    $stmtCheques->execute($idParams);
     $todosCheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
 
     // Agrupar cheques por cobranza_id

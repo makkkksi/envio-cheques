@@ -226,7 +226,7 @@ sequenceDiagram
     AuthChq->>ERP: SELECT ven_mail, nombre_vendedor FROM autotec_ecom.tbl_vendedores WHERE cli_vendedor=15
     ERP-->>AuthChq: Retorna correo corporativo y nombre oficial
     AuthChq->>AuthChq: Crea $_SESSION['vendedor_auth'] (SameSite=Lax, Secure=true)
-    AuthChq-->>ChqApp: 200 OK { success: true, data: { vendedor_id: 15, email: "...", nombre: "..." } }
+    AuthChq-->>ChqApp: 200 OK { success: true, data: { vendedor_id: 15, empresa_id: 3, email: "...", nombre: "...", csrf_token: "..." } }
     
     ChqApp-->>V: Muestra formulario con selector de clientes cargado
     V->>ChqApp: Clic en "← Volver a Ventas"
@@ -255,3 +255,6 @@ sequenceDiagram
    `vendedor_id` se valida con `(int)` y `empresa` contra whitelist de conexiones PDO.
 3. **Aislamiento de Sesiones:**  
    El portal `vendedores_DEV` utiliza la cookie `at_token` (`web_sesiones`), mientras que `app/` utiliza `PHPSESSID` con `$_SESSION['vendedor_auth']`, garantizando que ninguna sesión sobreescriba a la otra.
+
+4. **Contexto compartido con Rendiciones:**
+   `auth_seller.php` resuelve además el `empresa_id` de `bd_modulo_cobranzas.empresas` y lo almacena junto al `vend_cod`. Las APIs de `/api/rendiciones/` consumen exclusivamente esos valores de sesión mediante `requireSellerContext()` y no aceptan identificadores de autoría enviados por el navegador.

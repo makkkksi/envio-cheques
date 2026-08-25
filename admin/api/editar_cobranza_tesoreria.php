@@ -23,7 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 try {
     $pdo = Database::getCobranzasConnection();
-    $user = requireAuth($pdo, ['ADMINISTRADOR', 'TESORERIA']);
+    $user = requirePermission($pdo, 'cheques.manage');
+    requireCsrfToken();
     $usuario_id = $user['id'];
 
     $input = json_decode(file_get_contents('php://input'), true);

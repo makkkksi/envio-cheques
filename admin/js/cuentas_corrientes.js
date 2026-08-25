@@ -9,6 +9,7 @@ let historyFilterSelected = 'Todos';
 let historialCurrentPage = 1;
 let historialTotalPages = 1;
 let historialTotal = 0;
+const CAN_MANAGE_CC = document.body.dataset.canManageCc === '1';
 
 
 function resolverEmpresaDesdeTexto(emitidoA, empresaFallback) {
@@ -354,9 +355,8 @@ function actualizarTemporizadorCorte() {
     // Disparo automático inteligente si el portal está abierto y llega la hora de corte:
     // Si la hora objetivo ya se cumplió hoy (diff <= 0 y dentro de la ventana de 5 minutos)
     // y hay cobranzas pendientes en cola, se dispara automáticamente
-    if (diff <= 0 && diff > -300000 && !yaDisparadoAutoHoy && cacheCobranzasCola.length > 0 && typeof despachandoCC !== 'undefined' && !despachandoCC) {
+    if (CAN_MANAGE_CC && diff <= 0 && diff > -300000 && !yaDisparadoAutoHoy && cacheCobranzasCola.length > 0 && typeof despachandoCC !== 'undefined' && !despachandoCC) {
         yaDisparadoAutoHoy = true;
-        console.log('[Auto-Despacho] Hora de corte alcanzada. Ejecutando despacho automático...');
         showToast('Hora de corte alcanzada. Despachando resumen automáticamente a digitadoras...', 'success');
         ejecutarDespachoCC();
     }
@@ -429,8 +429,7 @@ function cargarDatosCC() {
             filtrarColaDeCheques();
             renderHistorialTable();
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             showToast('Error de conexión', 'error');
         });
 }
@@ -454,8 +453,7 @@ function cargarHistorial(page) {
             historialTotal = data.data.historial_total || 0;
             renderHistorialTable();
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             showToast('Error de conexión', 'error');
         });
 }
@@ -484,7 +482,8 @@ function actualizarKPIStrip() {
     document.getElementById('kpiDetails').textContent = `${uniqueClientes.size} Cliente(s) / ${countCobranzas} Cobranzas`;
 
     const btnDespachar = document.getElementById('btnDespacharResumen');
-    if (countCobranzas > 0) {
+    if (!btnDespachar) return;
+    if (CAN_MANAGE_CC && countCobranzas > 0) {
         btnDespachar.disabled = false;
         btnDespachar.removeAttribute('title');
     } else {
@@ -639,7 +638,7 @@ function renderHistorialTable() {
                         <td style="text-align: right; white-space: nowrap;">
                             <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
                                 <button type="button" class="btn-action btn-secondary" onclick="abrirLogDetalle(${log.id})">Ver Info & Cheques</button>
-                                <button type="button" class="btn-action btn-secondary" onclick="reenviarBitacoraCC(${log.id})">Re-enviar</button>
+                                ${CAN_MANAGE_CC ? `<button type="button" class="btn-action btn-secondary" onclick="reenviarBitacoraCC(${log.id})">Re-enviar</button>` : ''}
                             </div>
                         </td>
                     </tr>
@@ -702,7 +701,7 @@ function filtrarHistorialCC(filterType) {
 
 let despachandoCC = false;
 function ejecutarDespachoCC() {
-    if (despachandoCC) return;
+    if (!CAN_MANAGE_CC || despachandoCC) return;
     const btnDespachar = document.getElementById('btnDespacharResumen');
     
     despachandoCC = true;
@@ -713,7 +712,10 @@ function ejecutarDespachoCC() {
     
     cerrarConfirmarDespacho();
     
-    fetch('api/despachar_resumen_cc.php', { method: 'POST' })
+    fetch('api/despachar_resumen_cc.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': getAdminCsrfToken() }
+    })
         .then(res => res.json())
         .then(data => {
             if (!data.success) {
@@ -723,8 +725,7 @@ function ejecutarDespachoCC() {
             showToast(data.message || 'Resumen despachado con éxito', 'success');
             cargarDatosCC();
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             showToast('Error al conectar con el despachador', 'error');
         })
         .finally(() => {
@@ -737,13 +738,12 @@ function ejecutarDespachoCC() {
 }
 
 function reenviarBitacoraCC(logId) {
-    const nuevoCorreo = prompt('Re-enviar a correo alternativo (dejar vacío para usar el original):');
-    if (nuevoCorreo === null) return;
+    if (!CAN_MANAGE_CC) return;
 
     fetch('api/reenviar_informe_cc.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ log_id: logId, nuevo_correo: nuevoCorreo.trim() })
+        headers: getAdminJsonHeaders(),
+        body: JSON.stringify({ log_id: logId, nuevo_correo: '' })
     })
     .then(res => res.json())
     .then(data => {

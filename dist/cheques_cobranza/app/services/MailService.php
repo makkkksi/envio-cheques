@@ -373,6 +373,81 @@ class MailService
     }
 
     /**
+     * Envía a jefatura la solicitud de aprobación de un exceso de rendición.
+     * El token crudo sólo existe durante este envío; en BD se almacena su SHA-256.
+     */
+    public static function enviarSolicitudExcesoRendicion(array $rendicion, array $documentos, string $rawToken): bool
+    {
+        if (RENDICIONES_APPROVER_EMAIL === '' || !filter_var(RENDICIONES_APPROVER_EMAIL, FILTER_VALIDATE_EMAIL)) {
+            error_log('[MailService] RENDICIONES_APPROVER_EMAIL no está configurado.');
+            return false;
+        }
+
+        $code = htmlspecialchars((string)($rendicion['codigo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $seller = htmlspecialchars((string)($rendicion['vendedor_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $period = htmlspecialchars((string)($rendicion['periodo_mes'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $type = htmlspecialchars((string)($rendicion['tipo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $total = (float)($rendicion['monto_total_rendido'] ?? 0);
+        $budget = (float)($rendicion['monto_presupuesto_asignado'] ?? 0);
+        $excess = (float)($rendicion['monto_exceso'] ?? 0);
+        $baseApprovalUrl = PORTAL_BASE_URL . '/rendiciones/aprobar_exceso.php';
+        $approveUrl = $baseApprovalUrl . '?token=' . rawurlencode($rawToken) . '&decision=APROBADO';
+        $rejectUrl = $baseApprovalUrl . '?token=' . rawurlencode($rawToken) . '&decision=RECHAZADO';
+
+        $rows = '';
+        foreach ($documentos as $documento) {
+            $category = htmlspecialchars((string)($documento['categoria_gasto'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $documentType = htmlspecialchars((string)($documento['tipo_documento'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $date = htmlspecialchars((string)($documento['fecha_emision'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $reference = htmlspecialchars((string)($documento['numero_documento'] ?? $documento['razon_social_proveedor'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $amount = number_format((float)($documento['monto'] ?? 0), 0, ',', '.');
+            $rows .= '<tr style="border-bottom:1px solid #e2e8f0">'
+                . '<td style="padding:9px">' . $category . '</td>'
+                . '<td style="padding:9px">' . $documentType . '</td>'
+                . '<td style="padding:9px">' . $date . '</td>'
+                . '<td style="padding:9px">' . $reference . '</td>'
+                . '<td style="padding:9px;text-align:right">$' . $amount . '</td>'
+                . '</tr>';
+        }
+
+        $subject = '[APROBACIÓN REQUERIDA] Exceso en rendición ' . $code;
+        $html = '<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#1e293b;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden">'
+            . '<div style="background:#172554;color:#fff;padding:24px"><h2 style="margin:0">Aprobación de exceso</h2><p style="margin:6px 0 0">Rendición ' . $code . '</p></div>'
+            . '<div style="padding:24px"><p>Hola ' . htmlspecialchars(RENDICIONES_APPROVER_NAME, ENT_QUOTES, 'UTF-8') . ',</p>'
+            . '<p><strong>' . $seller . '</strong> presentó una rendición ' . $type . ' del periodo ' . $period . ' que supera el saldo disponible.</p>'
+            . '<table style="width:100%;border-collapse:collapse;background:#f8fafc;margin:18px 0">'
+            . '<tr><td style="padding:9px">Presupuesto</td><td style="padding:9px;text-align:right">$' . number_format($budget, 0, ',', '.') . '</td></tr>'
+            . '<tr><td style="padding:9px">Total rendido</td><td style="padding:9px;text-align:right">$' . number_format($total, 0, ',', '.') . '</td></tr>'
+            . '<tr><td style="padding:9px;font-weight:bold;color:#b91c1c">Exceso</td><td style="padding:9px;text-align:right;font-weight:bold;color:#b91c1c">$' . number_format($excess, 0, ',', '.') . '</td></tr>'
+            . '</table><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#e2e8f0"><th style="padding:9px;text-align:left">Categoría</th><th style="padding:9px;text-align:left">Documento</th><th style="padding:9px;text-align:left">Fecha</th><th style="padding:9px;text-align:left">Referencia</th><th style="padding:9px;text-align:right">Monto</th></tr></thead><tbody>' . $rows . '</tbody></table>'
+            . '<div style="display:flex;gap:12px;justify-content:center;margin-top:28px">'
+            . '<a href="' . htmlspecialchars($approveUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#15803d;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Revisar aprobación</a>'
+            . '<a href="' . htmlspecialchars($rejectUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Revisar rechazo</a>'
+            . '</div><p style="font-size:12px;color:#64748b;margin-top:24px">El enlace vence en ' . RENDICIONES_TOKEN_TTL_HOURS . ' horas y sólo puede utilizarse una vez.</p></div></div>';
+
+        return self::sendSmtp(RENDICIONES_APPROVER_EMAIL, $subject, $html);
+    }
+
+    public static function notificarDecisionExcesoRendicion(array $rendicion, string $decision): bool
+    {
+        $recipient = trim((string)($rendicion['vendedor_email'] ?? ''));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            error_log('[MailService] Rendición sin correo válido de vendedor para notificar resolución.');
+            return false;
+        }
+        $code = htmlspecialchars((string)($rendicion['codigo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $seller = htmlspecialchars((string)($rendicion['vendedor_nombre'] ?? 'Vendedor'), ENT_QUOTES, 'UTF-8');
+        $approved = $decision === 'APROBADO';
+        $label = $approved ? 'aprobado' : 'rechazado';
+        $color = $approved ? '#15803d' : '#b91c1c';
+        $subject = '[RENDICIONES] Exceso ' . $label . ' — ' . $code;
+        $html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1e293b;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">'
+            . '<div style="background:' . $color . ';color:#fff;padding:22px"><h2 style="margin:0">Exceso ' . ucfirst($label) . '</h2></div>'
+            . '<div style="padding:22px"><p>Hola ' . $seller . ',</p><p>El exceso asociado a la rendición <strong>' . $code . '</strong> fue <strong>' . $label . '</strong>.</p></div></div>';
+        return self::sendSmtp($recipient, $subject, $html);
+    }
+
+    /**
      * Envía un correo electrónico utilizando PHPMailer.
      */
     public static function sendSmtp(string $to, string $subject, string $htmlBody, array $attachments = [], string $cc = ''): bool

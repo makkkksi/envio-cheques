@@ -469,27 +469,6 @@ body.modal-open {
     line-height: 1.4;
 }
 
-/* FILTRO DE ALTO CONTRASTE Y ROTACIÓN DE FOTOS DE CHEQUE */
-.high-contrast-image {
-    filter: contrast(1.85) brightness(1.1) grayscale(0.3) !important;
-}
-
-.image-tool-btn {
-    background: rgba(15, 23, 42, 0.85);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    padding: 4px 10px;
-    border-radius: var(--radius-sm);
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.image-tool-btn:hover {
-    background: rgba(15, 23, 42, 1);
-}
-
 /* Fallback de Vendedor Neutro (Ley de Tesler) */
 .seller-badge-muted {
     background: #f1f5f9;
@@ -1089,29 +1068,6 @@ body.modal-open {
     margin-top: 18px;
 }
 
-/* TOAST */
-.toast-container {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 3000;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.toast {
-    padding: 12px 18px;
-    border-radius: var(--radius-md);
-    color: white;
-    font-weight: 600;
-    font-size: 0.85rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.toast.success { background-color: #16a34a; }
-.toast.error { background-color: #dc2626; }
-
 /* ==========================================================================
    RESPONSIVE DESIGN (TABLET & MOBILE)
    ========================================================================== */
@@ -1159,59 +1115,7 @@ body.modal-open {
     }
 }
 
-/* Security Hardening - Extracted Inline Styles */
-.modal-logout-overlay {
-    display: none;
-    position: fixed;
-    z-index: 9999;
-    inset: 0;
-    background: rgba(15,23,42,0.75);
-    backdrop-filter: blur(4px);
-    align-items: center;
-    justify-content: center;
-}
-.modal-logout-card {
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 12px;
-    padding: 28px;
-    max-width: 380px;
-    width: 90%;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-}
-.modal-logout-title {
-    margin: 0 0 10px;
-    color: #f1f5f9;
-    font-size: 1.1rem;
-}
-.modal-logout-text {
-    margin: 0 0 24px;
-    color: #94a3b8;
-    font-size: 0.9rem;
-}
-.modal-logout-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-}
-.modal-logout-btn-cancel {
-    padding: 8px 16px;
-    border-radius: 6px;
-    border: 1px solid #475569;
-    background: transparent;
-    color: #94a3b8;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-.modal-logout-btn-confirm {
-    padding: 8px 16px;
-    border-radius: 6px;
-    background: #dc2626;
-    color: #fff;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
+/* Los Toasts, el Lightbox y el logout se definen únicamente en css/shell.css. */
 .empty-detail-state-h3 {
     font-size: 0.95rem;
     font-weight: 600;

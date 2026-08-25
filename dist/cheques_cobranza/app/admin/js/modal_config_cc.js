@@ -1,10 +1,20 @@
 // modal_config_cc.js
 let cacheEmpresasMatrizCfg = [];
 
+function escapeConfigHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
 function abrirModalConfigCC() {
     const modal = document.getElementById('modalConfigCC');
     if (!modal) return;
-    modal.style.display = 'flex';
+    modal.hidden = false;
+    const canManageSheets = modal.dataset.canManageSheets === '1';
     
     const tbody = document.getElementById('tblAsignacionesDigitadorasCC');
     if (tbody) {
@@ -44,36 +54,41 @@ function abrirModalConfigCC() {
             }
 
             tbodyEmp.innerHTML = cacheEmpresasMatrizCfg.map(emp => {
+                const empresaId = Number(emp.id);
                 const emailActual = emp.email_digitadora || '';
                 const isDig2 = (emailActual === dig2 && dig2 !== '');
+                const sheetCell = canManageSheets ? `
+                        <td>
+                            <div class="sheet-id-field">
+                                <input type="text" id="input_sheet_id_${empresaId}" value="${escapeConfigHtml(emp.google_sheet_id || '')}" placeholder="ID Google Sheet" readonly class="sheet-id-input">
+                                <button type="button" data-sheet-lock="${empresaId}" id="btn_lock_${empresaId}" class="sheet-id-lock" title="Editar ID de Google Sheets">Editar</button>
+                            </div>
+                        </td>` : '';
                 return `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="font-weight: 600; font-size: 0.82rem; padding: 12px 14px; color: #334155; text-align: left;">${emp.nombre}</td>
+                        <td style="font-weight: 600; font-size: 0.82rem; padding: 12px 14px; color: #334155; text-align: left;">${escapeConfigHtml(emp.nombre)}</td>
                         <td>
-                            <input type="radio" name="radio_emp_cfg_${emp.id}" value="1" ${!isDig2 ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #2563eb;">
+                            <input type="radio" name="radio_emp_cfg_${empresaId}" value="1" ${!isDig2 ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #2563eb;">
                         </td>
                         <td>
-                            <input type="radio" name="radio_emp_cfg_${emp.id}" value="2" ${isDig2 ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #16a34a;">
+                            <input type="radio" name="radio_emp_cfg_${empresaId}" value="2" ${isDig2 ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px; accent-color: #16a34a;">
                         </td>
-                        <td style="display: none;">
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                <input type="text" id="input_sheet_id_${emp.id}" value="${emp.google_sheet_id || ''}" placeholder="ID Google Sheet" readonly style="width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.8rem; font-family: monospace; background-color: #f1f5f9; color: #64748b; outline: none;">
-                                <button type="button" onclick="toggleLockSheetId(${emp.id})" id="btn_lock_${emp.id}" style="background: none; border: none; cursor: pointer; padding: 4px; font-size: 1.1rem; opacity: 0.6; transition: 0.2s;" title="Desbloquear">🔒</button>
-                            </div>
-                        </td>
+                        ${sheetCell}
                     </tr>
                 `;
             }).join('');
+            tbodyEmp.querySelectorAll('[data-sheet-lock]').forEach((button) => {
+                button.addEventListener('click', () => toggleLockSheetId(button.dataset.sheetLock));
+            });
         })
-        .catch(err => {
-            console.error(err);
+        .catch(() => {
             if (typeof showToast === 'function') showToast('Error de conexión al cargar config', 'error');
         });
 }
 
 function cerrarModalConfigCC() {
     const modal = document.getElementById('modalConfigCC');
-    if (modal) modal.style.display = 'none';
+    if (modal) modal.hidden = true;
 }
 
 function toggleLockSheetId(empId) {
@@ -82,19 +97,15 @@ function toggleLockSheetId(empId) {
     if (!input || !btn) return;
     if (input.hasAttribute('readonly')) {
         input.removeAttribute('readonly');
-        input.style.backgroundColor = '#fff';
-        input.style.color = '#000';
-        btn.textContent = '🔓';
+        input.classList.add('is-editable');
+        btn.textContent = 'Bloquear';
         btn.title = 'Bloquear';
-        btn.style.opacity = '1';
         input.focus();
     } else {
         input.setAttribute('readonly', 'readonly');
-        input.style.backgroundColor = '#f1f5f9';
-        input.style.color = '#64748b';
-        btn.textContent = '🔒';
-        btn.title = 'Desbloquear';
-        btn.style.opacity = '0.6';
+        input.classList.remove('is-editable');
+        btn.textContent = 'Editar';
+        btn.title = 'Editar ID de Google Sheets';
     }
 }
 
@@ -177,7 +188,7 @@ function guardarConfiguracionCC() {
 
     fetch('api/guardar_configuracion_cc.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminJsonHeaders(),
         body: JSON.stringify({
             hora_despacho_diario: inputHora ? inputHora.value : '16:00',
             despacho_automatico_activado: (document.getElementById('chkAutoDispatch') && document.getElementById('chkAutoDispatch').checked) ? '1' : '0',
@@ -202,8 +213,7 @@ function guardarConfiguracionCC() {
             cargarDatosCC();
         }
     })
-    .catch(err => {
-        console.error(err);
+    .catch(() => {
         if (typeof showToast === 'function') showToast('Error al guardar configuración', 'error');
     });
 }
@@ -213,4 +223,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCfg1) btnCfg1.addEventListener('click', abrirModalConfigCC);
     const btnCfg2 = document.getElementById('btnHeaderConfigCC');
     if (btnCfg2) btnCfg2.addEventListener('click', abrirModalConfigCC);
+    const btnCerrar = document.getElementById('btnCerrarConfigCC');
+    if (btnCerrar) btnCerrar.addEventListener('click', cerrarModalConfigCC);
+    const btnCancelar = document.getElementById('btnCancelarConfigCC');
+    if (btnCancelar) btnCancelar.addEventListener('click', cerrarModalConfigCC);
+    const btnGuardar = document.getElementById('btnGuardarConfigCC');
+    if (btnGuardar) btnGuardar.addEventListener('click', guardarConfiguracionCC);
+    const inputHora = document.getElementById('inputHoraDespachoCC');
+    if (inputHora) inputHora.addEventListener('input', actualizarHoraLocalCfg);
+    const toggleAuto = document.getElementById('chkAutoDispatch');
+    if (toggleAuto) toggleAuto.addEventListener('change', actualizarToggleLabelCfg);
 });

@@ -16,11 +16,14 @@ require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
+    $httpsEnabled = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['SERVER_PORT'] ?? null) === '443')
+        || (defined('APP_ENV') && APP_ENV === 'production');
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
         'domain'   => '',
-        'secure'   => true,
+        'secure'   => $httpsEnabled,
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
@@ -49,18 +52,24 @@ try {
     
     $sellerEmail = null;
     $sellerName = null;
+    $empresaIdCentral = null;
+    $empresaDatabase = null;
 
     if ($vendedor_id !== null) {
         $stmt = null;
         if ($empresa !== '') {
             $empresa_code = strtoupper(trim($empresa));
             if ($empresa_code === 'EMP01' || $empresa_code === 'AUTOMARCO') {
+                $empresaDatabase = 'automarc_automarco';
                 $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM automarc_automarco.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail IS NOT NULL AND ven_mail != '' AND ven_mail != '.' LIMIT 1");
             } elseif ($empresa_code === 'EMP10' || $empresa_code === 'GABTEC') {
+                $empresaDatabase = 'gabteccl_sitbdd1978';
                 $stmt = $pdo->prepare("SELECT ven_mail, ven_nombre as nombre_vendedor FROM gabteccl_sitbdd1978.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail IS NOT NULL AND ven_mail != '' AND ven_mail != '.' LIMIT 1");
             } elseif ($empresa_code === 'EMP03' || $empresa_code === 'AUTOTEC' || $empresa_code === 'EMP24' || $empresa_code === 'TOP_REPUESTOS') {
+                $empresaDatabase = 'autotec_ecom';
                 $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM autotec_ecom.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail IS NOT NULL AND ven_mail != '' AND ven_mail != '.' LIMIT 1");
             } elseif ($empresa_code === 'EMP06' || $empresa_code === 'HD') {
+                $empresaDatabase = 'autohd_automarcohd';
                 $stmt = $pdo->prepare("SELECT ven_mail, nombre_vendedor FROM autohd_automarcohd.tbl_vendedores WHERE cli_vendedor = :vid AND ven_mail IS NOT NULL AND ven_mail != '' AND ven_mail != '.' LIMIT 1");
             }
         }
@@ -101,12 +110,30 @@ try {
         $sellerEmail = ($vendedor_id !== null) ? "vendedor{$vendedor_id}@holdingautomarco.com" : "envio@holdingautomarco.com";
     }
 
+    if ($empresaDatabase !== null) {
+        $stmtEmpresa = $pdo->prepare('SELECT id FROM empresas WHERE nombre_bd = :nombre_bd LIMIT 1');
+        $stmtEmpresa->execute([':nombre_bd' => $empresaDatabase]);
+        $empresaIdCentral = (int)$stmtEmpresa->fetchColumn();
+    }
+
+    if (!$empresaIdCentral && defined('APP_ENV') && APP_ENV !== 'local') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'La empresa de origen no es válida.']);
+        exit;
+    }
+
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+
     $_SESSION['vendedor_auth'] = [
         'vendedor_id' => $vendedor_id,
+        'empresa_id' => $empresaIdCentral,
         'email' => $sellerEmail,
         'nombre' => $sellerName,
         'empresa_origen' => $empresa ?: 'DESCONOCIDA',
-        'auth_time' => time()
+        'auth_time' => time(),
+        'csrf_token' => $_SESSION['csrf_token']
     ];
 
     echo json_encode([

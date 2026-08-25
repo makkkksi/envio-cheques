@@ -67,6 +67,17 @@ SetEnv DB_NAME_CENTRAL bd_modulo_cobranzas
 SetEnv PORTAL_BASE_URL "https://www.autotec.cl/cobranza_cheques"
 SetEnv UPLOADS_BASE_URL "https://www.autotec.cl/cobranza_cheques/uploads"
 
+# Override de desarrollo local (Laragon).
+# Este bloque debe existir solo fuera de dist/; prevalece sobre los valores
+# productivos anteriores sin alterar el paquete de despliegue.
+SetEnv APP_ENV local
+SetEnv DB_HOST localhost
+SetEnv DB_USER root
+SetEnv DB_PASS ""
+SetEnv DB_NAME_CENTRAL bd_modulo_cobranzas
+SetEnv PORTAL_BASE_URL http://localhost/form
+SetEnv UPLOADS_BASE_URL http://localhost/form/uploads
+
 # Correo (SMTP Externo Host)
 SetEnv MAIL_HOST mail.holdingautomarco.com
 SetEnv MAIL_PORT 587

@@ -2,6 +2,85 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [Unreleased] - 2026-08-21
+
+### Módulo 3 — Presupuesto aprobado vs. pendiente (2026-08-25)
+- **Lectura financiera corregida**: el portal vendedor separa el monto realmente aprobado del importe enviado que todavía espera resolución de Tesorería.
+- **Saldo prudente preservado**: tanto lo aprobado como lo pendiente permanecen comprometidos y reducen el saldo para nuevas boletas, evitando doble imputación.
+- **Barra segmentada accesible**: mensual y giras muestran proporción aprobada en verde, pendiente en ámbar y disponible en neutro, con importes y porcentajes textuales.
+- **Contrato API ampliado**: `get_bolsa_gastos.php` deriva `monto_aprobado` desde rendiciones resueltas y entrega `monto_pendiente` sin cambiar el esquema.
+- **SQL nuevo para phpMyAdmin**: ninguno; todos los valores nuevos son derivados de columnas existentes.
+
+### Módulo 3 — Identidad ERP y asignación de presupuestos (2026-08-25)
+- **Selector oficial de vendedores**: el modal elimina la digitación manual de código, nombre y correo; empresa y vendedor se cargan desde los cuatro ERP mediante un combobox accesible con búsqueda y navegación por teclado.
+- **Revalidación backend**: `gestion_presupuestos.php` ya no confía en datos descriptivos enviados por el navegador. Resuelve nuevamente `(empresa_id, cli_vendedor)` y persiste nombre/correo canónicos del ERP.
+- **Homologación multiempresa visible**: la tabla muestra, por correo, en qué empresas existe cada vendedor y su código ERP local en cada una.
+- **Gira sin recaptura**: presupuestos mensuales activos incorporan `+ Agregar gira`; abre el formulario con identidad y empresa bloqueadas y solicita sólo datos de gira, fechas, período y monto.
+- **Pruebas locales**: `scripts/test_rendiciones.php` valida catálogo ERP, identidad canónica y coexistencia transaccional de presupuesto mensual + gira; los fixtures se revierten por completo.
+- **SQL nuevo para phpMyAdmin**: ninguno. Se reutilizan `empresas`, las tablas ERP de sólo lectura y el esquema vigente de `presupuestos_vendedores`.
+
+### Módulo 3 — Nota a Tesorería (2026-08-25)
+- **Persistencia y auditoría de la nota**: `nota_vendedor` se guarda al consolidar una rendición, se incorpora a la bitácora inmutable `ENVIAR_RENDICION` y se muestra a Tesorería en el panel de detalle.
+- **Migración aditiva documentada**: `rendiciones_gastos.nota_vendedor` queda definida en ambos DDL y con SQL exacto para phpMyAdmin en `docs/SQL_PRODUCCION.md`; no hay eliminaciones ni cambios destructivos.
+- **Campo conectado en interfaz**: el drawer de consolidación del vendedor incorpora “Nota para Tesorería” (máximo 500 caracteres) y la envía explícitamente a `guardar_rendicion.php`.
+- **Prueba E2E local completada**: validado Peaje con fotografía, exceso, nota, Magic Token de un uso, recepción física y aprobación total contra Laragon; no se enviaron correos reales.
+- **Correcciones detectadas por E2E**: la cookie de vendedor se adapta a HTTP local/HTTPS productivo y la expiración de Magic Token se compara con `NOW()` de MySQL, evitando descalces de zona horaria entre PHP y la BD.
+- **Tablet como superficie híbrida**: entre 600 y 1199 px, el portal de vendedor evita columnas vacías mediante grillas `auto-fit`; una sola rendición o presupuesto se presenta con ancho útil y varias tarjetas se equilibran en dos columnas. Se amplían controles, métricas, tarjetas y navegación inferior sin modificar el comportamiento móvil.
+- **Presupuesto con lectura financiera**: se reemplazó la tarjeta KPI genérica por un resumen de asignado, utilizado, saldo y porcentaje de uso. El frontend consume `monto_utilizado` —campo que entrega la API— y presenta los saldos negativos como “Exceso comprometido” con estado explícito rojo, eliminando la señal incorrecta de disponible verde. Las giras usan la misma estructura y semántica.
+
+### Módulo 3 — Rediseño Mobile-First Vendedor (Estilo Rindegastos & Hardening)
+- **Edición y Descarte de Gastos en Borrador**: Al tocar cualquier tarjeta en la Bolsa de Gastos que permanezca en borrador (`rendicion_id IS NULL`), se abre el Drawer en modo edición (`Editar Gasto`) permitiendo modificar todos sus datos, sustituir o conservar la fotografía y/o descartar el comprobante mediante eliminación lógica segura.
+- **Bloqueo de Modificación en Gastos Rendidos**: Comprobantes que ya forman parte de una rendición consolidada enviada a Tesorería quedan protegidos en modo solo lectura para garantizar inmutabilidad.
+- **Experiencia Mobile-First Integral**: Refactorización de `rendiciones/vendedor.php`, `rendiciones/vendedor.css` y `rendiciones/vendedor.js` imitando la arquitectura de Rindegastos mobile app.
+- **Corrección Contrato Cena Cliente (SII)**: Separación de `cliente_invitado_empresa` y `cliente_invitado_cargo` en el formulario y validación estricta de los 5 campos exigidos por backend antes del envío.
+- **Claridad de Flujo en Consolidación**: Eliminación del falso botón "Guardar" borrador en el drawer de informe (que ejecutaba el despacho inmediato), dejando el flujo explícito hacia el botón "Enviar Rendición a Tesorería" con modal de confirmación.
+- **Ergonomía Táctil y Accesibilidad (Impeccable)**: Targets táctiles >= 44x44px en toda la interfaz móvil, checklist accesible con botones `role="checkbox"` y navegación por teclado, e iconografía lineal SVG consistente con la Suite.
+- **Bottom Navigation Bar fija (64px)**: Pestañas de navegación directas con soporte `safe-area-inset-bottom` para `Gastos` (con badge dinámico de borradores pendientes), `Informes` y `Presupuesto`.
+- **Sincronización Dual y Paridad**: Sincronización idéntica en `dist/cheques_cobranza/app/rendiciones/` verificada con `scripts/verify_release.php` (87 archivos PHP válidos, 201 archivos SHA-256 idénticos).
+
+### Entorno local Laragon
+- **Migración local aplicada**: ejecutado `config/setup_rendiciones.sql` sobre `bd_modulo_cobranzas` en MySQL 8.4.3 de Laragon; quedaron disponibles las cuatro tablas del Módulo 3.
+- **Separación local/producción**: el `.htaccess` de la raíz fuerza `APP_ENV=local`, MySQL `localhost` y URLs bajo `http://localhost/form`; `dist/cheques_cobranza/app/.htaccess` conserva exclusivamente los valores productivos.
+- **Verificación de release**: `scripts/verify_release.php` valida explícitamente ambos entornos y excluye únicamente `.htaccess` de la igualdad SHA-256; los demás archivos continúan exigiendo paridad exacta.
+- **SQL nuevo**: ninguno. Se aplicó localmente la migración aditiva ya documentada, sin `DROP`, `TRUNCATE` ni `DELETE`.
+
+### Módulo 3 — Rendiciones, Fases 3 y 4
+- **Bandeja unificada de revisión**: los estados `PENDIENTE_APROBACION_EXCESO` y `DOCUMENTOS_FISICOS_RECIBIDOS` se incorporan al filtro principal “Bandeja por revisar”, reduciendo filtros operativos sin perder trazabilidad; las filas mantienen badges explícitos de exceso y su estado de recepción física.
+- **Sidebar colapsable**: el panel de submódulos puede contraerse a iconos en escritorio, conserva títulos accesibles y recuerda la preferencia durante la sesión del navegador; en móvil se preserva la navegación horizontal completa.
+- **Navegación por submódulos**: Rendiciones incorpora sidebar propia con Bandeja, Dashboard y Vendedores; la selección es instantánea, accesible y persistente mediante `#bandeja`, `#dashboard` y `#vendedores`.
+- **Bandeja alineada con Cheques Cobranza**: se adoptó el patrón operativo de píldoras de estado, búsqueda/filtros compactos, tabla maestra y detalle lateral con alerta de exceso, metadatos, comprobantes SII, trazabilidad y acciones de Tesorería.
+- **Analítica y control presupuestario**: nuevo Dashboard con ejecución global, tasa de excesos, distribución por categoría y comparativa por empresa; el submódulo Vendedores concentra presupuestos mensuales y giras con alta, edición y baja lógica sobre las APIs existentes.
+- **Refactor UI/UX Impeccable**: pulido integral de `admin/rendiciones.php` con Outfit para títulos/cifras, Plus Jakarta Sans para operación densa, strip ejecutivo de KPIs, filtros compactos, CTA corporativo y split-view con estados laterales claramente diferenciados.
+- **Detalle accesible por pestañas**: separación de Comprobantes, Datos Tributarios SII y Auditoría mediante `tablist`/`tabpanel`, selección visible y navegación de teclado con flechas, Inicio y Fin, sin alterar APIs ni contratos de datos.
+- **Responsive y accesibilidad**: KPIs 2×2 en móvil, controles mínimos de 44 px, foco visible, tabulares financieros, selección y scrollbars tematizados, estados hover/active/disabled y ausencia de overflow horizontal en 390 px.
+- **Portal vendedor integrado**: creada `rendiciones/vendedor.php` con CSS/JS Vanilla, KPIs de mensual/giras, bolsa de borradores seleccionable, envío por presupuesto y seguimiento de estados.
+- **Carga adaptativa**: Peaje Rápido solicita sólo fecha, monto y fotografía; Cena Cliente activa los cinco campos tributarios obligatorios para respaldo SII.
+- **Semáforo presupuestario**: calcula el total seleccionado contra el saldo disponible y anticipa el flujo de Magic Token cuando existe exceso.
+- **Integración portal terreno**: agregada entrada “Rendir Gastos / Viáticos” en los portales `vendedores` y `vendedores_DEV`, transfiriendo `vend_cod`, empresa y nombre al punto unificado de autenticación.
+- **Bandeja Tesorería**: `admin/rendiciones.php` deja de ser placeholder e incorpora KPIs, filtros, patrón maestro–detalle, documentos, información de cenas, historial y acciones según transición/RBAC.
+- **Lightbox y notificaciones**: comprobantes y Toasts reutilizan exclusivamente `shared_ui.js` y `shell.css`, sin duplicar visor ni manejadores comunes.
+- **Presupuestos**: modal administrativo para crear, editar y desactivar lógicamente presupuestos mensuales o giras, con validación adaptativa de fechas y monto.
+- **SQL productivo**: SQL nuevo: ninguno. Esta refactorización reutiliza el esquema y las APIs existentes; se mantiene como único prerequisito productivo pendiente la migración de Fases 1 y 2 registrada en `config/setup_rendiciones.sql`.
+- **Validación local**: sintaxis PHP/JS, sesión vendedor/admin, responsive móvil, formulario Peaje/Cena SII, bandeja vacía y modal de giras comprobados sin errores de consola.
+
+### Módulo 3 — Rendiciones, Fases 1 y 2
+- **DDL y migración productiva**: agregadas `presupuestos_vendedores`, `rendiciones_gastos`, `rendicion_documentos` y `rendicion_historial_estados` tanto a `config/setup.sql` como a `config/setup_rendiciones.sql`, archivo idempotente listo para phpMyAdmin. El procedimiento productivo queda registrado en `docs/SQL_PRODUCCION.md`.
+- **Bolsa del vendedor**: carga segura de fotografías, campos adaptativos de Peaje/Cena Cliente, descarte lógico, historial propio y consolidación de lotes sin aceptar identidad desde el payload.
+- **Presupuestos y antifraude**: fondos mensuales/giras bloqueados transaccionalmente, saldos comprometidos y `document_hash` SHA-256 único.
+- **Magic Token**: token hasheado, expiración de 48 horas, consumo único por `POST` tras confirmación humana y notificaciones SMTP responsivas.
+- **Tesorería/Admin**: listado, detalle SII, gestión de presupuestos, recepción física, aprobación total/parcial, rechazo y pago con RBAC, CSRF, historial y `audit_logs`.
+- **Pruebas**: `scripts/test_rendiciones.php` valida esquema local, hashes, transiciones, duplicidad y uso único; `verify_release.php` exige las 14 tablas centrales y la migración productiva.
+
+### RBAC, sesión unificada y administración de usuarios
+- **Matriz de permisos central (`config/auth.php`)**: permisos granulares para Cheques, Cuentas Corrientes, Rendiciones, usuarios y empresas; las sesiones administrativas se revalidan contra `usuarios` para aplicar inmediatamente cambios de rol o desactivaciones.
+- **Hardening de sesión**: cookies `HttpOnly` + `SameSite=Strict`, modo estricto, regeneración al autenticar, expiración por inactividad, email administrativo en sesión y CSRF en operaciones mutables y logout.
+- **Gestión de usuarios (`admin/usuarios.php`)**: listado, alta con Bcrypt, cambio de rol, baja lógica y reset de contraseña, con transacciones y `audit_logs`. Se evita desactivar la propia cuenta y eliminar el último administrador activo.
+- **RBAC de portales y APIs**: `TESORERIA` consulta CC sin despachar/configurar; `SUPERVISORA_CC` opera CC y consulta Cheques sin mutarlos; Rendiciones queda limitada a `ADMINISTRADOR`/`TESORERIA`. Todos los endpoints administrativos usan permisos backend granulares.
+- **Reenvío trazable de informes CC**: el reenvío reconstruye el correo desde `payload_json` del despacho original, preservando el snapshot aunque las cobranzas ya hayan avanzado a `DEPOSITADO`; mantiene fallback para logs antiguos.
+- **Google Sheets en segundo plano**: el modal de configuración permite visualizar/editar `empresas.google_sheet_id` sólo a `ADMINISTRADOR`; otros roles no reciben el valor desde la API ni pueden sobrescribirlo.
+- **UI compartida**: Lightbox, Toasts y logout usan una única implementación en `shared_ui.js`/`shell.css`; se eliminaron `console.error`, prompts/confirmaciones bloqueantes y handlers duplicados en los flujos modificados.
+- **Verificación de release**: agregado `scripts/verify_release.php` para ejecutar `php -l` y comprobar paridad SHA-256 integral entre raíz y `dist/cheques_cobranza/app/`.
+
 ## [Unreleased] - 2026-08-19
 
 ### Arquitectura Suite Modular SaaS (Fase 1 — Zero-Breakage)
@@ -226,4 +305,5 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 - `config/app.php`: Se creó el archivo de configuración global del sistema en el cual se definen las constantes de entorno (`APP_ENV`), credenciales de la BD central, modo bypass de autenticación, directorio/URL pública de uploads, constantes SMTP de correo y la lista blanca (`ALLOWED_DATABASES`) de las 4 bases de datos ERP autorizadas.
 - `config/setup.sql`: Se creó el script SQL DDL para la base de datos central `bd_modulo_cobranzas`, definiendo las tablas `empresas`, `usuarios`, `cobranzas`, `cheques` e `historial_estados`, junto con sus seeders y restricciones de claves foráneas.
 - `docs/PROJECT_STATUS.md`: Documento de seguimiento de estado del proyecto.
+- `docs/CHANGELOG.md`: Historial y registro de cambios del proyecto.
 - `docs/CHANGELOG.md`: Historial y registro de cambios del proyecto.

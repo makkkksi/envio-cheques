@@ -1,22 +1,18 @@
 <?php
-/**
- * admin/api/auth/logout.php
- * Cierra sesión del portal Admin (Tesorería / Cuentas Corrientes).
- */
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path'     => '/',
-        'domain'   => '',
-        'secure'   => true,
-        'httponly' => true,
-        'samesite' => 'Strict'
-    ]);
-    session_start();
+/** Cierra la sesión administrativa mediante POST protegido por CSRF. */
+header('Content-Type: application/json; charset=utf-8');
+
+require_once __DIR__ . '/../../../config/auth.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+    exit;
 }
 
-$_SESSION = [];
-session_destroy();
+startSecureSession();
+requireCsrfToken();
+clearAdminSession();
+session_regenerate_id(true);
 
-header('Location: ../../login.php');
-exit;
+echo json_encode(['success' => true, 'message' => 'Sesión cerrada correctamente.']);

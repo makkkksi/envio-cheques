@@ -33,3 +33,38 @@
 .toggle-status.off { background: #f1f5f9; color: #64748b; }
 .toggle-status.on { background: #dcfce3; color: #16a34a; }
 .toggle-label-text { font-size: 0.8rem; font-weight: 600; color: #475569; }
+.sheet-id-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 250px;
+}
+
+.sheet-id-input {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    color: #64748b;
+    background: #f1f5f9;
+    font-family: monospace;
+    font-size: 0.76rem;
+}
+
+.sheet-id-input.is-editable {
+    color: #0f172a;
+    background: #fff;
+    border-color: #2563eb;
+}
+
+.sheet-id-lock {
+    min-height: 34px;
+    padding: 5px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    color: #334155;
+    background: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+}

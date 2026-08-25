@@ -316,6 +316,24 @@ Durante la auditoría general de seguridad y rendimiento de Julio de 2026, se ap
 ### 10.3 Hardening de Seguridad HTTP (OWASP ZAP)
 * **Medida:** Se añadieron encabezados de seguridad globales en `.htaccess` (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, y se ocultó X-Powered-By/Server).
 * **Comportamiento:** Mitiga ataques de Clickjacking, MIME-sniffing, y fuerza conexiones HTTPS seguras. La directiva Content Security Policy (CSP) fue configurada restrictivamente (`default-src 'self'`). Las dependencias de Google Fonts se descargaron localmente para prescindir del SRI, y se removió cualquier uso de `unsafe-inline` en scripts y estilos (refactorizados hacia clases CSS y Event Listeners en JavaScript puro).
-* **Cookies de Sesión:** Todas las instancias de inicialización de sesión (`session_set_cookie_params`) exigen `secure=true`. En el portal Admin se aplica `SameSite=Strict`, mientras que para el WebView móvil se fijó `SameSite=Lax` para mantener retrocompatibilidad de navegación intra-app.
+* **Cookies de Sesión:** En producción o HTTPS, todas las instancias de inicialización de sesión (`session_set_cookie_params`) exigen `secure=true`. En Laragon HTTP local el flag se adapta a `false` para que el navegador pueda reenviar la cookie durante las pruebas. El portal Admin aplica `SameSite=Strict`; el WebView móvil usa `SameSite=Lax` para navegación intra-app.
 
+## 11. Sesión Administrativa y RBAC Granular (Agosto 2026)
 
+- `startSecureSession()` centraliza cookies `HttpOnly`, `SameSite=Strict`, `use_only_cookies` y `use_strict_mode`; el flag `Secure` es obligatorio en producción/HTTPS y se adapta únicamente al entorno HTTP local de Laragon.
+- Al autenticar se regenera el ID y se almacenan `admin_user_id`, `admin_user_nombre`, `admin_user_email`, `admin_user_rol` y `admin_last_activity`.
+- Cada request administrativo vuelve a consultar `usuarios` por ID. Una baja lógica o cambio de rol invalida o actualiza los privilegios de la sesión sin esperar un nuevo login.
+- `requirePermission()` aplica la matriz granular también en APIs. Los permisos de interfaz son sólo una ayuda visual, nunca el control de seguridad principal.
+- Las mutaciones administrativas y el logout exigen `X-CSRF-Token`, ligado a la sesión y comparado con `hash_equals()`.
+- La gestión de usuarios sólo permite `ADMINISTRADOR`, usa `PASSWORD_BCRYPT`, impide la autodesactivación y garantiza al menos un administrador activo.
+
+## 12. Seguridad del Módulo de Rendiciones
+
+- `requireSellerContext()` deriva vendedor y empresa exclusivamente desde `$_SESSION['vendedor_auth']`; los payloads no pueden sobrescribirlos.
+- La sesión guarda `empresa_id` central además del `vend_cod`, evitando colisiones de códigos ERP entre razones sociales.
+- Las mutaciones del vendedor y de administración requieren CSRF ligado a la sesión.
+- Las fotos se validan por MIME real con `finfo`, límite de 10 MB, nombre aleatorio y ruta generada por servidor.
+- `document_hash` tiene índice único y los errores de duplicidad se transforman en respuesta `409` sin exponer SQL.
+- El Magic Token se almacena hasheado, expira y se consume con bloqueo de fila. Los enlaces `GET` sólo abren una confirmación; la decisión usa `POST`.
+- `RENDICIONES_APPROVER_EMAIL` debe configurarse como variable de entorno productiva. Nunca se incorpora el correo del aprobador al repositorio.
+- Todas las transiciones críticas insertan historial y las acciones administrativas también se registran en `audit_logs`.

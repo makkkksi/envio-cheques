@@ -45,6 +45,12 @@ define('UPLOADS_BASE_PATH', getenv('UPLOADS_BASE_PATH') ?: __DIR__ . '/../upload
 define('UPLOADS_BASE_URL', getenv('UPLOADS_BASE_URL') ?: 'https://www.autotec.cl/cobranza_cheques/uploads');
 define('PORTAL_BASE_URL', rtrim(getenv('PORTAL_BASE_URL') ?: 'https://www.autotec.cl/cobranza_cheques', '/'));
 
+// Módulo de Rendiciones de Gastos
+define('RENDICIONES_APPROVER_EMAIL', trim(getenv('RENDICIONES_APPROVER_EMAIL') ?: ''));
+define('RENDICIONES_APPROVER_NAME', trim(getenv('RENDICIONES_APPROVER_NAME') ?: 'Francisco J.'));
+define('RENDICIONES_TOKEN_TTL_HOURS', max(1, (int)(getenv('RENDICIONES_TOKEN_TTL_HOURS') ?: 48)));
+define('RENDICIONES_MAX_UPLOAD_BYTES', 10 * 1024 * 1024);
+
 // Whitelist de Bases de Datos ERP Autorizadas (Seguridad Cross-DB)
 define('ALLOWED_DATABASES', [
     'automarc_automarco',

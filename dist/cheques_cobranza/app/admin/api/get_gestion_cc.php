@@ -4,9 +4,15 @@ require_once __DIR__ . '/../../config/auth.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+    exit;
+}
+
 try {
-    requireRole(['ADMINISTRADOR', 'SUPERVISORA_CC', 'TESORERIA']);
     $pdo = Database::getCobranzasConnection();
+    $user = requirePermission($pdo, 'cc.view');
 
     // 1. Obtener la hora de despacho configurada
     $stmtConfig = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = 'hora_despacho_diario'");
@@ -59,6 +65,12 @@ try {
     ");
     $stmtEmpresas->execute();
     $empresas = $stmtEmpresas->fetchAll(PDO::FETCH_ASSOC);
+    if (!userHasPermission($user['rol'], 'companies.manage')) {
+        foreach ($empresas as &$empresa) {
+            unset($empresa['google_sheet_id']);
+        }
+        unset($empresa);
+    }
 
     // 3. Obtener el historial de la bitácora paginado (10 por página)
     $historialPage = max(1, (int)($_GET['historial_page'] ?? 1));
@@ -113,12 +125,12 @@ try {
     foreach ($cobranzas_en_cola as &$cob) {
         $cobId = $cob['cobranza_id'];
         
-        $stmtChq = $pdo->prepare("SELECT id, numero_cheque, banco, monto as monto_cheque, fecha_vencimiento, foto_cheque_url, emitido_a, cuenta_corriente FROM cheques WHERE cobranza_id = ?");
-        $stmtChq->execute([$cobId]);
+        $stmtChq = $pdo->prepare("SELECT id, numero_cheque, banco, monto as monto_cheque, fecha_vencimiento, foto_cheque_url, emitido_a, cuenta_corriente FROM cheques WHERE cobranza_id = :cobranza_id");
+        $stmtChq->execute([':cobranza_id' => $cobId]);
         $cob['cheques'] = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmtFac = $pdo->prepare("SELECT numero_factura, cuota_label, monto_cubierto FROM cobranza_facturas WHERE cobranza_id = ?");
-        $stmtFac->execute([$cobId]);
+        $stmtFac = $pdo->prepare("SELECT numero_factura, cuota_label, monto_cubierto FROM cobranza_facturas WHERE cobranza_id = :cobranza_id");
+        $stmtFac->execute([':cobranza_id' => $cobId]);
         $cob['facturas_multiples'] = $stmtFac->fetchAll(PDO::FETCH_ASSOC);
     }
     unset($cob);
@@ -143,8 +155,7 @@ try {
     ]);
 
 } catch (Exception $e) {
-    echo json_encode([
-        'success' => false,
-        'message' => $e->getMessage()
-    ]);
+    error_log('[admin/api/get_gestion_cc.php] ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'No fue posible cargar la gestión de cuentas corrientes.']);
 }

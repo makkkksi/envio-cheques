@@ -21,11 +21,20 @@ function showToast(message, type = 'success') {
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(-10px)';
-        toast.style.transition = 'all 0.3s ease';
+        toast.classList.add('toast--leaving');
         setTimeout(() => toast.remove(), 300);
     }, 4000);
+}
+
+function getAdminCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+}
+
+function getAdminJsonHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getAdminCsrfToken()
+    };
 }
 
 // ==========================================
@@ -49,24 +58,37 @@ function abrirImagenLightbox(url) {
     if (!lightbox) {
         lightbox = document.createElement('div');
         lightbox.id = 'modalLightbox';
-        lightbox.className = 'modal-overlay';
-        lightbox.style.cssText = 'display:none; position:fixed; inset:0; background:rgba(15,23,42,0.85); backdrop-filter:blur(4px); z-index:99999; flex-direction:column; align-items:center; justify-content:center;';
+        lightbox.className = 'modal-overlay shared-lightbox';
+        lightbox.hidden = true;
         lightbox.innerHTML = `
-            <div style="display:flex; gap:8px; background:rgba(15,23,42,0.92); padding:8px 14px; border-radius:8px; flex-wrap:wrap; justify-content:center; margin-bottom:10px; z-index:10; border:1px solid rgba(255,255,255,0.1);">
-                <button type="button" class="image-tool-btn" onclick="rotarImagenLightbox()">🔄 Rotar 90°</button>
-                <button type="button" class="image-tool-btn" onclick="zoomInLightbox()">➕ Zoom</button>
-                <button type="button" class="image-tool-btn" onclick="zoomOutLightbox()">➖ Zoom</button>
-                <button type="button" class="image-tool-btn" onclick="toggleAltoContrasteLightbox()">☀️ Alto Contraste</button>
-                <button type="button" class="image-tool-btn" onclick="resetImagenLightbox()">Restablecer</button>
-                <button type="button" class="image-tool-btn" onclick="descargarImagenLightbox()">📥 Descargar</button>
-                <button type="button" onclick="cerrarImagenLightbox()" style="background:#dc2626; color:white; border:none; font-size:1.1rem; width:30px; height:30px; border-radius:50%; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center; line-height:1;" title="Cerrar">&times;</button>
+            <div class="shared-lightbox__toolbar">
+                <button type="button" class="image-tool-btn" data-lightbox-action="rotate">Rotar 90°</button>
+                <button type="button" class="image-tool-btn" data-lightbox-action="zoom-in">Acercar</button>
+                <button type="button" class="image-tool-btn" data-lightbox-action="zoom-out">Alejar</button>
+                <button type="button" class="image-tool-btn" data-lightbox-action="contrast">Alto contraste</button>
+                <button type="button" class="image-tool-btn" data-lightbox-action="reset">Restablecer</button>
+                <button type="button" class="image-tool-btn" data-lightbox-action="download">Descargar</button>
+                <button type="button" class="shared-lightbox__close" data-lightbox-action="close" title="Cerrar" aria-label="Cerrar visor">&times;</button>
             </div>
-            <div id="lightboxImageWrapper" style="position:relative; overflow:hidden; width:90vw; height:80vh; border-radius:8px; background:rgba(0,0,0,0.25); cursor:grab;">
-                <img id="imgLightboxTarget" src="" alt="Comprobante digitalizado" style="position:absolute; top:50%; left:50%; transform-origin:center center; border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.6); user-select:none; -webkit-user-drag:none; pointer-events:none;">
+            <div id="lightboxImageWrapper" class="shared-lightbox__image-wrapper">
+                <img id="imgLightboxTarget" class="shared-lightbox__image" src="" alt="Comprobante digitalizado">
             </div>
-            <div id="lightboxZoomLabel" style="position:fixed; bottom:16px; right:16px; background:rgba(15,23,42,0.85); color:#94a3b8; padding:4px 12px; border-radius:6px; font-size:0.8rem; font-weight:600; z-index:10; border:1px solid rgba(255,255,255,0.1);">100%</div>
+            <div id="lightboxZoomLabel" class="shared-lightbox__zoom-label">100%</div>
         `;
         document.body.appendChild(lightbox);
+
+        const lightboxActions = {
+            rotate: rotarImagenLightbox,
+            'zoom-in': zoomInLightbox,
+            'zoom-out': zoomOutLightbox,
+            contrast: toggleAltoContrasteLightbox,
+            reset: resetImagenLightbox,
+            download: descargarImagenLightbox,
+            close: cerrarImagenLightbox
+        };
+        lightbox.querySelectorAll('[data-lightbox-action]').forEach((button) => {
+            button.addEventListener('click', () => lightboxActions[button.dataset.lightboxAction]?.());
+        });
 
         // Cerrar al hacer click en el fondo oscuro
         lightbox.addEventListener('click', (e) => {
@@ -78,7 +100,7 @@ function abrirImagenLightbox(url) {
         // --- DRAG CON MOUSE ---
         wrapper.addEventListener('mousedown', (e) => {
             lbDragging = true;
-            wrapper.style.cursor = 'grabbing';
+            wrapper.classList.add('is-dragging');
             lbDragStartX = e.clientX;
             lbDragStartY = e.clientY;
             lbPanStartX = lbPanX;
@@ -97,7 +119,7 @@ function abrirImagenLightbox(url) {
             if (lbDragging) {
                 lbDragging = false;
                 const w = document.getElementById('lightboxImageWrapper');
-                if (w) w.style.cursor = 'grab';
+                if (w) w.classList.remove('is-dragging');
             }
         });
 
@@ -146,7 +168,7 @@ function abrirImagenLightbox(url) {
     img.src = url;
     if (img.complete && img.naturalWidth) aplicarTransformLightbox();
 
-    lightbox.style.display = 'flex';
+    lightbox.hidden = false;
     document.body.classList.add('modal-open');
 }
 
@@ -214,7 +236,7 @@ function resetImagenLightbox() {
 
 function cerrarImagenLightbox() {
     const lightbox = document.getElementById('modalLightbox');
-    if (lightbox) lightbox.style.display = 'none';
+    if (lightbox) lightbox.hidden = true;
     document.body.classList.remove('modal-open');
 }
 
@@ -237,7 +259,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.keyCode === 27) {
         cerrarImagenLightbox();
         const modalLogout = document.getElementById('modalLogout');
-        if (modalLogout) modalLogout.style.display = 'none';
+        if (modalLogout) modalLogout.hidden = true;
     }
 });
 
@@ -247,14 +269,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalLogout = document.getElementById('modalLogout');
     if (btnAbrirModalLogout && modalLogout) {
         btnAbrirModalLogout.addEventListener('click', () => {
-            modalLogout.style.display = 'flex';
+            modalLogout.hidden = false;
         });
     }
 
     const btnCancelarLogout = document.getElementById('btnCancelarLogout');
     if (btnCancelarLogout && modalLogout) {
         btnCancelarLogout.addEventListener('click', () => {
-            modalLogout.style.display = 'none';
+            modalLogout.hidden = true;
+        });
+    }
+
+    const btnConfirmarLogout = document.getElementById('btnConfirmarLogout');
+    if (btnConfirmarLogout) {
+        btnConfirmarLogout.addEventListener('click', async () => {
+            btnConfirmarLogout.disabled = true;
+            try {
+                const response = await fetch(btnConfirmarLogout.dataset.logoutUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': getAdminCsrfToken() }
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'No fue posible cerrar la sesión.');
+                }
+                window.location.href = 'login.php';
+            } catch (error) {
+                showToast(error.message || 'No fue posible cerrar la sesión.', 'error');
+                btnConfirmarLogout.disabled = false;
+            }
+        });
+    }
+
+    if (modalLogout) {
+        modalLogout.addEventListener('click', (event) => {
+            if (event.target === modalLogout) modalLogout.hidden = true;
         });
     }
 });

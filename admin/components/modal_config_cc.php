@@ -1,5 +1,6 @@
+<?php $canManageSheetIds = isset($rolUsuario) && userHasPermission($rolUsuario, 'companies.manage'); ?>
 <!-- admin/components/modal_config_cc.php -->
-<div id="modalConfigCC" class="modal-cc" style="display: none;">
+<div id="modalConfigCC" class="modal-cc" data-can-manage-sheets="<?php echo $canManageSheetIds ? '1' : '0'; ?>" hidden>
     <div class="modal-content-cc" style="max-width: 900px;">
         <!-- Header del modal -->
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
@@ -7,7 +8,7 @@
                 <h2 style="margin: 0 0 4px; font-size: 1.2rem; color: #0f172a;">Configuración del Distribuidor</h2>
                 <p style="margin: 0; font-size: 0.82rem; color: #64748b;">Gestión horaria y asignación de digitadoras por empresa.</p>
             </div>
-            <span class="close-modal" onclick="cerrarModalConfigCC()" style="float: none; font-size: 22px; line-height: 1; margin-top: 2px;">&times;</span>
+            <button type="button" class="close-modal" id="btnCerrarConfigCC" style="float: none; font-size: 22px; line-height: 1; margin-top: 2px;" aria-label="Cerrar configuración">&times;</button>
         </div>
 
         <!-- Sección 1: Hora de corte -->
@@ -18,7 +19,7 @@
             <div style="display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 140px;">
                     <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 6px;">Hora de envío automático</label>
-                    <input type="time" id="inputHoraDespachoCC" onchange="actualizarHoraLocalCfg()" oninput="actualizarHoraLocalCfg()" step="60"
+                    <input type="time" id="inputHoraDespachoCC" step="60"
                         style="width: 100%; box-sizing: border-box; font-size: 1.05rem; font-weight: 600; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'JetBrains Mono', monospace; background: white; color: #0f172a; cursor: text;">
                 </div>
                 <!-- Toggle Switch -->
@@ -26,7 +27,7 @@
                     <span class="toggle-label-text">Despacho Automático</span>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label class="toggle-switch">
-                            <input type="checkbox" id="chkAutoDispatch" onchange="actualizarToggleLabelCfg()">
+                            <input type="checkbox" id="chkAutoDispatch">
                             <span class="toggle-slider"></span>
                         </label>
                         <span class="toggle-status off" id="lblToggleStatus">DESACTIVADO</span>
@@ -85,11 +86,13 @@
                             <th style="padding: 10px 14px; font-weight: 600; color: #475569; text-align: left;">Empresa</th>
                             <th style="padding: 10px 14px; font-weight: 600; color: #1d4ed8;">Asignar a Digitadora 1</th>
                             <th style="padding: 10px 14px; font-weight: 600; color: #15803d;">Asignar a Digitadora 2</th>
-                            <th style="display: none;">ID Google Sheet</th>
+                            <?php if ($canManageSheetIds): ?>
+                            <th>ID Google Sheet</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody id="tblAsignacionesDigitadorasCC">
-                        <tr><td colspan="3" style="color: #94a3b8; padding: 16px;">Cargando asignaciones...</td></tr>
+                        <tr><td colspan="<?php echo $canManageSheetIds ? '4' : '3'; ?>" style="color: #94a3b8; padding: 16px;">Cargando asignaciones...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -97,9 +100,8 @@
 
         <!-- Footer de acciones -->
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f1f5f9;">
-            <button type="button" class="btn-action btn-secondary" onclick="cerrarModalConfigCC()" style="padding: 9px 20px;">Cancelar</button>
-            <button type="button" class="btn-action btn-success" onclick="guardarConfiguracionCC()" style="padding: 9px 20px;">Aplicar Cambios</button>
+            <button type="button" class="btn-action btn-secondary" id="btnCancelarConfigCC" style="padding: 9px 20px;">Cancelar</button>
+            <button type="button" class="btn-action btn-success" id="btnGuardarConfigCC" style="padding: 9px 20px;">Aplicar Cambios</button>
         </div>
     </div>
 </div>
-

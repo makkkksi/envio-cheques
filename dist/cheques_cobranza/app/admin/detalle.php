@@ -5,19 +5,27 @@
  * Ficha detallada de una cobranza para Tesorería.
  * Permite visualizar comprobantes, fotos de cheques, auditoría y cambiar estados.
  */
+require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../config/auth.php';
+
+$adminUser = requireAdminPage('cheques.view');
+$rolUsuario = $adminUser['rol'];
+$csrfToken = getCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfToken); ?>">
     <title>Detalle de Cobranza — Tesorería</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=1">
+    <link rel="stylesheet" href="css/shell.css?v=2">
 </head>
-<body>
+<body data-can-manage-cheques="<?php echo userHasPermission($rolUsuario, 'cheques.manage') ? '1' : '0'; ?>">
 
     <div id="viewDetalleCobranza">
         <!-- HEADER -->
@@ -155,6 +163,7 @@
         </main>
     </div>
 
-    <script src="admin.js?v=1"></script>
+    <script src="js/shared_ui.js?v=2"></script>
+    <script src="admin.js?v=12"></script>
 </body>
 </html>
