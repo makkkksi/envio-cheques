@@ -71,6 +71,7 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 - [x] **Presupuesto vendedor reformado por crítica Impeccable** — La vista deja el patrón de KPI genérico: ahora muestra asignado, utilizado, saldo y porcentaje de uso con jerarquía financiera. Corrige el contrato visual para usar `monto_utilizado`, y un saldo negativo se identifica como “Exceso comprometido” en rojo, nunca como disponible verde. Sin cambios de BD ni APIs.
 - [x] **Identidad ERP en presupuestos administrativos** — Tesorería selecciona empresa y vendedor desde los catálogos ERP reales; nombre, correo y código quedan bloqueados contra escritura libre y se revalidan en backend antes de persistir. El directorio muestra la homologación por correo y los códigos locales por empresa. Un presupuesto mensual permite agregar una gira sin volver a capturar la identidad. Validación local: 19 comprobaciones con rollback completo. SQL nuevo: ninguno.
 - [x] **Presupuesto vendedor con resolución real** — El cupo mensual y las giras distinguen monto aprobado, monto pendiente de Tesorería y saldo disponible. La barra segmentada evita presentar una rendición en revisión como gasto aprobado, mientras el pendiente continúa reservado contra doble uso. SQL nuevo: ninguno.
+- [x] **Bloqueo de envío sin presupuesto** — La interfaz detiene la consolidación cuando el vendedor no posee un presupuesto activo y le indica solicitarlo a Gerencia. Los avisos de exceso ya no exponen el nombre de la persona aprobadora. SQL nuevo: ninguno.
 
 ## Próximo trabajo inmediato
 

@@ -443,7 +443,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
                 <h3 class="rg-modal-title">¿Enviar Rendición?</h3>
                 <p class="rg-modal-text" id="txtConfirmMessage">Se enviará el informe a Tesorería para revisión y validación.</p>
                 <div class="rg-modal-alert" id="boxExcessWarning" hidden>
-                    <strong>Aviso de Exceso:</strong> El monto total sobrepasa tu presupuesto asignado. Se enviará una solicitud de aprobación de exceso a Francisco J.
+                    <strong>Aviso de Exceso:</strong> El monto total sobrepasa tu presupuesto asignado. Se enviará una solicitud de aprobación de exceso a Gerencia.
                 </div>
                 <div class="rg-modal-buttons">
                     <button type="button" class="rg-modal-btn-cancel" id="btnCancelSubmit">Cancelar</button>
@@ -493,6 +493,6 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 
     <!-- Toast container & scripts -->
     <div id="toastContainer" class="toast-container"></div>
-    <script src="vendedor.js?v=20260825-selector-1" defer></script>
+    <script src="vendedor.js?v=20260825-no-budget-1" defer></script>
 </body>
 </html>

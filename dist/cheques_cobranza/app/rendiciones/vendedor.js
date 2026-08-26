@@ -817,7 +817,14 @@
     // ==========================================
     // 8. DRAWER: CONSOLIDAR INFORME DE RENDICIÓN
     // ==========================================
+    const NO_BUDGET_MESSAGE = 'No puedes enviar rendiciones porque no tienes un presupuesto asignado. Si necesitas uno, solicítalo a Gerencia.';
+
     function openNewReportDrawer() {
+        if (state.budgets.length === 0) {
+            showToast(NO_BUDGET_MESSAGE, 'error');
+            return;
+        }
+
         const draftDocs = state.documents.filter((d) => !d.rendicion_id);
         if (draftDocs.length === 0) {
             showToast('No tienes boletas en borrador para armar una rendición', 'error');
@@ -918,6 +925,13 @@
     }
 
     function openConfirmSubmitModal() {
+        const selectedBudgetId = Number($('#reportBudgetSelect').value);
+        const budget = state.budgets.find((b) => b.id === selectedBudgetId);
+        if (!budget) {
+            showToast(NO_BUDGET_MESSAGE, 'error');
+            return;
+        }
+
         const selectedDocs = state.documents.filter((d) => state.selectedForReport.has(d.id));
         if (selectedDocs.length === 0) {
             showToast('Selecciona al menos una boleta para enviar', 'error');
@@ -925,9 +939,7 @@
         }
 
         const total = selectedDocs.reduce((sum, d) => sum + Number(d.monto || 0), 0);
-        const selectedBudgetId = Number($('#reportBudgetSelect').value);
-        const budget = state.budgets.find((b) => b.id === selectedBudgetId);
-        const available = budget ? Number(budget.saldo_disponible || 0) : 0;
+        const available = Number(budget.saldo_disponible || 0);
 
         $('#txtConfirmMessage').textContent = `Se enviarán ${selectedDocs.length} boletas por un total de ${formatMoney(total)} CLP a Tesorería.`;
         $('#boxExcessWarning').hidden = total <= available;
@@ -944,7 +956,7 @@
 
         const budgetId = Number($('#reportBudgetSelect').value);
         if (!budgetId) {
-            showToast('Selecciona el presupuesto a imputar', 'error');
+            showToast(NO_BUDGET_MESSAGE, 'error');
             return;
         }
 

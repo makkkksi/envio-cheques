@@ -4,6 +4,11 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Módulo 3 — Bloqueo claro sin presupuesto (2026-08-25)
+- **Consolidación protegida**: un vendedor sin presupuesto activo ya no puede abrir ni confirmar el envío de una rendición; recibe un aviso que indica solicitar la asignación a Gerencia.
+- **Privacidad operativa**: el aviso de exceso deja de identificar al aprobador por nombre y comunica únicamente que la solicitud será enviada a Gerencia.
+- **SQL nuevo para phpMyAdmin**: ninguno.
+
 ### Módulo 3 — Presupuesto aprobado vs. pendiente (2026-08-25)
 - **Lectura financiera corregida**: el portal vendedor separa el monto realmente aprobado del importe enviado que todavía espera resolución de Tesorería.
 - **Saldo prudente preservado**: tanto lo aprobado como lo pendiente permanecen comprometidos y reducen el saldo para nuevas boletas, evitando doble imputación.
