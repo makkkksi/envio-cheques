@@ -2,7 +2,9 @@
     'use strict';
 
     const API_BASE = 'api/rendiciones';
+    const APPROVED_STATES = Object.freeze(['APROBADA', 'APROBADA_PARCIAL', 'PAGADA']);
     const canManage = document.body.dataset.canManageRendiciones === '1';
+    const canConfigureApprovers = document.body.dataset.canConfigureApprovers === '1';
     const state = {
         renditions: [],
         selectedId: null,
@@ -15,11 +17,16 @@
         sellerDirectoryLoaded: false,
         sellerOptions: [],
         sellerOptionIndex: -1,
+        approvers: [],
         statusFilter: 'REVIEW',
         activeSubmodule: 'bandeja',
         action: null,
         dashboardKey: '',
         dashboardLoading: false,
+        sellerAnalyticsKey: '',
+        sellerAnalyticsLoading: false,
+        sellerAnalytics: null,
+        selectedAnalyticsSeller: null,
         lastFocused: new Map()
     };
     const $ = (selector) => document.querySelector(selector);
@@ -35,6 +42,7 @@
         if ($('#dashboardMonth')) $('#dashboardMonth').value = currentPeriod;
         if ($('#budgetPeriod')) $('#budgetPeriod').value = currentPeriod;
         bindEvents();
+        window.registerSuiteRefresh?.(refreshActiveSubmodule);
         restoreSidebarState();
         const requestedSubmodule = window.location.hash.replace('#', '').toLowerCase();
         activateSubmodule(requestedSubmodule || 'bandeja', false);
@@ -57,10 +65,16 @@
         $('#renditionsTableBody')?.addEventListener('keydown', onRenditionKeydown);
         $('#detailContent')?.addEventListener('click', onDetailAction);
         $('#dashboardMonth')?.addEventListener('change', () => loadDashboard(true));
+        $('#dashboardWindow')?.addEventListener('change', () => loadSellerAnalytics(true));
+        $('#dashboardSellerSearch')?.addEventListener('input', renderSellerRanking);
+        $('#dashboardSellerRows')?.addEventListener('click', onAnalyticsSellerSelect);
+        $('#dashboardSellerRows')?.addEventListener('keydown', onAnalyticsSellerKeydown);
 
         if (canManage) {
             $('#openBudgetModal')?.addEventListener('click', openBudgetModal);
             $('#budgetType')?.addEventListener('change', syncTourFields);
+            $('#budgetStartDate')?.addEventListener('change', syncTourPeriod);
+            $('#budgetEndDate')?.addEventListener('change', validateTourDateRange);
             $('#budgetCompany')?.addEventListener('change', onBudgetCompanyChange);
             $('#budgetSellerSearch')?.addEventListener('input', onBudgetSellerSearch);
             $('#budgetSellerSearch')?.addEventListener('keydown', onBudgetSellerKeydown);
@@ -73,6 +87,10 @@
             $('#partialDecisionList')?.addEventListener('change', updatePartialTotal);
             $('#partialDecisionList')?.addEventListener('input', updatePartialTotal);
             $('#savePartialButton')?.addEventListener('click', savePartialReview);
+            $('#sendExcessApproval')?.addEventListener('click', sendExcessApproval);
+            $('#openApproverConfig')?.addEventListener('click', openApproverConfig);
+            $('#btnHeaderApprovers')?.addEventListener('click', openApproverConfig);
+            $('#approverConfigForm')?.addEventListener('submit', saveApproverConfig);
             $$('[data-close-modal]').forEach((button) => button.addEventListener('click', () => closeModal(button.dataset.closeModal)));
             $$('.rd-modal').forEach((modal) => modal.addEventListener('click', (event) => {
                 if (event.target === modal) closeModal(modal.id);
@@ -160,7 +178,7 @@
     function renderStateCounters() {
         const rows = state.renditions;
         setText('countReview', rows.filter((item) => matchesStatusFilter(item.estado, 'REVIEW')).length);
-        setText('countApproved', rows.filter((item) => ['APROBADA', 'APROBADA_PARCIAL'].includes(item.estado)).length);
+        setText('countApproved', rows.filter((item) => APPROVED_STATES.includes(item.estado)).length);
         setText('countRejected', rows.filter((item) => item.estado === 'RECHAZADA').length);
         setText('countAll', rows.length);
     }
@@ -179,7 +197,7 @@
     function matchesStatusFilter(status, filter) {
         const map = {
             REVIEW: ['EN_REVISION_TESORERIA', 'PENDIENTE_APROBACION_EXCESO', 'DOCUMENTOS_FISICOS_RECIBIDOS'],
-            APPROVED: ['APROBADA', 'APROBADA_PARCIAL'],
+            APPROVED: APPROVED_STATES,
             REJECTED: ['RECHAZADA'],
             ALL: null
         };
@@ -282,19 +300,28 @@
         const rendered = Number(rendition.monto_total_rendido || 0);
         const resultingBalance = assigned - rendered;
         const excess = Number(rendition.monto_exceso || 0);
+        const excessFund = rendition.tipo_rendicion === 'GIRA'
+            ? `la gira “${rendition.nombre_gira || 'Gira comercial'}”`
+            : 'el presupuesto mensual';
         const excessNotification = rendition.notificacion_exceso_estado === 'ENVIADA'
             ? 'Notificación enviada a Gerencia / Administración.'
             : rendition.notificacion_exceso_estado === 'FALLIDA'
                 ? 'La notificación requiere reenvío.'
                 : 'Aprobación pendiente de notificación.';
-
+        const excessApproved = rendition.decision_exceso === 'APROBADO' && rendition.aprobado_exceso_at;
+        const approvalProof = excessApproved ? `<aside class="rd-approval-proof">
+            <span class="rd-approval-proof__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>
+            <div class="rd-approval-proof__content"><strong>Aprobación gerencial registrada</strong><span>${escapeHtml(rendition.aprobador_nombre_snapshot || rendition.aprobado_exceso_por || 'Responsable')} · ${escapeHtml(rendition.aprobador_cargo_snapshot || 'Cargo no informado')} · ${escapeHtml(formatDateTime(rendition.aprobado_exceso_at))}</span><small>El exceso fue autorizado; la rendición continúa su revisión en Tesorería.</small></div>
+            <a class="rd-btn rd-btn--success rd-approval-proof__button" href="reportes/comprobante_aprobacion_exceso.php?id=${Number(rendition.id)}" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6V2Zm8 0v6h6M9 13h8m-8 4h5"/></svg>Ver / imprimir PDF</a>
+        </aside>` : '';
         $('#detailContent').innerHTML = `
             <header class="rd-detail-bar">
                 <div class="rd-detail-title"><div class="rd-detail-title__line"><h2>Rendición ${escapeHtml(rendition.codigo_rendicion)}</h2><span class="rd-status ${status.className}">${escapeHtml(status.label)}</span></div><p>${documents.length} comprobante(s) · ${escapeHtml(rendition.vendedor_nombre || 'Vendedor sin nombre')}</p></div>
                 <button class="rd-detail-close" type="button" data-close-detail aria-label="Cerrar detalle"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
             </header>
             <div class="rd-detail-scroll"><div class="rd-detail-stack">
-                ${excess > 0 ? `<aside class="rd-excess-alert"><div class="rd-excess-alert__title"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10.3 3.7 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/></svg>Alerta de exceso de presupuesto (+${money.format(excess)})</div><p>El total rendido (${money.format(rendered)}) supera el cupo asignado (${money.format(assigned)}). ${escapeHtml(excessNotification)}</p></aside>` : ''}
+                ${excess > 0 && !excessApproved ? `<aside class="rd-excess-alert"><div class="rd-excess-alert__title"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10.3 3.7 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/></svg>Alerta de exceso de presupuesto (+${money.format(excess)})</div><p>El exceso pertenece a ${escapeHtml(excessFund)}. El total rendido (${money.format(rendered)}) supera su saldo disponible. ${escapeHtml(excessNotification)}</p></aside>` : ''}
+                ${approvalProof}
                 <section class="rd-detail-section"><div class="rd-detail-section__heading"><h3>Resumen de la rendición</h3><span>${formatMonth(rendition.periodo_mes)}</span></div><div class="rd-meta-grid">
                     ${metaMarkup('Vendedor', `${rendition.vendedor_nombre || 'Sin nombre'} · #${rendition.vendedor_id}`)}
                     ${metaMarkup('Empresa', rendition.empresa_nombre || 'Sin empresa')}
@@ -307,7 +334,7 @@
                 <section class="rd-detail-section"><div class="rd-detail-section__heading"><h3>Comprobantes y boletas</h3><span>${documents.length} documento(s)</span></div><div class="rd-document-list">${documents.length ? documents.map(documentMarkup).join('') : '<div class="rd-readonly-note">No hay comprobantes activos.</div>'}</div></section>
                 <section class="rd-detail-section"><div class="rd-detail-section__heading"><h3>Trazabilidad de auditoría</h3><span>${history.length} movimiento(s)</span></div><div class="rd-audit-list">${history.length ? history.map(historyMarkup).join('') : '<div class="rd-readonly-note">Aún no hay movimientos registrados.</div>'}</div></section>
             </div></div>
-            <footer class="rd-detail-footer">${renderStepper(rendition.estado)}${actionsMarkup(rendition.estado)}</footer>`;
+            <footer class="rd-detail-footer">${renderStepper(rendition.estado)}${actionsMarkup(rendition)}</footer>`;
     }
 
     function metaMarkup(label, value) {
@@ -365,10 +392,15 @@
         }).join('')}</div>`;
     }
 
-    function actionsMarkup(status) {
+    function actionsMarkup(rendition) {
+        const status = rendition.estado;
         if (!canManage) return '<div class="rd-readonly-note">Tu rol permite consultar la rendición sin ejecutar transiciones.</div>';
         const buttons = [];
-        if (status === 'PENDIENTE_APROBACION_EXCESO') buttons.push(actionButton('REENVIAR_EXCESO', 'Reenviar aprobación', 'rd-btn--warning'));
+        if (status === 'PENDIENTE_APROBACION_EXCESO') {
+            const sent = rendition.notificacion_exceso_estado === 'ENVIADA';
+            buttons.push(actionButton('REENVIAR_EXCESO', sent ? 'Reenviar aprobación' : 'Enviar aprobación', 'rd-btn--warning'));
+            buttons.push(actionButton('RECHAZAR_EXCESO_TESORERIA', sent ? 'Cancelar solicitud y rechazar' : 'Rechazar sin enviar', 'rd-btn--danger'));
+        }
         if (status === 'EN_REVISION_TESORERIA') {
             buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física recibida', 'rd-btn--primary'));
             buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
@@ -416,12 +448,13 @@
         try {
             const [renditions] = await Promise.all([
                 loadDashboardRenditions(period),
-                canManage && !state.budgetsLoaded ? loadBudgets(true) : Promise.resolve()
+                canManage && (force || !state.budgetsLoaded) ? loadBudgets(true) : Promise.resolve()
             ]);
-            const details = await loadDetailsWithConcurrency(renditions, 5);
-            renderDashboard(renditions, details, period);
+            const approvedRenditions = renditions.filter((item) => APPROVED_STATES.includes(item.estado));
+            const details = await loadDetailsWithConcurrency(approvedRenditions, 5);
+            renderDashboard(approvedRenditions, details, period);
             state.dashboardKey = key;
-            $('#dashboardStatus').textContent = details.length < renditions.length ? 'Algunos comprobantes no pudieron incorporarse al desglose.' : `Actualizado con ${details.length} rendición(es).`;
+            $('#dashboardStatus').textContent = details.length < approvedRenditions.length ? 'Algunos comprobantes aprobados no pudieron incorporarse al desglose.' : `Actualizado con ${approvedRenditions.length} rendición(es) aprobada(s).`;
         } catch (error) {
             $('#dashboardStatus').textContent = `No fue posible consolidar el período. ${error.message}`;
             $('#dashboardCategories').innerHTML = '<div class="rd-bar-empty">Sin información disponible.</div>';
@@ -430,6 +463,179 @@
         } finally {
             state.dashboardLoading = false;
         }
+        await loadSellerAnalytics(force);
+    }
+
+    async function loadSellerAnalytics(force) {
+        if (state.sellerAnalyticsLoading) return;
+        const period = $('#dashboardMonth')?.value || currentPeriod;
+        const windowSize = Number($('#dashboardWindow')?.value || 6);
+        const key = `${period}|${windowSize}`;
+        if (!force && state.sellerAnalyticsKey === key) return;
+        state.sellerAnalyticsLoading = true;
+        setText('sellerAnalyticsStatus', 'Consolidando historial de presupuestos y rendiciones…');
+        $('#dashboardSellerRows').innerHTML = '<tr><td colspan="6" class="rd-table-message">Cargando vendedores…</td></tr>';
+        try {
+            const query = new URLSearchParams({ mes: period, ventana: String(windowSize) });
+            const payload = await apiRequest(`${API_BASE}/get_dashboard_analitico.php?${query.toString()}`);
+            state.sellerAnalytics = payload.data;
+            state.sellerAnalyticsKey = key;
+            const sellers = payload.data.vendedores || [];
+            if (!sellers.some((seller) => seller.clave === state.selectedAnalyticsSeller)) {
+                state.selectedAnalyticsSeller = sellers[0]?.clave || null;
+            }
+            renderSellerAnalytics();
+        } catch (error) {
+            state.sellerAnalytics = null;
+            state.selectedAnalyticsSeller = null;
+            setText('sellerAnalyticsStatus', `No fue posible cargar el análisis. ${error.message}`);
+            $('#dashboardSellerRows').innerHTML = '<tr><td colspan="6" class="rd-table-message">Sin información histórica disponible.</td></tr>';
+            $('#dashboardSellerDetail').innerHTML = '<div class="rd-seller-detail__empty"><h3>Análisis no disponible</h3><p>Actualiza nuevamente o revisa la conexión con la base de datos.</p></div>';
+            $('#dashboardBusinessSignals').innerHTML = '<div class="rd-bar-empty">No fue posible calcular señales.</div>';
+        } finally {
+            state.sellerAnalyticsLoading = false;
+        }
+    }
+
+    function renderSellerAnalytics() {
+        const analytics = state.sellerAnalytics;
+        if (!analytics) return;
+        const summary = analytics.resumen || {};
+        const metrics = $$('#dashboardDecisionStrip .rd-decision-metric');
+        if (metrics[0]) metrics[0].querySelector('strong').textContent = money.format(Number(summary.saldo_no_ejecutado || 0));
+        if (metrics[1]) metrics[1].querySelector('strong').textContent = money.format(Number(summary.pendiente_total || 0));
+        if (metrics[2]) metrics[2].querySelector('strong').textContent = `${formatPercent(summary.concentracion_principal_pct)}%`;
+        setText('sellerAnalyticsStatus', `${summary.vendedores_analizados || 0} vendedor(es) · ${formatMonthShort(analytics.periodo_inicio)} a ${formatMonthShort(analytics.periodo_fin)}`);
+        renderFundTypeComparison();
+        renderSellerRanking();
+        renderAnalyticsSellerDetail();
+        renderBusinessSignals();
+    }
+
+    function renderFundTypeComparison() {
+        const container = $('#dashboardFundTypes');
+        if (!container || !state.sellerAnalytics) return;
+        const rows = state.sellerAnalytics.fondos_por_tipo || [];
+        container.innerHTML = rows.map((fund) => {
+            const isTour = fund.tipo === 'GIRA';
+            const execution = Math.max(0, Number(fund.ejecucion_pct || 0));
+            return `<article class="rd-fund-row ${isTour ? 'rd-fund-row--tour' : ''}">
+                <div class="rd-fund-row__type"><span>${isTour ? 'Giras comerciales' : 'Presupuestos mensuales'}</span><small>${fund.fondos_activos || 0} fondo(s) · promedio ${money.format(Number(fund.promedio_fondo || 0))}</small></div>
+                <dl><div><dt>Asignado</dt><dd>${money.format(Number(fund.presupuesto || 0))}</dd></div><div><dt>Aprobado</dt><dd>${money.format(Number(fund.aprobado || 0))}</dd></div><div><dt>Pendiente</dt><dd>${money.format(Number(fund.pendiente || 0))}</dd></div><div><dt>Excesos</dt><dd>${fund.excesos || 0}</dd></div></dl>
+                <div class="rd-fund-row__execution"><span><strong>${formatPercent(execution)}%</strong> ejecutado</span><i><b style="width:${Math.min(execution, 100)}%"></b></i></div>
+            </article>`;
+        }).join('') || '<div class="rd-bar-empty">No hay fondos en el horizonte seleccionado.</div>';
+    }
+
+    function renderSellerRanking() {
+        const tbody = $('#dashboardSellerRows');
+        if (!tbody || !state.sellerAnalytics) return;
+        const search = ($('#dashboardSellerSearch')?.value || '').trim().toLocaleLowerCase('es');
+        const sellers = (state.sellerAnalytics.vendedores || []).filter((seller) => {
+            const haystack = `${seller.vendedor_nombre} ${seller.empresa_nombre} ${seller.vendedor_id}`.toLocaleLowerCase('es');
+            return !search || haystack.includes(search);
+        });
+        if (!sellers.length) {
+            tbody.innerHTML = `<tr><td colspan="6" class="rd-table-message">${search ? 'No hay vendedores que coincidan con la búsqueda.' : 'No existen presupuestos ni rendiciones en este horizonte.'}</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = sellers.map((seller) => {
+            const execution = Math.max(0, Number(seller.ejecucion_pct || 0));
+            const executionWidth = Math.min(execution, 100);
+            const active = seller.clave === state.selectedAnalyticsSeller;
+            const frictionParts = [];
+            if (Number(seller.casos_exceso || 0)) frictionParts.push(`${seller.casos_exceso} exceso(s)`);
+            if (Number(seller.rendiciones_rechazadas || 0)) frictionParts.push(`${seller.rendiciones_rechazadas} rechazo(s)`);
+            return `<tr class="${active ? 'is-active' : ''}" tabindex="0" role="button" aria-pressed="${active}" data-analytics-seller="${escapeHtml(seller.clave)}">
+                <td><strong>${escapeHtml(seller.vendedor_nombre)}</strong><small>${escapeHtml(seller.empresa_nombre)} · ERP #${seller.vendedor_id}</small></td>
+                <td class="rd-number">${money.format(Number(seller.presupuesto_total || 0))}</td>
+                <td class="rd-number rd-number--approved">${money.format(Number(seller.aprobado_total || 0))}<small>${seller.rendiciones_aprobadas || 0} aprobada(s)</small></td>
+                <td><div class="rd-execution-cell"><strong>${formatPercent(execution)}%</strong><span><i style="width:${executionWidth}%"></i></span></div></td>
+                <td class="rd-number rd-number--pending">${money.format(Number(seller.pendiente_total || 0))}<small>${seller.rendiciones_pendientes || 0} por resolver</small></td>
+                <td>${frictionParts.length ? `<span class="rd-friction">${escapeHtml(frictionParts.join(' · '))}</span>` : '<span class="rd-friction rd-friction--clear">Sin alertas</span>'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function onAnalyticsSellerSelect(event) {
+        const row = event.target.closest('[data-analytics-seller]');
+        if (!row) return;
+        selectAnalyticsSeller(row.dataset.analyticsSeller);
+    }
+
+    function onAnalyticsSellerKeydown(event) {
+        if (!['Enter', ' '].includes(event.key)) return;
+        const row = event.target.closest('[data-analytics-seller]');
+        if (!row) return;
+        event.preventDefault();
+        selectAnalyticsSeller(row.dataset.analyticsSeller);
+    }
+
+    function selectAnalyticsSeller(key) {
+        state.selectedAnalyticsSeller = key;
+        renderSellerRanking();
+        renderAnalyticsSellerDetail();
+    }
+
+    function renderAnalyticsSellerDetail() {
+        const container = $('#dashboardSellerDetail');
+        if (!container || !state.sellerAnalytics) return;
+        const seller = (state.sellerAnalytics.vendedores || []).find((item) => item.clave === state.selectedAnalyticsSeller);
+        if (!seller) {
+            container.innerHTML = '<div class="rd-seller-detail__empty"><h3>Selecciona un vendedor</h3><p>Verás su trayectoria mensual, presupuesto asignado, gasto aprobado y montos todavía pendientes.</p></div>';
+            return;
+        }
+        const trend = seller.tendencia || [];
+        const maximum = Math.max(1, ...trend.map((month) => Math.max(Number(month.presupuesto || 0), Number(month.aprobado || 0) + Number(month.pendiente || 0))));
+        const rows = trend.map((month) => {
+            const approvedWidth = Math.min(100, (Number(month.aprobado || 0) / maximum) * 100);
+            const pendingWidth = Math.min(100 - approvedWidth, (Number(month.pendiente || 0) / maximum) * 100);
+            const budgetPosition = Math.min(100, (Number(month.presupuesto || 0) / maximum) * 100);
+            return `<div class="rd-trend-row">
+                <span>${escapeHtml(formatMonthShort(month.periodo))}</span>
+                <div class="rd-trend-row__visual"><div class="rd-trend-track" aria-label="${money.format(Number(month.aprobado || 0))} aprobado, ${money.format(Number(month.pendiente || 0))} pendiente, ${money.format(Number(month.presupuesto || 0))} asignado"><i class="rd-trend-approved" style="width:${approvedWidth}%"></i><i class="rd-trend-pending" style="left:${approvedWidth}%;width:${pendingWidth}%"></i><b style="left:${budgetPosition}%" title="Tope presupuestario"></b></div><small>${money.format(Number(month.aprobado || 0))}</small></div>
+            </div>`;
+        }).join('');
+        container.innerHTML = `<header class="rd-seller-detail__header"><div><h3>${escapeHtml(seller.vendedor_nombre)}</h3><p>${escapeHtml(seller.empresa_nombre)} · Código ERP #${seller.vendedor_id}</p></div><strong>${formatPercent(seller.ejecucion_pct)}% ejecutado</strong></header>
+            <div class="rd-seller-detail__metrics"><div><span>Asignado</span><strong>${money.format(Number(seller.presupuesto_total || 0))}</strong></div><div><span>Aprobado real</span><strong>${money.format(Number(seller.aprobado_total || 0))}</strong></div><div><span>Pendiente</span><strong>${money.format(Number(seller.pendiente_total || 0))}</strong></div><div><span>Ticket promedio</span><strong>${money.format(Number(seller.ticket_promedio || 0))}</strong></div></div>
+            <div class="rd-trend-legend"><span><i class="is-approved"></i>Aprobado</span><span><i class="is-pending"></i>Pendiente</span><span><i class="is-budget"></i>Tope asignado</span></div>
+            <div class="rd-trend-list">${rows || '<div class="rd-bar-empty">Sin movimientos en el horizonte.</div>'}</div>
+            <p class="rd-seller-detail__foot">Último movimiento: ${escapeHtml(formatDateTime(seller.ultimo_movimiento))}</p>`;
+    }
+
+    function renderBusinessSignals() {
+        const container = $('#dashboardBusinessSignals');
+        if (!container || !state.sellerAnalytics) return;
+        const sellers = state.sellerAnalytics.vendedores || [];
+        const summary = state.sellerAnalytics.resumen || {};
+        const signals = [];
+        if (Number(summary.pendiente_total || 0) > 0) {
+            signals.push({ tone: 'pending', title: 'Monto pendiente de decisión', detail: `${money.format(Number(summary.pendiente_total))} permanece fuera del gasto aprobado hasta que Tesorería resuelva las rendiciones.` });
+        }
+        sellers.filter((seller) => Number(seller.casos_exceso || 0) >= 2).forEach((seller) => {
+            signals.push({ tone: 'warning', title: 'Excesos recurrentes', detail: `${seller.vendedor_nombre} registra ${seller.casos_exceso} casos con exceso en ${seller.empresa_nombre}; conviene revisar cupo o política de gasto.` });
+        });
+        sellers.forEach((seller) => {
+            const decided = Number(seller.rendiciones_aprobadas || 0) + Number(seller.rendiciones_rechazadas || 0);
+            const rejectionRate = decided > 0 ? Number(seller.rendiciones_rechazadas || 0) / decided : 0;
+            if (decided >= 2 && rejectionRate >= .4) {
+                signals.push({ tone: 'danger', title: 'Alta tasa de rechazo', detail: `${seller.vendedor_nombre} tiene ${formatPercent(rejectionRate * 100)}% de rendiciones decididas rechazadas; revisar calidad documental o capacitación.` });
+            }
+        });
+        sellers.filter((seller) => Number(seller.presupuesto_total || 0) > 0 && Number(seller.aprobado_total || 0) === 0).forEach((seller) => {
+            signals.push({ tone: 'neutral', title: 'Presupuesto sin ejecución aprobada', detail: `${seller.vendedor_nombre} mantiene ${money.format(Number(seller.presupuesto_total))} asignados sin gasto aprobado en el horizonte.` });
+        });
+        sellers.filter((seller) => Number(seller.presupuesto_total || 0) > 0 && Number(seller.ejecucion_pct || 0) >= 90).forEach((seller) => {
+            signals.push({ tone: 'info', title: 'Cupo próximo al límite', detail: `${seller.vendedor_nombre} lleva ${formatPercent(seller.ejecucion_pct)}% de ejecución aprobada; revisar continuidad operativa antes del próximo período.` });
+        });
+        if (Number(summary.concentracion_principal_pct || 0) >= 50 && sellers[0]) {
+            signals.push({ tone: 'info', title: 'Gasto concentrado', detail: `${sellers[0].vendedor_nombre} representa ${formatPercent(summary.concentracion_principal_pct)}% del gasto aprobado del horizonte.` });
+        }
+        if (!signals.length) {
+            container.innerHTML = '<div class="rd-signal rd-signal--clear"><span></span><div><strong>Sin señales críticas</strong><p>La ejecución no presenta patrones que superen los umbrales de revisión definidos.</p></div></div>';
+            return;
+        }
+        container.innerHTML = signals.slice(0, 6).map((signal) => `<div class="rd-signal rd-signal--${signal.tone}"><span aria-hidden="true"></span><div><strong>${escapeHtml(signal.title)}</strong><p>${escapeHtml(signal.detail)}</p></div></div>`).join('');
     }
 
     async function loadDashboardRenditions(period) {
@@ -472,30 +678,49 @@
     function renderDashboard(renditions, details, period) {
         const budgets = state.budgets.filter((budget) => Number(budget.activo) === 1 && budget.periodo_mes === period);
         const budgetTotal = budgets.reduce((sum, budget) => sum + Number(budget.monto_asignado || 0), 0);
-        const renderedTotal = renditions.reduce((sum, item) => sum + Number(item.monto_total_rendido || 0), 0);
+        const approvedTotal = renditions.reduce((sum, item) => sum + Number(item.monto_total_aprobado || 0), 0);
         const excessCount = renditions.filter((item) => Number(item.monto_exceso || 0) > 0).length;
-        const execution = budgetTotal > 0 ? (renderedTotal / budgetTotal) * 100 : 0;
+        const execution = budgetTotal > 0 ? (approvedTotal / budgetTotal) * 100 : 0;
         const excessRate = renditions.length ? (excessCount / renditions.length) * 100 : 0;
         const budgetMetricsAvailable = canManage && state.budgetsAvailable;
         setText('dashboardBudget', budgetMetricsAvailable ? money.format(budgetTotal) : 'No disponible');
         setText('dashboardBudgetNote', budgetMetricsAvailable ? (budgets.length === 1 ? '1 presupuesto activo' : `${budgets.length} presupuestos activos`) : 'No fue posible consultar presupuestos');
-        setText('dashboardRendered', money.format(renderedTotal));
-        setText('dashboardRenderedNote', renditions.length === 1 ? '1 rendición' : `${renditions.length} rendiciones`);
+        setText('dashboardRendered', money.format(approvedTotal));
+        setText('dashboardRenderedNote', renditions.length === 1 ? '1 rendición aprobada' : `${renditions.length} rendiciones aprobadas`);
         setText('dashboardExecution', budgetMetricsAvailable ? `${formatPercent(execution)}%` : '—');
         setText('dashboardExcessRate', `${formatPercent(excessRate)}%`);
         setText('dashboardExcessNote', excessCount === 1 ? '1 caso con exceso' : `${excessCount} casos con exceso`);
 
         const categories = new Map();
-        details.forEach((detail) => (detail.documentos || []).forEach((documentData) => {
+        details.forEach((detail) => (detail.documentos || []).filter((documentData) => documentData.estado_item === 'APROBADO').forEach((documentData) => {
             const key = documentData.categoria_gasto || 'OTROS';
-            categories.set(key, (categories.get(key) || 0) + Number(documentData.monto || 0));
+            categories.set(key, (categories.get(key) || 0) + Number(documentData.monto_validado ?? documentData.monto ?? 0));
         }));
         const categoryRows = [...categories.entries()].map(([key, amount]) => ({ label: categoryInfo(key).label, amount }));
         renderBarList($('#dashboardCategories'), categoryRows);
 
         const companies = new Map();
-        renditions.forEach((item) => companies.set(item.empresa_nombre || 'Sin empresa', (companies.get(item.empresa_nombre || 'Sin empresa') || 0) + Number(item.monto_total_rendido || 0)));
+        renditions.forEach((item) => companies.set(item.empresa_nombre || 'Sin empresa', (companies.get(item.empresa_nombre || 'Sin empresa') || 0) + Number(item.monto_total_aprobado || 0)));
         renderBarList($('#dashboardCompanies'), [...companies.entries()].map(([label, amount]) => ({ label, amount })));
+    }
+
+    async function refreshActiveSubmodule() {
+        state.dashboardKey = '';
+        state.sellerAnalyticsKey = '';
+        state.detailCache.clear();
+        if (state.activeSubmodule === 'dashboard') {
+            await loadDashboard(true);
+            return;
+        }
+        if (state.activeSubmodule === 'vendedores' && canManage) {
+            await Promise.all([loadBudgets(true), loadSellerDirectory(true)]);
+            return;
+        }
+        const selectedId = state.selectedId;
+        await loadRenditions(false);
+        if (selectedId && state.renditions.some((item) => Number(item.id) === Number(selectedId))) {
+            await loadDetail(selectedId);
+        }
     }
 
     function renderBarList(container, rows) {
@@ -811,7 +1036,30 @@
         if (!$('#budgetType')) return;
         const isTour = $('#budgetType').value === 'GIRA';
         $('#tourFields').hidden = !isTour;
+        $('#budgetPeriodField').hidden = isTour;
         ['#budgetTourName', '#budgetStartDate', '#budgetEndDate'].forEach((selector) => { $(selector).required = isTour; });
+        if (isTour) syncTourPeriod();
+        else {
+            $('#budgetEndDate').min = '';
+            $('#budgetEndDate').setCustomValidity('');
+        }
+    }
+
+    function syncTourPeriod() {
+        const startDate = $('#budgetStartDate')?.value || '';
+        if (startDate) {
+            $('#budgetPeriod').value = startDate.slice(0, 7);
+            $('#budgetEndDate').min = startDate;
+        }
+        validateTourDateRange();
+    }
+
+    function validateTourDateRange() {
+        const startDate = $('#budgetStartDate')?.value || '';
+        const endDate = $('#budgetEndDate')?.value || '';
+        const invalidRange = Boolean(startDate && endDate && endDate < startDate);
+        $('#budgetEndDate')?.setCustomValidity(invalidRange ? 'La fecha de término no puede ser anterior al inicio de la gira.' : '');
+        return !invalidRange;
     }
 
     async function saveBudget(event) {
@@ -821,7 +1069,7 @@
             $('#budgetSellerSearch')?.focus();
             return;
         }
-        if (!event.currentTarget.reportValidity()) return;
+        if (!validateTourDateRange() || !event.currentTarget.reportValidity()) return;
         const id = Number($('#budgetId').value || 0);
         const input = {
             accion: id ? 'ACTUALIZAR' : 'CREAR', id: id || undefined,
@@ -846,12 +1094,16 @@
     }
 
     function openActionModal(action, context = {}) {
+        if (action === 'REENVIAR_EXCESO') {
+            openExcessApprovalModal();
+            return;
+        }
         const actionDetails = {
             RECIBIR_FISICOS: ['Registrar recepción física', 'Se dejará constancia de que Tesorería recibió los documentos originales.', false, 'Registrar recepción'],
             APROBAR_TOTAL: ['Aprobar rendición completa', 'Todos los comprobantes quedarán aprobados por su monto rendido.', false, 'Aprobar rendición'],
             RECHAZAR: ['Rechazar rendición', 'La rendición y sus documentos quedarán rechazados. Esta acción requiere un motivo.', true, 'Rechazar'],
+            RECHAZAR_EXCESO_TESORERIA: ['Cancelar rendición con exceso', 'Tesorería rechazará la rendición y liberará todo el monto comprometido. No se enviará una nueva solicitud a Jefatura; si ya existía un enlace, quedará invalidado.', true, 'Rechazar y liberar fondos'],
             MARCAR_PAGADA: ['Marcar rendición pagada', 'Se cerrará el flujo financiero de esta rendición.', false, 'Marcar pagada'],
-            REENVIAR_EXCESO: ['Reenviar aprobación de exceso', 'El token anterior será invalidado y se enviará una nueva solicitud.', false, 'Reenviar solicitud'],
             DESACTIVAR_PRESUPUESTO: ['Desactivar presupuesto', 'El presupuesto dejará de estar disponible para nuevas rendiciones.', false, 'Desactivar']
         };
         const info = actionDetails[action];
@@ -863,8 +1115,104 @@
         $('#actionComment').required = info[2];
         $('#actionComment').value = '';
         $('#confirmActionButton').textContent = info[3];
-        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'DESACTIVAR_PRESUPUESTO'].includes(action) ? 'rd-btn--danger' : 'rd-btn--primary'}`;
+        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO'].includes(action) ? 'rd-btn--danger' : 'rd-btn--primary'}`;
         openModal('actionModal');
+    }
+
+    async function loadApprovers() {
+        const payload = await apiRequest(`${API_BASE}/gestion_aprobadores.php`);
+        state.approvers = Array.isArray(payload.data) ? payload.data : [];
+        return state.approvers;
+    }
+
+    async function openExcessApprovalModal() {
+        $('#approverChoices').innerHTML = '<p class="rd-modal__description">Cargando responsables…</p>';
+        $('#approverChoiceStatus').textContent = '';
+        $('#excessApprovalComment').value = '';
+        $('#sendExcessApproval').disabled = true;
+        openModal('excessApprovalModal');
+        try {
+            const approvers = await loadApprovers();
+            if (approvers.length !== 2) {
+                $('#approverChoices').innerHTML = '<p class="rd-modal__description rd-form-status--error">La solicitud no puede enviarse hasta configurar dos responsables activos.</p>';
+                $('#approverChoiceStatus').textContent = canConfigureApprovers ? 'Cierra este diálogo y usa “Responsables de aprobación”.' : 'Solicita a un Administrador que complete la configuración.';
+                return;
+            }
+            $('#approverChoices').innerHTML = approvers.map((approver, index) => `<label class="rd-approver-option"><input type="radio" name="excessApprover" value="${Number(approver.id)}" ${index === 0 ? 'checked' : ''}><span><strong>${escapeHtml(approver.nombre)}</strong><small>${escapeHtml(approver.cargo)} · ${escapeHtml(approver.email)}</small></span></label>`).join('');
+            $('#sendExcessApproval').disabled = false;
+        } catch (error) {
+            $('#approverChoices').innerHTML = `<p class="rd-modal__description rd-form-status--error">${escapeHtml(error.message)}</p>`;
+        }
+    }
+
+    async function sendExcessApproval() {
+        const selected = $('input[name="excessApprover"]:checked');
+        if (!selected) { $('#approverChoiceStatus').textContent = 'Selecciona un responsable.'; return; }
+        const button = $('#sendExcessApproval');
+        setBusy(button, true, 'Enviando…');
+        try {
+            const payload = await apiRequest(`${API_BASE}/cambiar_estado.php`, { method: 'POST', body: JSON.stringify({
+                rendicion_id: state.selectedId,
+                accion: 'REENVIAR_EXCESO',
+                aprobador_id: Number(selected.value),
+                comentario: $('#excessApprovalComment').value.trim()
+            }) });
+            closeModal('excessApprovalModal');
+            notify(payload.message, payload.data?.correo_enviado ? 'success' : 'warning');
+            state.detailCache.delete(Number(state.selectedId));
+            await selectRendition(Number(state.selectedId), true);
+            await loadRenditions();
+        } catch (error) {
+            $('#approverChoiceStatus').textContent = error.message;
+        } finally {
+            setBusy(button, false, 'Enviar solicitud');
+        }
+    }
+
+    async function openApproverConfig() {
+        if (!canConfigureApprovers) return;
+        $('#approverConfigStatus').textContent = 'Cargando configuración…';
+        openModal('approverConfigModal');
+        try {
+            const approvers = await loadApprovers();
+            [1, 2].forEach((order) => {
+                const approver = approvers.find((item) => Number(item.orden) === order) || {};
+                $(`#approver${order}Name`).value = approver.nombre || '';
+                $(`#approver${order}Title`).value = approver.cargo || '';
+                $(`#approver${order}Email`).value = approver.email || '';
+            });
+            $('#approverConfigStatus').textContent = approvers.length === 2 ? 'Los dos responsables están activos.' : 'Completa ambos responsables para habilitar el envío.';
+        } catch (error) {
+            $('#approverConfigStatus').textContent = error.message;
+        }
+    }
+
+    async function saveApproverConfig(event) {
+        event.preventDefault();
+        const form = $('#approverConfigForm');
+        if (!form.reportValidity()) return;
+        const approvers = [1, 2].map((order) => ({
+            orden: order,
+            nombre: $(`#approver${order}Name`).value.trim(),
+            cargo: $(`#approver${order}Title`).value.trim(),
+            email: $(`#approver${order}Email`).value.trim()
+        }));
+        if (approvers[0].email.toLowerCase() === approvers[1].email.toLowerCase()) {
+            $('#approverConfigStatus').textContent = 'Los responsables deben tener correos diferentes.';
+            return;
+        }
+        const button = $('#saveApproverConfig');
+        setBusy(button, true, 'Guardando…');
+        try {
+            const payload = await apiRequest(`${API_BASE}/gestion_aprobadores.php`, { method: 'POST', body: JSON.stringify({ aprobadores: approvers }) });
+            state.approvers = payload.data || [];
+            $('#approverConfigStatus').textContent = payload.message;
+            notify(payload.message, 'success');
+        } catch (error) {
+            $('#approverConfigStatus').textContent = error.message;
+        } finally {
+            setBusy(button, false, 'Guardar responsables');
+        }
     }
 
     async function confirmAction() {

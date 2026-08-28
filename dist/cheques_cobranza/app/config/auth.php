@@ -7,33 +7,110 @@ require_once __DIR__ . '/app.php';
 require_once __DIR__ . '/db.php';
 
 const ADMIN_ROLES = ['ADMINISTRADOR', 'TESORERIA', 'SUPERVISORA_CC'];
-const ADMIN_SESSION_IDLE_SECONDS = 28800;
 
-function startSecureSession(): void
+const SESSION_CONTEXT_ADMIN = 'admin';
+const SESSION_CONTEXT_SELLER = 'seller';
+const ADMIN_SESSION_NAME = 'AUTOMARCO_ADMIN_SID';
+const SELLER_SESSION_NAME = 'AUTOMARCO_SELLER_SID';
+
+function getApplicationCookiePath(): string
+{
+    $path = (string)(parse_url(defined('PORTAL_BASE_URL') ? PORTAL_BASE_URL : '/', PHP_URL_PATH) ?: '/');
+    $path = '/' . trim($path, '/');
+    return ($path === '/' ? '' : rtrim($path, '/')) . '/';
+}
+
+function requestSessionContext(): string
+{
+    $script = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? ''));
+    return str_contains($script, '/admin/') ? SESSION_CONTEXT_ADMIN : SESSION_CONTEXT_SELLER;
+}
+
+function getSessionLifetimeForContext(string $context): int
+{
+    return $context === SESSION_CONTEXT_ADMIN ? ADMIN_SESSION_IDLE_SECONDS : SELLER_SESSION_IDLE_SECONDS;
+}
+
+function getSessionCookieOptions(string $context, ?int $expiresAt = null): array
+{
+    $httpsEnabled = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['SERVER_PORT'] ?? null) === '443')
+        || (defined('APP_ENV') && APP_ENV === 'production');
+
+    return [
+        'expires' => $expiresAt ?? (time() + getSessionLifetimeForContext($context)),
+        'path' => getApplicationCookiePath(),
+        'domain' => '',
+        'secure' => $httpsEnabled,
+        'httponly' => true,
+        'samesite' => $context === SESSION_CONTEXT_ADMIN ? 'Strict' : 'Lax',
+    ];
+}
+
+function getSessionCookieParams(string $context): array
+{
+    $options = getSessionCookieOptions($context);
+    unset($options['expires']);
+    return ['lifetime' => getSessionLifetimeForContext($context)] + $options;
+}
+
+function startApplicationSession(string $context): void
 {
     if (session_status() !== PHP_SESSION_NONE) {
         return;
     }
 
-    $httpsEnabled = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['SERVER_PORT'] ?? null) === '443')
-        || (defined('APP_ENV') && APP_ENV === 'production');
+    $context = $context === SESSION_CONTEXT_SELLER ? SESSION_CONTEXT_SELLER : SESSION_CONTEXT_ADMIN;
 
     ini_set('session.use_only_cookies', '1');
     ini_set('session.use_strict_mode', '1');
     ini_set('session.cookie_httponly', '1');
-    ini_set('session.cookie_samesite', 'Strict');
-    ini_set('session.cookie_secure', $httpsEnabled ? '1' : '0');
+    ini_set('session.gc_maxlifetime', (string)SESSION_SERVER_TTL_SECONDS);
 
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path' => '/',
-        'domain' => '',
-        'secure' => $httpsEnabled,
-        'httponly' => true,
-        'samesite' => 'Strict',
-    ]);
+    session_name($context === SESSION_CONTEXT_ADMIN ? ADMIN_SESSION_NAME : SELLER_SESSION_NAME);
+    session_set_cookie_params(getSessionCookieParams($context));
     session_start();
+    $_SESSION['_session_context'] = $context;
+    refreshSessionCookie($context);
+}
+
+function startAdminSession(): void
+{
+    startApplicationSession(SESSION_CONTEXT_ADMIN);
+}
+
+function startSellerSession(): void
+{
+    startApplicationSession(SESSION_CONTEXT_SELLER);
+}
+
+function startSecureSession(): void
+{
+    startApplicationSession(requestSessionContext());
+}
+
+function refreshSessionCookie(string $context, bool $force = false): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE || session_id() === '') {
+        return;
+    }
+    $now = time();
+    $lastRefresh = (int)($_SESSION['_cookie_refreshed_at'] ?? 0);
+    if (!$force && $lastRefresh > 0 && ($now - $lastRefresh) < SESSION_COOKIE_REFRESH_SECONDS) {
+        return;
+    }
+    setcookie(session_name(), session_id(), getSessionCookieOptions($context, $now + getSessionLifetimeForContext($context)));
+    $_SESSION['_cookie_refreshed_at'] = $now;
+}
+
+function destroyCurrentSession(string $context): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    $_SESSION = [];
+    setcookie(session_name(), '', getSessionCookieOptions($context, time() - 3600));
+    session_destroy();
 }
 
 function adminPermissions(): array
@@ -79,14 +156,16 @@ function clearAdminSession(): void
 
 function loadAdminSessionUser(PDO $pdo): ?array
 {
-    startSecureSession();
+    startAdminSession();
 
     if (($_SESSION['admin_logged_in'] ?? false) !== true) {
         return null;
     }
 
     $lastActivity = (int)($_SESSION['admin_last_activity'] ?? 0);
-    if ($lastActivity > 0 && (time() - $lastActivity) > ADMIN_SESSION_IDLE_SECONDS) {
+    $createdAt = (int)($_SESSION['admin_created_at'] ?? $lastActivity);
+    if (($lastActivity > 0 && (time() - $lastActivity) > ADMIN_SESSION_IDLE_SECONDS)
+        || ($createdAt > 0 && (time() - $createdAt) > ADMIN_SESSION_ABSOLUTE_SECONDS)) {
         clearAdminSession();
         return null;
     }
@@ -111,6 +190,8 @@ function loadAdminSessionUser(PDO $pdo): ?array
     $_SESSION['admin_user_email'] = $user['email'];
     $_SESSION['admin_user_rol'] = $user['rol'];
     $_SESSION['admin_last_activity'] = time();
+    $_SESSION['admin_created_at'] = $createdAt > 0 ? $createdAt : time();
+    refreshSessionCookie(SESSION_CONTEXT_ADMIN);
 
     return $user;
 }
@@ -166,11 +247,12 @@ function requireAuth(PDO $pdo, array $allowedRoles = []): array
         return $adminUser;
     }
 
-    if (!empty($_SESSION['vendedor_auth']['vendedor_id'])) {
+    $sellerSession = loadSellerSession();
+    if ($sellerSession !== null) {
         $user = [
-            'id' => (int)$_SESSION['vendedor_auth']['vendedor_id'],
-            'nombre' => $_SESSION['vendedor_auth']['nombre'] ?? 'Vendedor',
-            'email' => $_SESSION['vendedor_auth']['email'] ?? '',
+            'id' => (int)$sellerSession['vendedor_id'],
+            'nombre' => $sellerSession['nombre'] ?? 'Vendedor',
+            'email' => $sellerSession['email'] ?? '',
             'rol' => 'VENDEDOR',
             'activo' => 1,
         ];
@@ -179,6 +261,65 @@ function requireAuth(PDO $pdo, array $allowedRoles = []): array
     }
 
     jsonAuthError(401, 'Acceso denegado. Sesión no iniciada.');
+}
+
+function clearSellerSession(): void
+{
+    unset($_SESSION['vendedor_auth'], $_SESSION['csrf_token']);
+}
+
+function loadSellerSession(): ?array
+{
+    startSellerSession();
+    $seller = $_SESSION['vendedor_auth'] ?? null;
+    if (!is_array($seller) || empty($seller['vendedor_id'])) {
+        return null;
+    }
+
+    $now = time();
+    $authenticatedAt = (int)($seller['auth_time'] ?? 0);
+    $lastActivity = (int)($seller['last_activity'] ?? $authenticatedAt);
+    if (($lastActivity > 0 && ($now - $lastActivity) > SELLER_SESSION_IDLE_SECONDS)
+        || ($authenticatedAt > 0 && ($now - $authenticatedAt) > SELLER_SESSION_ABSOLUTE_SECONDS)) {
+        clearSellerSession();
+        return null;
+    }
+
+    $_SESSION['vendedor_auth']['last_activity'] = $now;
+    refreshSessionCookie(SESSION_CONTEXT_SELLER);
+    return $_SESSION['vendedor_auth'];
+}
+
+function getAdminSessionExpiresIn(): int
+{
+    $now = time();
+    $lastActivity = (int)($_SESSION['admin_last_activity'] ?? 0);
+    $createdAt = (int)($_SESSION['admin_created_at'] ?? $lastActivity);
+    if ($lastActivity <= 0 || $createdAt <= 0) {
+        return 0;
+    }
+    return max(0, min(
+        ADMIN_SESSION_IDLE_SECONDS - ($now - $lastActivity),
+        ADMIN_SESSION_ABSOLUTE_SECONDS - ($now - $createdAt)
+    ));
+}
+
+function getSellerSessionExpiresIn(): int
+{
+    $seller = $_SESSION['vendedor_auth'] ?? null;
+    if (!is_array($seller)) {
+        return 0;
+    }
+    $now = time();
+    $authenticatedAt = (int)($seller['auth_time'] ?? 0);
+    $lastActivity = (int)($seller['last_activity'] ?? $authenticatedAt);
+    if ($authenticatedAt <= 0 || $lastActivity <= 0) {
+        return 0;
+    }
+    return max(0, min(
+        SELLER_SESSION_IDLE_SECONDS - ($now - $lastActivity),
+        SELLER_SESSION_ABSOLUTE_SECONDS - ($now - $authenticatedAt)
+    ));
 }
 
 function enforceAllowedRoles(array $user, array $allowedRoles): void
@@ -210,8 +351,8 @@ function requirePermission(PDO $pdo, string $permission): array
  */
 function requireSellerContext(PDO $pdo): array
 {
-    startSecureSession();
-    $sessionSeller = $_SESSION['vendedor_auth'] ?? null;
+    startSellerSession();
+    $sessionSeller = loadSellerSession();
     if (!is_array($sessionSeller) || empty($sessionSeller['vendedor_id'])) {
         jsonAuthError(401, 'Sesión de vendedor no iniciada.');
     }
@@ -258,7 +399,7 @@ function requireSellerContext(PDO $pdo): array
 
 function requireAdminPage(string $permission): array
 {
-    startSecureSession();
+    startAdminSession();
     $pdo = Database::getCobranzasConnection();
     $user = loadAdminSessionUser($pdo);
 

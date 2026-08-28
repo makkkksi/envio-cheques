@@ -25,6 +25,7 @@ try {
     $stmt = $pdo->prepare(
         'SELECT r.id, r.codigo_rendicion, r.periodo_mes, r.tipo_rendicion,
                 r.monto_total_rendido, r.monto_total_aprobado, r.monto_exceso,
+                r.monto_maximo_aprobable, r.monto_exceso_no_reembolsable, r.aplico_tope_presupuestario,
                 r.estado, r.documentos_fisicos_recibidos, r.enviada_at,
                 r.created_at, p.nombre_gira,
                 COUNT(d.id) AS cantidad_documentos
@@ -37,6 +38,7 @@ try {
            AND (:todos = 1 OR r.estado = :estado)
          GROUP BY r.id, r.codigo_rendicion, r.periodo_mes, r.tipo_rendicion,
                   r.monto_total_rendido, r.monto_total_aprobado, r.monto_exceso,
+                  r.monto_maximo_aprobable, r.monto_exceso_no_reembolsable, r.aplico_tope_presupuestario,
                   r.estado, r.documentos_fisicos_recibidos, r.enviada_at,
                   r.created_at, p.nombre_gira
          ORDER BY r.created_at DESC
@@ -57,7 +59,10 @@ try {
         $rendition['cantidad_documentos'] = (int)$rendition['cantidad_documentos'];
         $rendition['monto_total_rendido'] = (float)$rendition['monto_total_rendido'];
         $rendition['monto_total_aprobado'] = (float)$rendition['monto_total_aprobado'];
+        $rendition['monto_maximo_aprobable'] = (float)($rendition['monto_maximo_aprobable'] ?? $rendition['monto_total_rendido']);
+        $rendition['monto_exceso_no_reembolsable'] = (float)($rendition['monto_exceso_no_reembolsable'] ?? 0);
         $rendition['monto_exceso'] = (float)$rendition['monto_exceso'];
+        $rendition['aplico_tope_presupuestario'] = (bool)($rendition['aplico_tope_presupuestario'] ?? false);
         $rendition['documentos_fisicos_recibidos'] = (bool)$rendition['documentos_fisicos_recibidos'];
     }
     unset($rendition);

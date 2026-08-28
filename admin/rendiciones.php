@@ -10,6 +10,7 @@ $adminUser = requireAdminPage('rendiciones.view');
 $rolUsuario = $adminUser['rol'];
 $csrfToken = getCsrfToken();
 $canManageRenditions = userHasPermission($rolUsuario, 'rendiciones.manage');
+$canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -22,11 +23,11 @@ $canManageRenditions = userHasPermission($rolUsuario, 'rendiciones.manage');
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=4">
-    <link rel="stylesheet" href="css/shell.css?v=2">
-    <link rel="stylesheet" href="css/modal_config_cc.css">
-    <link rel="stylesheet" href="css/rendiciones.css?v=20260825-1">
+    <link rel="stylesheet" href="css/shell.css?v=20260828-session-1">
+    <link rel="stylesheet" href="css/modal_config_cc.css?v=20260826-4">
+    <link rel="stylesheet" href="css/rendiciones.css?v=20260826-4">
 </head>
-<body data-can-manage-rendiciones="<?= $canManageRenditions ? '1' : '0' ?>">
+<body data-can-manage-rendiciones="<?= $canManageRenditions ? '1' : '0' ?>" data-can-configure-approvers="<?= $canConfigureApprovers ? '1' : '0' ?>">
     <!--
     THESIS: Rendiciones se opera con la misma memoria muscular de Cheques, sumando navegación secundaria sin dispersar la revisión.
     OWN-WORLD: superficies blancas, azul Automarco, tabla financiera densa, controles compactos y estados semánticos.
@@ -98,18 +99,52 @@ $canManageRenditions = userHasPermission($rolUsuario, 'rendiciones.manage');
                     <div class="rd-dashboard-scroll">
                         <section class="rd-dashboard-kpis" aria-label="Indicadores presupuestarios">
                             <article class="rd-dashboard-kpi"><span>Presupuesto global holding</span><strong id="dashboardBudget">$0</strong><small id="dashboardBudgetNote">0 presupuestos activos</small></article>
-                            <article class="rd-dashboard-kpi"><span>Monto rendido total</span><strong id="dashboardRendered">$0</strong><small id="dashboardRenderedNote">0 rendiciones</small></article>
-                            <article class="rd-dashboard-kpi"><span>Ejecución presupuestaria</span><strong id="dashboardExecution">0%</strong><small>Rendido sobre presupuesto asignado</small></article>
+                            <article class="rd-dashboard-kpi"><span>Monto aprobado total</span><strong id="dashboardRendered">$0</strong><small id="dashboardRenderedNote">0 rendiciones aprobadas</small></article>
+                            <article class="rd-dashboard-kpi"><span>Ejecución presupuestaria</span><strong id="dashboardExecution">0%</strong><small>Aprobado sobre presupuesto asignado</small></article>
                             <article class="rd-dashboard-kpi rd-dashboard-kpi--warning"><span>Tasa de excesos</span><strong id="dashboardExcessRate">0%</strong><small id="dashboardExcessNote">0 casos con exceso</small></article>
                         </section>
                         <p class="rd-dashboard-status" id="dashboardStatus" role="status"></p>
-                        <div class="rd-dashboard-grid"><section class="rd-analytics-panel"><header><h2>Gasto por categoría</h2><p>Participación de comprobantes rendidos.</p></header><div class="rd-bar-list" id="dashboardCategories"></div></section><section class="rd-analytics-panel"><header><h2>Consumo por empresa</h2><p>Comparativa entre razones sociales del holding.</p></header><div class="rd-bar-list" id="dashboardCompanies"></div></section></div>
+                        <div class="rd-dashboard-grid"><section class="rd-analytics-panel"><header><h2>Gasto aprobado por categoría</h2><p>Participación de comprobantes aprobados.</p></header><div class="rd-bar-list" id="dashboardCategories"></div></section><section class="rd-analytics-panel"><header><h2>Consumo aprobado por empresa</h2><p>Comparativa de montos aprobados entre razones sociales.</p></header><div class="rd-bar-list" id="dashboardCompanies"></div></section></div>
+
+                        <section class="rd-seller-analytics" aria-labelledby="sellerAnalyticsTitle">
+                            <header class="rd-seller-analytics__header">
+                                <div><h2 id="sellerAnalyticsTitle">Uso de presupuesto por vendedor</h2><p>Compara ejecución aprobada, fondos pendientes y fricción operativa a través del tiempo.</p></div>
+                                <label class="rd-window-control"><span>Horizonte</span><select id="dashboardWindow"><option value="6">Últimos 6 meses</option><option value="12">Últimos 12 meses</option></select></label>
+                            </header>
+                            <div class="rd-decision-strip" id="dashboardDecisionStrip" aria-label="Señales para la toma de decisiones">
+                                <div class="rd-decision-metric"><span>Saldo no ejecutado</span><strong>—</strong><small>Dentro del período analizado</small></div>
+                                <div class="rd-decision-metric rd-decision-metric--pending"><span>Pendiente de decisión</span><strong>—</strong><small>Aún no forma parte del gasto aprobado</small></div>
+                                <div class="rd-decision-metric"><span>Concentración principal</span><strong>—</strong><small>Participación del vendedor con mayor gasto</small></div>
+                            </div>
+                            <section class="rd-fund-comparison" aria-labelledby="fundComparisonTitle">
+                                <header><div><h3 id="fundComparisonTitle">Composición de fondos</h3><p>Comparación estandarizada entre operación mensual y giras comerciales; no utiliza nombres ingresados por usuarios.</p></div></header>
+                                <div class="rd-fund-comparison__rows" id="dashboardFundTypes"><div class="rd-bar-empty">Consolidando tipos de fondo…</div></div>
+                            </section>
+                            <div class="rd-seller-analytics__body">
+                                <section class="rd-seller-ranking" aria-labelledby="sellerRankingTitle">
+                                    <header><div><h3 id="sellerRankingTitle">Comparativa de vendedores</h3><p id="sellerAnalyticsStatus" role="status">Preparando análisis histórico…</p></div><label class="rd-seller-filter"><span class="rd-visually-hidden">Buscar vendedor</span><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="dashboardSellerSearch" type="search" placeholder="Buscar vendedor o empresa…" autocomplete="off"></label></header>
+                                    <div class="rd-seller-table-wrap">
+                                        <table class="rd-seller-table">
+                                            <thead><tr><th>Vendedor</th><th>Presupuesto</th><th>Aprobado</th><th>Ejecución</th><th>Pendiente</th><th>Fricción</th></tr></thead>
+                                            <tbody id="dashboardSellerRows"><tr><td colspan="6" class="rd-table-message">Cargando vendedores…</td></tr></tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                                <aside class="rd-seller-detail" id="dashboardSellerDetail" aria-live="polite">
+                                    <div class="rd-seller-detail__empty"><h3>Selecciona un vendedor</h3><p>Verás su trayectoria mensual, presupuesto asignado, gasto aprobado y montos todavía pendientes.</p></div>
+                                </aside>
+                            </div>
+                            <section class="rd-business-signals" aria-labelledby="businessSignalsTitle">
+                                <header><h3 id="businessSignalsTitle">Señales para actuar</h3><p>Reglas transparentes que destacan concentración, baja ejecución, excesos recurrentes y rechazos.</p></header>
+                                <div class="rd-business-signals__list" id="dashboardBusinessSignals"><div class="rd-bar-empty">Analizando patrones del período…</div></div>
+                            </section>
+                        </section>
                     </div>
                 </section>
 
                 <?php if ($canManageRenditions): ?>
                 <section class="rd-submodule" id="tab-vendedores" data-submodule-panel="vendedores" aria-labelledby="vendorsTitle" hidden>
-                    <header class="rd-section-header rd-section-header--vendors"><div><h1 id="vendorsTitle">Vendedores y presupuestos</h1><p>Identidad ERP verificada, cupos mensuales y giras comerciales.</p></div><div class="rd-vendor-actions"><label class="rd-search-field"><span class="rd-visually-hidden">Buscar vendedor</span><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.4-4.4"/></svg><input type="search" id="budgetSearch" placeholder="Buscar vendedor, correo o código ERP…"></label><button class="rd-btn rd-btn--primary" id="openBudgetModal" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>Asignar presupuesto</button></div></header>
+                    <header class="rd-section-header rd-section-header--vendors"><div><h1 id="vendorsTitle">Vendedores y presupuestos</h1><p>Identidad ERP verificada, cupos mensuales y giras comerciales.</p></div><div class="rd-vendor-actions"><label class="rd-search-field"><span class="rd-visually-hidden">Buscar vendedor</span><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.4-4.4"/></svg><input type="search" id="budgetSearch" placeholder="Buscar vendedor, correo o código ERP…"></label><?php if ($canConfigureApprovers): ?><button class="rd-btn rd-btn--secondary" id="openApproverConfig" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0M19 4v6m3-3h-6"/></svg>Responsables de aprobación</button><?php endif; ?><button class="rd-btn rd-btn--primary" id="openBudgetModal" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>Asignar presupuesto</button></div></header>
                     <div class="rd-budget-directory"><div class="rd-table-summary"><span id="budgetSummary">Cargando presupuestos…</span><span id="budgetAmountSummary">$0 asignado</span></div><div class="rd-table-scroll"><table class="rd-master-table rd-budget-table"><thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Período / fechas</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="budgetTableBody"><tr><td colspan="10" class="rd-table-message">Cargando presupuestos…</td></tr></tbody></table></div></div>
                 </section>
                 <?php endif; ?>
@@ -143,21 +178,25 @@ $canManageRenditions = userHasPermission($rolUsuario, 'rendiciones.manage');
                         <input type="hidden" id="budgetSellerEmail">
                     </div>
                     <label><span>Tipo</span><select id="budgetType" required><option value="MENSUAL">Mensual</option><option value="GIRA">Gira comercial</option></select></label>
-                    <label><span>Período</span><input type="month" id="budgetPeriod" required></label>
+                    <label id="budgetPeriodField"><span>Período</span><input type="month" id="budgetPeriod" required></label>
                     <label class="rd-span-2"><span>Monto asignado</span><input type="number" id="budgetAmount" min="1" step="1" required></label>
                 </div>
-                <fieldset id="tourFields" hidden><legend>Datos de la gira</legend><div class="rd-form-grid"><label class="rd-span-2"><span>Nombre de gira</span><input type="text" id="budgetTourName" maxlength="150"></label><label><span>Inicio</span><input type="date" id="budgetStartDate"></label><label><span>Término</span><input type="date" id="budgetEndDate"></label></div></fieldset>
+                <fieldset id="tourFields" hidden><legend>Datos de la gira</legend><div class="rd-form-grid"><label class="rd-span-2"><span>Nombre de gira</span><input type="text" id="budgetTourName" minlength="3" maxlength="100"><small class="rd-field-help">Uso operativo; el Dashboard consolida las giras por tipo y no utiliza este nombre.</small></label><label><span>Inicio</span><input type="date" id="budgetStartDate"></label><label><span>Término</span><input type="date" id="budgetEndDate"></label></div></fieldset>
                 <div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" id="clearBudgetForm" type="button">Limpiar</button><button class="rd-btn rd-btn--primary" id="saveBudgetButton" type="submit">Guardar presupuesto</button></div>
             </form>
         </div>
     </div>
     <div class="rd-modal" id="actionModal" hidden role="dialog" aria-modal="true" aria-labelledby="actionModalTitle"><div class="rd-modal__card"><header class="rd-modal__header"><div><h2 id="actionModalTitle">Actualizar rendición</h2></div><button class="rd-modal__close" type="button" data-close-modal="actionModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><p id="actionModalDescription" class="rd-modal__description"></p><label class="rd-modal__comment"><span id="actionCommentLabel">Comentario</span><textarea id="actionComment" rows="4" maxlength="1000"></textarea></label><div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="actionModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="confirmActionButton" type="button">Confirmar</button></div></div></div>
+    <div class="rd-modal" id="excessApprovalModal" hidden role="dialog" aria-modal="true" aria-labelledby="excessApprovalTitle"><div class="rd-modal__card rd-modal__card--approval"><header class="rd-modal__header"><div><h2 id="excessApprovalTitle">Enviar aprobación de exceso</h2><p>Elige quién revisará la solicitud. El enlace anterior, si existe, quedará invalidado.</p></div><button class="rd-modal__close" type="button" data-close-modal="excessApprovalModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><fieldset class="rd-approver-choice"><legend>Responsable de la decisión</legend><div id="approverChoices" class="rd-approver-choice__list"><p class="rd-modal__description">Cargando responsables…</p></div></fieldset><label class="rd-modal__comment"><span>Comentario para Gerencia (opcional)</span><textarea id="excessApprovalComment" rows="4" maxlength="1000" placeholder="Contexto que acompañará el resumen financiero y los comprobantes."></textarea></label><p id="approverChoiceStatus" class="rd-form-status" role="status"></p><div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="excessApprovalModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="sendExcessApproval" type="button">Enviar solicitud</button></div></div></div>
+    <?php if ($canConfigureApprovers): ?>
+    <div class="rd-modal" id="approverConfigModal" hidden role="dialog" aria-modal="true" aria-labelledby="approverConfigTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="approverConfigTitle">Responsables de aprobación</h2><p>Configura las dos personas que pueden resolver excesos. Los cambios futuros no alteran la auditoría histórica.</p></div><button class="rd-modal__close" type="button" data-close-modal="approverConfigModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="approverConfigForm" novalidate><div class="rd-approver-config"><fieldset><legend>Responsable 1</legend><label><span>Nombre completo</span><input id="approver1Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver1Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver1Email" type="email" maxlength="190" required></label></fieldset><fieldset><legend>Responsable 2</legend><label><span>Nombre completo</span><input id="approver2Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver2Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver2Email" type="email" maxlength="190" required></label></fieldset></div><p id="approverConfigStatus" class="rd-form-status" role="status"></p><div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="approverConfigModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="saveApproverConfig" type="submit">Guardar responsables</button></div></form></div></div>
+    <?php endif; ?>
     <div class="rd-modal" id="partialModal" hidden role="dialog" aria-modal="true" aria-labelledby="partialModalTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="partialModalTitle">Aprobación parcial</h2></div><button class="rd-modal__close" type="button" data-close-modal="partialModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><p class="rd-modal__description">Resuelve todos los comprobantes. Cada rechazo debe incluir un motivo.</p><div class="rd-partial-list" id="partialDecisionList"></div><div class="rd-modal__actions"><strong id="partialApprovedTotal">Aprobado: $0</strong><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="partialModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="savePartialButton" type="button">Guardar revisión parcial</button></div></div></div>
     <?php endif; ?>
 
-    <script src="js/shared_ui.js?v=2"></script>
-    <script src="js/modal_config_cc.js"></script>
-    <script src="js/rendiciones.js?v=20260825-1" defer></script>
+    <script src="js/shared_ui.js?v=20260828-session-1"></script>
+    <script src="js/modal_config_cc.js?v=20260826-3"></script>
+    <script src="js/rendiciones.js?v=20260826-7" defer></script>
     <?php if (userHasPermission($rolUsuario, 'cc.manage') || userHasPermission($rolUsuario, 'companies.manage')): ?>
     <?php include __DIR__ . '/components/modal_config_cc.php'; ?>
     <?php endif; ?>

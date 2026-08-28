@@ -16,7 +16,7 @@ $csrfToken = getCsrfToken();
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/shell.css?v=2">
+    <link rel="stylesheet" href="css/shell.css?v=20260828-session-1">
     <link rel="stylesheet" href="css/modal_config_cc.css">
     <link rel="stylesheet" href="css/usuarios.css?v=1">
 </head>
@@ -128,8 +128,8 @@ $csrfToken = getCsrfToken();
     </div>
 
     <?php include __DIR__ . '/components/modal_config_cc.php'; ?>
-    <script src="js/shared_ui.js?v=2"></script>
+    <script src="js/shared_ui.js?v=20260828-session-1"></script>
     <script src="js/modal_config_cc.js?v=11"></script>
-    <script src="js/usuarios.js?v=1"></script>
+    <script src="js/usuarios.js?v=20260826-1"></script>
 </body>
 </html>

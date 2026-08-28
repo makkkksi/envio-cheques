@@ -19,6 +19,7 @@ $deploymentEntries = [
     'LOGO-HOLDING-AUTOMARCO.png',
     'index.php',
     'index.html',
+    'seller_session.js',
     'script.js',
     'styles.css',
 ];
@@ -123,9 +124,12 @@ $requiredCentralTables = [
     'log_envios_informes',
     'configuraciones_sistema',
     'presupuestos_vendedores',
+    'aprobadores_rendiciones',
     'rendiciones_gastos',
     'rendicion_documentos',
     'rendicion_historial_estados',
+    'solicitudes_aprobacion',
+    'solicitud_aprobacion_historial',
 ];
 $missingSetupTables = array_values(array_diff($requiredCentralTables, $setupTables));
 sort($missingSetupTables);
@@ -148,9 +152,12 @@ if (!is_file($rendicionesSetupPath)) {
     $rendicionesTables = array_map('strtolower', array_unique($rendicionesMatches[1] ?? []));
     $requiredRendicionesTables = [
         'presupuestos_vendedores',
+        'aprobadores_rendiciones',
         'rendiciones_gastos',
         'rendicion_documentos',
         'rendicion_historial_estados',
+        'solicitudes_aprobacion',
+        'solicitud_aprobacion_historial',
     ];
     $missingRendicionesTables = array_values(array_diff($requiredRendicionesTables, $rendicionesTables));
     if ($missingRendicionesTables) {
@@ -159,7 +166,7 @@ if (!is_file($rendicionesSetupPath)) {
             echo "  [ERROR] Tabla ausente en setup_rendiciones.sql: {$tableName}\n";
         }
 } else {
-    echo "OK: migración productiva de Rendiciones contiene sus 4 tablas.\n";
+    echo "OK: migración productiva de Rendiciones contiene sus 7 tablas.\n";
 }
 
 echo "\n=== CONTRATO ESTÁTICO DE RENDICIONES ===\n";
@@ -167,7 +174,7 @@ $rendicionesCodeFiles = [];
 foreach ($rootFiles as $relative => $absolute) {
     if (strpos($relative, 'api/rendiciones/') === 0
         || strpos($relative, 'admin/api/rendiciones/') === 0
-        || in_array($relative, ['services/RendicionesService.php', 'services/RendicionesDocumentService.php', 'services/ErpSellerDirectoryService.php'], true)) {
+        || in_array($relative, ['services/RendicionesService.php', 'services/RendicionesDocumentService.php', 'services/ErpSellerDirectoryService.php', 'services/ApprovalWorkflowService.php'], true)) {
         $rendicionesCodeFiles[$relative] = $absolute;
     }
 }

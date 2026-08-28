@@ -14,21 +14,9 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/auth.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    $httpsEnabled = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['SERVER_PORT'] ?? null) === '443')
-        || (defined('APP_ENV') && APP_ENV === 'production');
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path'     => '/',
-        'domain'   => '',
-        'secure'   => $httpsEnabled,
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
-    session_start();
-}
+startSellerSession();
 
 $vendedor_id = null;
 if (isset($_REQUEST['vendedor_id']) && $_REQUEST['vendedor_id'] !== '') {
@@ -122,9 +110,9 @@ try {
         exit;
     }
 
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
+    session_regenerate_id(true);
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $authenticatedAt = time();
 
     $_SESSION['vendedor_auth'] = [
         'vendedor_id' => $vendedor_id,
@@ -132,9 +120,11 @@ try {
         'email' => $sellerEmail,
         'nombre' => $sellerName,
         'empresa_origen' => $empresa ?: 'DESCONOCIDA',
-        'auth_time' => time(),
+        'auth_time' => $authenticatedAt,
+        'last_activity' => $authenticatedAt,
         'csrf_token' => $_SESSION['csrf_token']
     ];
+    refreshSessionCookie(SESSION_CONTEXT_SELLER, true);
 
     echo json_encode([
         'success' => true, 

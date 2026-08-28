@@ -38,6 +38,115 @@ function getAdminJsonHeaders() {
 }
 
 // ==========================================
+// SESIÓN ADMINISTRATIVA: HEARTBEAT + 401 GLOBAL
+// ==========================================
+const ADMIN_SESSION_STATUS_URL = 'api/auth/session_status.php';
+const adminNativeFetch = window.fetch.bind(window);
+let adminSessionExpiredVisible = false;
+let adminSessionHeartbeatPromise = null;
+
+function isAdministrativeApiRequest(resource) {
+    const value = typeof resource === 'string' ? resource : (resource?.url || '');
+    if (!value || value.includes('session_status.php')) return false;
+    try {
+        const url = new URL(value, window.location.href);
+        return url.origin === window.location.origin && url.pathname.includes('/admin/api/');
+    } catch (_) {
+        return false;
+    }
+}
+
+function showAdminSessionExpired() {
+    if (adminSessionExpiredVisible) return;
+    adminSessionExpiredVisible = true;
+    const returnTo = `${window.location.pathname.split('/').pop() || 'index.php'}${window.location.search}${window.location.hash}`;
+    const overlay = document.createElement('div');
+    overlay.className = 'suite-session-overlay';
+    overlay.id = 'suiteSessionExpired';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'suiteSessionExpiredTitle');
+    overlay.innerHTML = `<div class="suite-session-card">
+        <span class="suite-session-card__icon" aria-hidden="true">!</span>
+        <h2 id="suiteSessionExpiredTitle">Tu sesión administrativa finalizó</h2>
+        <p>Por seguridad debes volver a iniciar sesión. Regresarás a este mismo módulo después de ingresar.</p>
+        <a class="suite-session-card__action" href="login.php?return_to=${encodeURIComponent(returnTo)}">Volver a iniciar sesión</a>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('a')?.focus();
+}
+
+window.fetch = async function suiteAuthenticatedFetch(resource, options = {}) {
+    const response = await adminNativeFetch(resource, { credentials: 'same-origin', ...options });
+    if (response.status === 401 && isAdministrativeApiRequest(resource)) {
+        showAdminSessionExpired();
+    }
+    return response;
+};
+
+async function refreshAdminSession() {
+    if (adminSessionHeartbeatPromise || document.visibilityState !== 'visible' || adminSessionExpiredVisible) return;
+    adminSessionHeartbeatPromise = adminNativeFetch(ADMIN_SESSION_STATUS_URL, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store'
+    });
+    try {
+        const response = await adminSessionHeartbeatPromise;
+        if (response.status === 401) showAdminSessionExpired();
+    } catch (_) {
+        // Una caída de red no equivale a expiración; los módulos informarán el error operativo.
+    } finally {
+        adminSessionHeartbeatPromise = null;
+    }
+}
+
+window.refreshAdminSession = refreshAdminSession;
+
+// Actualización de datos del módulo activo sin navegación ni reinicio de sesión.
+const suiteRefreshHandlers = [];
+window.registerSuiteRefresh = function registerSuiteRefresh(handler) {
+    if (typeof handler === 'function' && !suiteRefreshHandlers.includes(handler)) {
+        suiteRefreshHandlers.push(handler);
+    }
+};
+
+async function executeSuiteRefresh() {
+    const button = document.getElementById('btnHeaderRefresh');
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    button.classList.add('is-loading');
+    button.setAttribute('aria-busy', 'true');
+    try {
+        if (!suiteRefreshHandlers.length) {
+            throw new Error('Este módulo no tiene una actualización de datos disponible.');
+        }
+        const results = await Promise.allSettled(suiteRefreshHandlers.map((handler) => Promise.resolve(handler())));
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure) throw failure.reason;
+        showToast('Datos actualizados sin cerrar la sesión.', 'success');
+    } catch (error) {
+        showToast(error?.message || 'No fue posible actualizar los datos.', 'error');
+    } finally {
+        button.disabled = false;
+        button.classList.remove('is-loading');
+        button.removeAttribute('aria-busy');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btnHeaderRefresh')?.addEventListener('click', executeSuiteRefresh);
+    window.setTimeout(refreshAdminSession, 60000);
+    window.setInterval(refreshAdminSession, 300000);
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshAdminSession();
+});
+window.addEventListener('focus', refreshAdminSession);
+
+// ==========================================
 // 2. VISOR FOTOGRÁFICO AVANZADO (LIGHTBOX)
 // Zoom, Rotación 90°, Arrastre (Mouse/Touch), Alto Contraste y Descarga
 // ==========================================

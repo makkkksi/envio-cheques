@@ -5,7 +5,8 @@
  */
 
 // Si tiene sesión administrativa activa o se consulta la raíz, derivar al portal admin
-session_start();
+require_once __DIR__ . '/config/auth.php';
+startAdminSession();
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
     header('Location: admin/index.php');
     exit;

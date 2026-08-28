@@ -320,7 +320,10 @@ Durante la auditoría general de seguridad y rendimiento de Julio de 2026, se ap
 
 ## 11. Sesión Administrativa y RBAC Granular (Agosto 2026)
 
-- `startSecureSession()` centraliza cookies `HttpOnly`, `SameSite=Strict`, `use_only_cookies` y `use_strict_mode`; el flag `Secure` es obligatorio en producción/HTTPS y se adapta únicamente al entorno HTTP local de Laragon.
+- `startSecureSession()` centraliza cookies `HttpOnly`, `use_only_cookies` y `use_strict_mode`; el flag `Secure` es obligatorio en producción/HTTPS y se adapta únicamente al entorno HTTP local de Laragon.
+- Admin y vendedor usan nombres de cookie independientes. Admin aplica `SameSite=Strict`; vendedor usa `SameSite=Lax` para WebView. El logout de un contexto no puede destruir el otro.
+- `session.gc_maxlifetime` se fija en 24 horas, por encima de los TTL lógicos. Admin expira tras 12 horas inactivo o 16 horas absolutas; vendedor tras 12 horas inactivo o 24 horas absolutas. Los valores pueden ajustarse con variables de entorno sin modificar código.
+- Los heartbeats sólo renuevan sesiones válidas y las cookies se reemiten como máximo cada cinco minutos. El frontend reintenta una única vez el request que recibió `401`, después de verificar o reconstruir la sesión; nunca entra en ciclos de reautenticación.
 - Al autenticar se regenera el ID y se almacenan `admin_user_id`, `admin_user_nombre`, `admin_user_email`, `admin_user_rol` y `admin_last_activity`.
 - Cada request administrativo vuelve a consultar `usuarios` por ID. Una baja lógica o cambio de rol invalida o actualiza los privilegios de la sesión sin esperar un nuevo login.
 - `requirePermission()` aplica la matriz granular también en APIs. Los permisos de interfaz son sólo una ayuda visual, nunca el control de seguridad principal.
@@ -330,10 +333,14 @@ Durante la auditoría general de seguridad y rendimiento de Julio de 2026, se ap
 ## 12. Seguridad del Módulo de Rendiciones
 
 - `requireSellerContext()` deriva vendedor y empresa exclusivamente desde `$_SESSION['vendedor_auth']`; los payloads no pueden sobrescribirlos.
+- Tras limpiar los parámetros sensibles de la URL, el navegador conserva temporalmente en `sessionStorage` la pareja vendedor/empresa validada. Este respaldo desaparece al cerrar la pestaña y sólo se usa para volver a ejecutar `auth_seller.php`, que revalida la identidad contra ERP.
 - La sesión guarda `empresa_id` central además del `vend_cod`, evitando colisiones de códigos ERP entre razones sociales.
 - Las mutaciones del vendedor y de administración requieren CSRF ligado a la sesión.
 - Las fotos se validan por MIME real con `finfo`, límite de 10 MB, nombre aleatorio y ruta generada por servidor.
 - `document_hash` tiene índice único y los errores de duplicidad se transforman en respuesta `409` sin exponer SQL.
 - El Magic Token se almacena hasheado, expira y se consume con bloqueo de fila. Los enlaces `GET` sólo abren una confirmación; la decisión usa `POST`.
-- `RENDICIONES_APPROVER_EMAIL` debe configurarse como variable de entorno productiva. Nunca se incorpora el correo del aprobador al repositorio.
+- Los destinatarios de excesos se administran en `aprobadores_rendiciones`; nunca se incorporan correos personales al código ni a la URL. El backend ignora descriptores enviados por el navegador y vuelve a cargar el responsable activo por `id`.
+- Cada envío rota un token aleatorio de 32 bytes, persiste sólo su SHA-256, snapshot del destinatario, emisor y fecha. El `GET` únicamente muestra antecedentes; la decisión se registra por `POST` con CSRF, bloqueo de fila, expiración y consumo único.
+- El rechazo de un exceso por Tesorería requiere `rendiciones.manage`, CSRF y motivo obligatorio. Se ejecuta con bloqueo transaccional, libera el compromiso y marca como consumido cualquier token ya emitido antes de pasar a `RECHAZADA`.
+- El comprobante PDF administrativo exige `rendiciones.view`, valida el `id`, usa exclusivamente consultas preparadas y sólo existe para decisiones `APROBADO`. No incluye el Magic Token ni correos; su firma se deriva de snapshots inmutables de nombre/cargo y añade un código SHA-256 abreviado de verificación.
 - Todas las transiciones críticas insertan historial y las acciones administrativas también se registran en `audit_logs`.

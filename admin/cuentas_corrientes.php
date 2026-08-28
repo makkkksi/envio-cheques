@@ -24,8 +24,8 @@ $csrfToken = getCsrfToken();
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/cuentas_corrientes.css">
-    <link rel="stylesheet" href="css/shell.css?v=1">
-    <link rel="stylesheet" href="css/modal_config_cc.css">
+    <link rel="stylesheet" href="css/shell.css?v=20260828-session-1">
+    <link rel="stylesheet" href="css/modal_config_cc.css?v=20260826-4">
 </head>
 <body data-can-manage-cc="<?php echo $canManageCc ? '1' : '0'; ?>">
 
@@ -197,8 +197,8 @@ $csrfToken = getCsrfToken();
         </div>
     </div>
 
-    <script src="js/shared_ui.js?v=1"></script>
-    <script src="js/modal_config_cc.js"></script>
-    <script src="js/cuentas_corrientes.js?v=11"></script>
+    <script src="js/shared_ui.js?v=20260828-session-1"></script>
+    <script src="js/modal_config_cc.js?v=20260826-3"></script>
+    <script src="js/cuentas_corrientes.js?v=20260826-1"></script>
 </body>
 </html>

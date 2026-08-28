@@ -12,6 +12,11 @@
     align-items: center;
     justify-content: center;
 }
+
+/* El componente compartido usa el atributo hidden como fuente de verdad. */
+#modalConfigCC:not([hidden]) {
+    display: flex;
+}
 .modal-content-cc {
     background-color: #fff;
     padding: 24px;

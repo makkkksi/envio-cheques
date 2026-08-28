@@ -17,6 +17,77 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
+.suite-session-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.56);
+    backdrop-filter: blur(4px);
+}
+
+.suite-session-card {
+    width: min(430px, 100%);
+    padding: 30px;
+    border: 1px solid #dbe4f0;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+    text-align: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.suite-session-card__icon {
+    display: inline-grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    margin-bottom: 16px;
+    border-radius: 50%;
+    background: #fef3c7;
+    color: #92400e;
+    font-family: 'Outfit', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.suite-session-card h2 {
+    margin: 0 0 9px;
+    color: #0f172a;
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+}
+
+.suite-session-card p {
+    margin: 0 0 22px;
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.suite-session-card__action {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 20px;
+    border-radius: 9px;
+    background: #1e3a8a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.suite-session-card__action:hover,
+.suite-session-card__action:focus-visible {
+    background: #1e40af;
+    outline: 3px solid rgba(37, 99, 235, 0.22);
+    outline-offset: 2px;
+}
+
 /* Marca / Logotipo ERP */
 .shell-brand-group {
     display: flex;
@@ -36,6 +107,14 @@
     border-radius: 6px;
     letter-spacing: 0.6px;
     box-shadow: 0 2px 4px rgba(30, 58, 138, 0.2);
+}
+
+.shell-brand-logo {
+    display: block;
+    width: 128px;
+    height: 28px;
+    object-fit: contain;
+    object-position: left center;
 }
 
 .shell-brand-title {
@@ -188,6 +267,13 @@
     color: #0f172a;
     border-color: #94a3b8;
 }
+
+.shell-btn-refresh { min-width: 44px; min-height: 44px; }
+.shell-btn-refresh svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.shell-btn-refresh:disabled { opacity: .62; cursor: wait; }
+.shell-btn-refresh.is-loading svg { animation: shell-refresh-spin .72s linear infinite; }
+
+@keyframes shell-refresh-spin { to { transform: rotate(360deg); } }
 
 .shell-btn-logout {
     background: transparent;
@@ -412,9 +498,11 @@
     .shell-tab { padding-inline: 9px; }
     .shell-right-zone { gap: 6px; }
     .shell-btn-config, .shell-btn-logout { padding-inline: 8px; }
+    .shell-btn-refresh span { display: none; }
 }
 
 @media (max-width: 640px) {
+    .shell-brand-logo { width: 112px; height: 25px; }
     .shell-header {
         display: flex;
         padding: 6px 10px;
@@ -429,4 +517,9 @@
         width: 100%;
         justify-content: center;
     }
+    .shell-btn-refresh span { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shell-btn-refresh.is-loading svg { animation-duration: 1.5s; }
 }

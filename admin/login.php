@@ -12,9 +12,26 @@ require_once __DIR__ . '/../services/AuditService.php';
 
 startSecureSession();
 
+function sanitizeAdminReturnTo(string $value): string
+{
+    $value = str_replace(["\r", "\n", '\\'], '', trim($value));
+    if ($value === '') return 'index.php';
+    $parts = parse_url($value);
+    if ($parts === false || isset($parts['scheme']) || isset($parts['host'])) return 'index.php';
+    $page = basename((string)($parts['path'] ?? ''));
+    $allowed = ['index.php', 'cuentas_corrientes.php', 'rendiciones.php', 'usuarios.php', 'detalle.php'];
+    if (!in_array($page, $allowed, true)) return 'index.php';
+    $target = $page;
+    if (!empty($parts['query'])) $target .= '?' . $parts['query'];
+    if (!empty($parts['fragment'])) $target .= '#' . rawurlencode((string)$parts['fragment']);
+    return $target;
+}
+
+$returnTo = sanitizeAdminReturnTo((string)($_POST['return_to'] ?? $_GET['return_to'] ?? ''));
+
 // Redireccionar si ya está logueado
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
-    header('Location: index.php');
+    header('Location: ' . $returnTo);
     exit;
 }
 
@@ -66,7 +83,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['admin_user_email'] = $user['email'];
                         $_SESSION['admin_user_rol'] = $user['rol'];
                         $_SESSION['admin_last_activity'] = time();
+                        $_SESSION['admin_created_at'] = time();
                         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                        refreshSessionCookie(SESSION_CONTEXT_ADMIN, true);
 
                         AuditService::log(
                             $pdo,
@@ -77,9 +96,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
 
                         if ($user['rol'] === 'SUPERVISORA_CC') {
-                            header('Location: cuentas_corrientes.php');
+                            header('Location: ' . ($returnTo !== 'index.php' ? $returnTo : 'cuentas_corrientes.php'));
                         } else {
-                            header('Location: index.php');
+                            header('Location: ' . $returnTo);
                         }
                         exit;
                     }
@@ -129,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <form method="POST" action="login.php">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+            <input type="hidden" name="return_to" value="<?php echo htmlspecialchars($returnTo); ?>">
 
             <div class="form-group">
                 <label for="email">Correo Electrónico</label>

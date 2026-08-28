@@ -558,6 +558,14 @@ Restablece el hash y revoca cualquier token Bearer existente del usuario objetiv
 
 Todas las respuestas usan `{ "success": true/false, ... }`. Las mutaciones con sesión requieren `X-CSRF-Token`. Ningún endpoint de vendedor acepta `vendedor_id` o `empresa_id`: ambos se obtienen exclusivamente de `$_SESSION['vendedor_auth']`.
 
+### GET `/api/auth/session_vendedor.php`
+
+Heartbeat y consulta de sesión para Cheques y Rendiciones. Renueva la actividad de una sesión válida y devuelve identidad canónica, empresa, expiración restante y CSRF vigente. Responde `401` cuando no existe una sesión recuperable.
+
+### GET `/admin/api/auth/session_status.php`
+
+Heartbeat del Shell ERP. Revalida usuario, estado y rol contra `usuarios`, actualiza la actividad y entrega la expiración restante. No recibe credenciales ni reemplaza el login.
+
 ### POST `/api/rendiciones/guardar_documento_bolsa.php`
 
 `multipart/form-data` con `tipo_documento`, `categoria_gasto`, `fecha_emision`, `monto` y `foto_documento`. Documentos normales exigen `rut_proveedor` y `numero_documento`; `CENA_CLIENTE` exige los cinco campos tributarios; `PEAJE` sólo exige fecha, monto y fotografía.
@@ -594,17 +602,27 @@ Filtros opcionales: `estado`, `pagina`, `limite`. Retorna sólo rendiciones del 
 
 ### POST `/api/rendiciones/aprobar_exceso.php`
 
-Endpoint público de capacidad limitada. La vista `/rendiciones/aprobar_exceso.php` obtiene confirmación humana y envía:
+Endpoint público de capacidad limitada. La vista `/rendiciones/aprobar_exceso.php` presenta el resumen financiero, comprobantes y datos SII antes de obtener confirmación humana y enviar:
 
 ```json
-{ "token": "64-caracteres-hex", "decision": "APROBADO", "comentario": "Opcional" }
+{ "token": "64-caracteres-hex", "decision": "APROBADO", "comentario": "Opcional al aprobar; obligatorio al rechazar" }
 ```
 
 El token expira a las 48 horas y sólo puede consumirse una vez. Aprobar mueve la rendición a `EN_REVISION_TESORERIA`; rechazar la mueve a `RECHAZADA` y libera el presupuesto comprometido.
 
+Al resolver correctamente, la respuesta incorpora `decision`, `aprobador_nombre` y `aprobador_cargo`. La vista reemplaza de inmediato el formulario por un estado final sin controles reutilizables.
+
+### GET `/admin/reportes/comprobante_aprobacion_exceso.php?id={id}`
+
+Requiere `rendiciones.view`. Genera en demanda un PDF imprimible únicamente cuando `decision_exceso = APROBADO`. Usa los snapshots históricos de nombre/cargo, la fecha de decisión, el resumen financiero y los comprobantes activos. El documento certifica la aprobación gerencial del exceso; no representa aprobación final ni pago de la rendición.
+
 ### GET `/admin/api/rendiciones/get_rendiciones.php`
 
 Requiere `rendiciones.view`. Filtros: `estado`, `mes`, `vendedor_id`, `empresa_id`, `tipo`, `pagina`, `limite`.
+
+### GET `/admin/api/rendiciones/get_dashboard_analitico.php`
+
+Requiere `rendiciones.view`. Recibe `mes=YYYY-MM` y `ventana=6|12`. Consolida por `(empresa_id, vendedor_id)` presupuesto activo, monto aprobado, monto pendiente, rendiciones aprobadas/rechazadas, casos con exceso aprobado, ticket promedio y tendencia mensual. La respuesta incluye un resumen holding y `fondos_por_tipo`, comparación estandarizada entre `MENSUAL` y `GIRA` con cantidad de fondos, promedio, asignado, aprobado, pendiente, ejecución y excesos. No entrega nombres libres de giras y no considera rendiciones rechazadas como gasto ni como exceso efectivo.
 
 ### GET `/admin/api/rendiciones/get_detalle_rendicion.php?id={id}`
 
@@ -635,8 +653,13 @@ Requiere `rendiciones.manage`. Consulta en modo de sólo lectura el catálogo `t
 
 ### POST `/admin/api/rendiciones/cambiar_estado.php`
 
-Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `APROBAR_TOTAL`, `APROBAR_PARCIAL`, `RECHAZAR`, `MARCAR_PAGADA` y `REENVIAR_EXCESO`. La aprobación parcial exige una decisión para cada documento; el reenvío rota el Magic Token anterior.
+Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `APROBAR_TOTAL`, `APROBAR_PARCIAL`, `RECHAZAR`, `RECHAZAR_EXCESO_TESORERIA`, `MARCAR_PAGADA` y `REENVIAR_EXCESO`. Para `REENVIAR_EXCESO` se exige `aprobador_id`; el servidor carga el responsable activo, guarda snapshots y rota el Magic Token anterior. `RECHAZAR_EXCESO_TESORERIA` sólo opera desde `PENDIENTE_APROBACION_EXCESO`, exige motivo, libera íntegramente el compromiso e invalida cualquier enlace emitido sin enviar correo nuevo.
+
+### GET|POST `/admin/api/rendiciones/gestion_aprobadores.php`
+
+- `GET` requiere `rendiciones.manage` y devuelve los dos responsables activos para que Tesorería elija el destinatario.
+- `POST` requiere `users.manage` y CSRF. Recibe exactamente dos elementos `{ orden, nombre, cargo, email }`, valida correos distintos y actualiza por posición sin eliminación física.
 
 ### GET|POST `/admin/api/rendiciones/gestion_presupuestos.php`
 
-Requiere `rendiciones.manage`. `POST` admite `CREAR`, `ACTUALIZAR` y `DESACTIVAR`; no existe operación física de eliminación. En crear y actualizar, el servidor ignora cualquier nombre o correo aportado por el cliente y vuelve a resolver ambos campos mediante `(empresa_id, vendedor_id)` en el ERP correspondiente.
+Requiere `rendiciones.manage`. `POST` admite `CREAR`, `ACTUALIZAR` y `DESACTIVAR`; no existe operación física de eliminación. En crear y actualizar, el servidor ignora cualquier nombre o correo aportado por el cliente y vuelve a resolver ambos campos mediante `(empresa_id, vendedor_id)` en el ERP correspondiente. Para `GIRA`, exige `nombre_gira` de 3–100 caracteres y fechas válidas; deriva `periodo_mes` desde `fecha_inicio`, por lo que no confía en un período mensual oculto enviado por el navegador.

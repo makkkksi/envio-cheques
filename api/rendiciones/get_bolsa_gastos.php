@@ -38,6 +38,7 @@ try {
     $stmtBudgets = $pdo->prepare(
         'SELECT p.id, p.tipo_presupuesto, p.nombre_gira, p.periodo_mes,
                 p.fecha_inicio, p.fecha_fin, p.monto_asignado, p.monto_utilizado,
+                p.estado_aprobacion,
                 (p.monto_asignado - p.monto_utilizado) AS saldo_disponible,
                 COALESCE((
                     SELECT SUM(r.monto_total_aprobado)
@@ -49,12 +50,15 @@ try {
          WHERE p.empresa_id = :empresa_id
            AND p.vendedor_id = :vendedor_id
            AND p.activo = :activo
+           AND (p.tipo_presupuesto = :tipo_mensual OR p.estado_aprobacion = :estado_aprobado)
          ORDER BY p.periodo_mes DESC, p.tipo_presupuesto ASC, p.id DESC'
     );
     $stmtBudgets->execute([
         ':estado_aprobada' => 'APROBADA',
         ':estado_parcial' => 'APROBADA_PARCIAL',
         ':estado_pagada' => 'PAGADA',
+        ':tipo_mensual' => 'MENSUAL',
+        ':estado_aprobado' => 'APROBADO',
         ':empresa_id' => $seller['empresa_id'],
         ':vendedor_id' => $seller['vendedor_id'],
         ':activo' => 1,

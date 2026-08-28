@@ -375,7 +375,7 @@ function actualizarTemporizadorCorte() {
 }
 
 function cargarDatosCC() {
-    fetch('api/get_gestion_cc.php')
+    return fetch('api/get_gestion_cc.php')
         .then(res => res.json())
         .then(data => {
             if (!data.success) {
@@ -757,6 +757,7 @@ function reenviarBitacoraCC(logId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    window.registerSuiteRefresh?.(cargarDatosCC);
     cargarDatosCC();
     setInterval(actualizarTemporizadorCorte, 10000); 
 });

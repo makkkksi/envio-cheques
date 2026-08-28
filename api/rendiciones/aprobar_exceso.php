@@ -23,6 +23,9 @@ try {
     if (!preg_match('/^[a-f0-9]{64}$/', $rawToken) || !in_array($decision, RendicionesService::DECISIONES_EXCESO, true)) {
         throw new InvalidArgumentException('Token o decisión no válidos.');
     }
+    if ($decision === 'RECHAZADO' && $comment === '') {
+        throw new InvalidArgumentException('Indique el motivo del rechazo.');
+    }
 
     $pdo = Database::getCobranzasConnection();
     $pdo->beginTransaction();
@@ -38,6 +41,12 @@ try {
     $rendition = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$rendition) {
         throw new DomainException('El enlace de aprobación no es válido.');
+    }
+    $approverName = trim((string)($rendition['aprobador_nombre_snapshot'] ?? ''));
+    $approverTitle = trim((string)($rendition['aprobador_cargo_snapshot'] ?? ''));
+    $approverEmail = trim((string)($rendition['aprobador_email_snapshot'] ?? ''));
+    if ($approverName === '' || !filter_var($approverEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new DomainException('La solicitud no tiene un responsable válido asociado. Tesorería debe emitir un nuevo enlace.');
     }
     if ($rendition['estado'] !== 'PENDIENTE_APROBACION_EXCESO' || $rendition['token_exceso_usado_at'] !== null) {
         throw new DomainException('Este enlace ya fue utilizado o la rendición fue resuelta.');
@@ -60,7 +69,7 @@ try {
     );
     $stmtUpdate->execute([
         ':decision' => $decision,
-        ':aprobado_por' => RENDICIONES_APPROVER_NAME,
+        ':aprobado_por' => $approverName,
         ':estado' => $nextState,
         ':motivo_rechazo' => $decision === 'RECHAZADO' ? ($comment !== '' ? mb_substr($comment, 0, 500) : 'Exceso rechazado por jefatura.') : null,
         ':id' => (int)$rendition['id'],
@@ -93,20 +102,30 @@ try {
     RendicionesService::logHistory($pdo, [
         'rendicion_id' => (int)$rendition['id'],
         'actor_tipo' => 'JEFATURA',
-        'actor_nombre' => RENDICIONES_APPROVER_NAME,
-        'actor_email' => RENDICIONES_APPROVER_EMAIL ?: null,
+        'actor_nombre' => $approverName,
+        'actor_email' => $approverEmail,
         'accion' => $decision === 'APROBADO' ? 'APROBAR_EXCESO' : 'RECHAZAR_EXCESO',
         'estado_anterior' => $rendition['estado'],
         'estado_nuevo' => $nextState,
         'comentario' => $comment !== '' ? mb_substr($comment, 0, 1000) : null,
-        'metadata' => ['monto_exceso' => (float)$rendition['monto_exceso']],
+        'metadata' => [
+            'monto_exceso' => (float)$rendition['monto_exceso'],
+            'aprobador_id' => $rendition['aprobador_solicitado_id'] ? (int)$rendition['aprobador_solicitado_id'] : null,
+            'aprobador_cargo' => $approverTitle,
+        ],
     ]);
     $pdo->commit();
 
     MailService::notificarDecisionExcesoRendicion($rendition, $decision);
     RendicionesService::jsonResponse(true, [
         'message' => $decision === 'APROBADO' ? 'Exceso aprobado correctamente.' : 'Exceso rechazado correctamente.',
-        'data' => ['rendicion_id' => (int)$rendition['id'], 'estado' => $nextState],
+        'data' => [
+            'rendicion_id' => (int)$rendition['id'],
+            'estado' => $nextState,
+            'decision' => $decision,
+            'aprobador_nombre' => $approverName,
+            'aprobador_cargo' => $approverTitle,
+        ],
     ]);
 } catch (InvalidArgumentException $exception) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) {

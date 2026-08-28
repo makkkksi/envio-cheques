@@ -38,6 +38,7 @@ function reajustarFiltros() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initSplitView();
+    window.registerSuiteRefresh?.(() => estadoActualFilter === 'GESTION_CC' ? cargarDatosGestionCC() : cargarCobranzas());
 });
 
 // ESC Key Listener para cerrar modales de Tesorería
@@ -149,7 +150,7 @@ function cargarCobranzas() {
     if (inputBuscar && inputBuscar.value.trim()) params.append('busqueda', inputBuscar.value.trim());
     if (selectEmpresa && selectEmpresa.value) params.append('empresa_id', selectEmpresa.value);
 
-    fetch(`api/get_cobranzas.php?${params.toString()}`)
+    return fetch(`api/get_cobranzas.php?${params.toString()}`)
         .then(res => res.json())
         .then(data => {
             if (!data.success) {
@@ -977,7 +978,7 @@ function debounce(func, wait) {
 // ==========================================
 
 function cargarDatosGestionCC() {
-    fetch('api/get_gestion_cc.php')
+    return fetch('api/get_gestion_cc.php')
         .then(res => res.json())
         .then(data => {
             if (!data.success) {

@@ -26,7 +26,7 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
     
     <!-- BRAND / LOGOTIPO ERP -->
     <div class="shell-brand-group">
-        <span class="shell-brand-badge">AUTOMARCO</span>
+        <img class="shell-brand-logo" src="../LOGO-HOLDING-AUTOMARCO.png" alt="Holding Automarco" width="128" height="28">
         <div class="shell-brand-title">Gestión Financiera <span>Suite</span></div>
     </div>
 
@@ -102,8 +102,27 @@ $roleBadgeData = $roleLabels[$rolUsuario] ?? ['label' => $rolUsuario, 'class' =>
             <span class="shell-role-badge <?php echo htmlspecialchars($roleBadgeData['class']); ?>"><?php echo htmlspecialchars($roleBadgeData['label']); ?></span>
         </div>
 
+        <button type="button" id="btnHeaderRefresh" class="shell-btn-config shell-btn-refresh" title="Actualizar datos sin recargar la sesión" aria-label="Actualizar datos del módulo">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5"></path>
+                <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"></path>
+            </svg>
+            <span>Recargar</span>
+        </button>
+
         <?php if (userHasPermission($rolUsuario, 'cc.manage') || userHasPermission($rolUsuario, 'companies.manage')): ?>
-        <button type="button" id="btnHeaderConfig" class="shell-btn-config" title="Configurar parámetros de corte, digitadoras y empresas">
+        <?php if ($currentModule === 'rendiciones' && userHasPermission($rolUsuario, 'users.manage')): ?>
+        <button type="button" id="btnHeaderApprovers" class="shell-btn-config" title="Configurar responsables de aprobación de excesos">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"></path>
+                <path d="M19 8v6M22 11h-6"></path>
+            </svg>
+            Aprobadores
+        </button>
+        <?php endif; ?>
+
+        <button type="button" id="btnHeaderConfig" class="shell-btn-config" title="Configurar corte, correos, digitadoras y empresas">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>

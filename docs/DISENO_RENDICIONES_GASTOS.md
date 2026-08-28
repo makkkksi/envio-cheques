@@ -101,6 +101,8 @@ Para erradicar la duplicidad de gastos y asegurar integridad total:
 
 ## 5. Flujo de Aprobación de Excesos con Magic Token (Francisco J.)
 
+> **Revisión directiva del 28-08-2026:** este flujo representa el comportamiento original. La política objetivo aprobada reemplaza la escalación automática por un tope mensual ordinario, una excepción de exceso opcional iniciada por Tesorería y la aprobación previa de fondos de gira. Véase `docs/PLAN_TOPES_Y_APROBACIONES_RENDICIONES.md`. La implementación está pendiente de confirmación.
+
 Para sustituir el "WhatsApp como firma":
 
 ```

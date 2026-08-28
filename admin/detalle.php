@@ -23,7 +23,7 @@ $csrfToken = getCsrfToken();
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css?v=1">
-    <link rel="stylesheet" href="css/shell.css?v=2">
+    <link rel="stylesheet" href="css/shell.css?v=20260828-session-1">
 </head>
 <body data-can-manage-cheques="<?php echo userHasPermission($rolUsuario, 'cheques.manage') ? '1' : '0'; ?>">
 
@@ -163,7 +163,7 @@ $csrfToken = getCsrfToken();
         </main>
     </div>
 
-    <script src="js/shared_ui.js?v=2"></script>
-    <script src="admin.js?v=12"></script>
+    <script src="js/shared_ui.js?v=20260828-session-1"></script>
+    <script src="admin.js?v=20260826-1"></script>
 </body>
 </html>

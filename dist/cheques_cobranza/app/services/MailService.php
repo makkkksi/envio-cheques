@@ -376,56 +376,89 @@ class MailService
      * Envía a jefatura la solicitud de aprobación de un exceso de rendición.
      * El token crudo sólo existe durante este envío; en BD se almacena su SHA-256.
      */
-    public static function enviarSolicitudExcesoRendicion(array $rendicion, array $documentos, string $rawToken): bool
+    public static function enviarSolicitudExcesoRendicion(
+        array $rendicion,
+        array $documentos,
+        string $rawToken,
+        array $aprobador,
+        string $comentarioTesoreria = ''
+    ): bool
     {
-        if (RENDICIONES_APPROVER_EMAIL === '' || !filter_var(RENDICIONES_APPROVER_EMAIL, FILTER_VALIDATE_EMAIL)) {
-            error_log('[MailService] RENDICIONES_APPROVER_EMAIL no está configurado.');
+        $recipient = mb_strtolower(trim((string)($aprobador['email'] ?? '')));
+        $approverNameRaw = trim((string)($aprobador['nombre'] ?? ''));
+        $approverTitleRaw = trim((string)($aprobador['cargo'] ?? ''));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || $approverNameRaw === '' || $approverTitleRaw === '') {
+            error_log('[MailService] Responsable de aprobación incompleto o inválido.');
             return false;
         }
 
         $code = htmlspecialchars((string)($rendicion['codigo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $company = htmlspecialchars((string)($rendicion['empresa_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
         $seller = htmlspecialchars((string)($rendicion['vendedor_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $sellerId = (int)($rendicion['vendedor_id'] ?? 0);
         $period = htmlspecialchars((string)($rendicion['periodo_mes'] ?? ''), ENT_QUOTES, 'UTF-8');
         $type = htmlspecialchars((string)($rendicion['tipo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $tourName = htmlspecialchars(trim((string)($rendicion['nombre_gira'] ?? '')), ENT_QUOTES, 'UTF-8');
+        $fundLabel = ($rendicion['tipo_rendicion'] ?? '') === 'GIRA'
+            ? 'Gira comercial' . ($tourName !== '' ? ': ' . $tourName : '')
+            : 'Presupuesto mensual';
+        $approverName = htmlspecialchars($approverNameRaw, ENT_QUOTES, 'UTF-8');
+        $approverTitle = htmlspecialchars($approverTitleRaw, ENT_QUOTES, 'UTF-8');
+        $sellerNote = nl2br(htmlspecialchars(trim((string)($rendicion['nota_vendedor'] ?? '')), ENT_QUOTES, 'UTF-8'));
+        $treasuryNote = nl2br(htmlspecialchars(trim($comentarioTesoreria), ENT_QUOTES, 'UTF-8'));
         $total = (float)($rendicion['monto_total_rendido'] ?? 0);
         $budget = (float)($rendicion['monto_presupuesto_asignado'] ?? 0);
+        $available = (float)($rendicion['saldo_disponible_al_enviar'] ?? 0);
+        $previouslyCommitted = max(0, $budget - $available);
         $excess = (float)($rendicion['monto_exceso'] ?? 0);
         $baseApprovalUrl = PORTAL_BASE_URL . '/rendiciones/aprobar_exceso.php';
-        $approveUrl = $baseApprovalUrl . '?token=' . rawurlencode($rawToken) . '&decision=APROBADO';
-        $rejectUrl = $baseApprovalUrl . '?token=' . rawurlencode($rawToken) . '&decision=RECHAZADO';
+        $reviewUrl = $baseApprovalUrl . '?token=' . rawurlencode($rawToken);
 
         $rows = '';
         foreach ($documentos as $documento) {
             $category = htmlspecialchars((string)($documento['categoria_gasto'] ?? ''), ENT_QUOTES, 'UTF-8');
             $documentType = htmlspecialchars((string)($documento['tipo_documento'] ?? ''), ENT_QUOTES, 'UTF-8');
             $date = htmlspecialchars((string)($documento['fecha_emision'] ?? ''), ENT_QUOTES, 'UTF-8');
-            $reference = htmlspecialchars((string)($documento['numero_documento'] ?? $documento['razon_social_proveedor'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $provider = htmlspecialchars((string)($documento['razon_social_proveedor'] ?? 'Sin proveedor'), ENT_QUOTES, 'UTF-8');
+            $rut = htmlspecialchars((string)($documento['rut_proveedor'] ?? 'Sin RUT'), ENT_QUOTES, 'UTF-8');
+            $folio = htmlspecialchars((string)($documento['numero_documento'] ?? 'Sin folio'), ENT_QUOTES, 'UTF-8');
             $amount = number_format((float)($documento['monto'] ?? 0), 0, ',', '.');
             $rows .= '<tr style="border-bottom:1px solid #e2e8f0">'
-                . '<td style="padding:9px">' . $category . '</td>'
-                . '<td style="padding:9px">' . $documentType . '</td>'
+                . '<td style="padding:10px"><strong>' . $provider . '</strong><br><span style="font-size:12px;color:#64748b">' . $rut . ' · Folio ' . $folio . '</span></td>'
+                . '<td style="padding:10px">' . $category . '<br><span style="font-size:12px;color:#64748b">' . $documentType . '</span></td>'
                 . '<td style="padding:9px">' . $date . '</td>'
-                . '<td style="padding:9px">' . $reference . '</td>'
                 . '<td style="padding:9px;text-align:right">$' . $amount . '</td>'
                 . '</tr>';
+            if (($documento['categoria_gasto'] ?? '') === 'CENA_CLIENTE') {
+                $guest = htmlspecialchars((string)($documento['cliente_invitado_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $guestRut = htmlspecialchars((string)($documento['cliente_invitado_rut'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $guestCompany = htmlspecialchars((string)($documento['cliente_invitado_empresa'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $guestTitle = htmlspecialchars((string)($documento['cliente_invitado_cargo'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $purpose = htmlspecialchars((string)($documento['proposito_comercial'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $rows .= '<tr style="background:#fffbeb"><td colspan="4" style="padding:10px;font-size:12px"><strong>Antecedentes SII:</strong> ' . $guest . ' · ' . $guestRut . ' · ' . $guestCompany . ' / ' . $guestTitle . '<br><strong>Propósito:</strong> ' . $purpose . '</td></tr>';
+            }
         }
 
         $subject = '[APROBACIÓN REQUERIDA] Exceso en rendición ' . $code;
-        $html = '<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#1e293b;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden">'
+        $html = '<div style="font-family:Arial,sans-serif;max-width:720px;margin:auto;color:#1e293b;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden">'
             . '<div style="background:#172554;color:#fff;padding:24px"><h2 style="margin:0">Aprobación de exceso</h2><p style="margin:6px 0 0">Rendición ' . $code . '</p></div>'
-            . '<div style="padding:24px"><p>Hola ' . htmlspecialchars(RENDICIONES_APPROVER_NAME, ENT_QUOTES, 'UTF-8') . ',</p>'
-            . '<p><strong>' . $seller . '</strong> presentó una rendición ' . $type . ' del periodo ' . $period . ' que supera el saldo disponible.</p>'
+            . '<div style="padding:24px"><p>Hola <strong>' . $approverName . '</strong> (' . $approverTitle . '),</p>'
+            . '<p>Tesorería solicita tu decisión sobre un exceso asociado al fondo <strong>' . $fundLabel . '</strong>. El detalle completo estará disponible antes de confirmar.</p>'
+            . '<p><strong>' . $seller . '</strong> · código ERP #' . $sellerId . '<br>' . $company . ' · ' . $type . ' · ' . $period . '</p>'
             . '<table style="width:100%;border-collapse:collapse;background:#f8fafc;margin:18px 0">'
-            . '<tr><td style="padding:9px">Presupuesto</td><td style="padding:9px;text-align:right">$' . number_format($budget, 0, ',', '.') . '</td></tr>'
+            . '<tr><td style="padding:9px">Presupuesto asignado</td><td style="padding:9px;text-align:right">$' . number_format($budget, 0, ',', '.') . '</td></tr>'
+            . '<tr><td style="padding:9px">Comprometido previamente</td><td style="padding:9px;text-align:right">$' . number_format($previouslyCommitted, 0, ',', '.') . '</td></tr>'
+            . '<tr><td style="padding:9px">Saldo antes de esta rendición</td><td style="padding:9px;text-align:right">$' . number_format($available, 0, ',', '.') . '</td></tr>'
             . '<tr><td style="padding:9px">Total rendido</td><td style="padding:9px;text-align:right">$' . number_format($total, 0, ',', '.') . '</td></tr>'
             . '<tr><td style="padding:9px;font-weight:bold;color:#b91c1c">Exceso</td><td style="padding:9px;text-align:right;font-weight:bold;color:#b91c1c">$' . number_format($excess, 0, ',', '.') . '</td></tr>'
-            . '</table><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#e2e8f0"><th style="padding:9px;text-align:left">Categoría</th><th style="padding:9px;text-align:left">Documento</th><th style="padding:9px;text-align:left">Fecha</th><th style="padding:9px;text-align:left">Referencia</th><th style="padding:9px;text-align:right">Monto</th></tr></thead><tbody>' . $rows . '</tbody></table>'
-            . '<div style="display:flex;gap:12px;justify-content:center;margin-top:28px">'
-            . '<a href="' . htmlspecialchars($approveUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#15803d;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Revisar aprobación</a>'
-            . '<a href="' . htmlspecialchars($rejectUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#b91c1c;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Revisar rechazo</a>'
-            . '</div><p style="font-size:12px;color:#64748b;margin-top:24px">El enlace vence en ' . RENDICIONES_TOKEN_TTL_HOURS . ' horas y sólo puede utilizarse una vez.</p></div></div>';
+            . '</table>'
+            . ($sellerNote !== '' ? '<div style="background:#f8fafc;border-left:3px solid #64748b;padding:12px;margin:14px 0"><strong>Nota del vendedor</strong><br>' . $sellerNote . '</div>' : '')
+            . ($treasuryNote !== '' ? '<div style="background:#eff6ff;border-left:3px solid #2563eb;padding:12px;margin:14px 0"><strong>Comentario de Tesorería</strong><br>' . $treasuryNote . '</div>' : '')
+            . '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#e2e8f0"><th style="padding:9px;text-align:left">Proveedor</th><th style="padding:9px;text-align:left">Categoría</th><th style="padding:9px;text-align:left">Fecha</th><th style="padding:9px;text-align:right">Monto</th></tr></thead><tbody>' . $rows . '</tbody></table>'
+            . '<div style="text-align:center;margin-top:28px"><a href="' . htmlspecialchars($reviewUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#1d4ed8;color:#fff;padding:13px 22px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">Revisar y resolver solicitud</a></div>'
+            . '<p style="font-size:12px;color:#64748b;margin-top:24px">Abrir el enlace no registra una decisión. La aprobación o el rechazo requieren confirmación; el token vence en ' . RENDICIONES_TOKEN_TTL_HOURS . ' horas y sólo puede utilizarse una vez.</p></div></div>';
 
-        return self::sendSmtp(RENDICIONES_APPROVER_EMAIL, $subject, $html);
+        return self::sendSmtp($recipient, $subject, $html);
     }
 
     public static function notificarDecisionExcesoRendicion(array $rendicion, string $decision): bool
@@ -444,6 +477,86 @@ class MailService
         $html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1e293b;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">'
             . '<div style="background:' . $color . ';color:#fff;padding:22px"><h2 style="margin:0">Exceso ' . ucfirst($label) . '</h2></div>'
             . '<div style="padding:22px"><p>Hola ' . $seller . ',</p><p>El exceso asociado a la rendición <strong>' . $code . '</strong> fue <strong>' . $label . '</strong>.</p></div></div>';
+        return self::sendSmtp($recipient, $subject, $html);
+    }
+
+    /**
+     * Envía al responsable de jefatura la solicitud de aprobación de una gira.
+     * El token crudo solo existe durante este envío; en BD se almacena su SHA-256.
+     */
+    public static function enviarSolicitudAprobacionGira(
+        array $gira,
+        string $rawToken,
+        array $aprobador,
+        string $comentarioTesoreria = ''
+    ): bool {
+        $recipient       = mb_strtolower(trim((string)($aprobador['email'] ?? '')));
+        $approverNameRaw = trim((string)($aprobador['nombre'] ?? ''));
+        $approverTitle   = trim((string)($aprobador['cargo'] ?? ''));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || $approverNameRaw === '' || $approverTitle === '') {
+            error_log('[MailService] Responsable de gira incompleto o inválido.');
+            return false;
+        }
+
+        $tourName    = htmlspecialchars((string)($gira['nombre_gira'] ?? 'Sin nombre'), ENT_QUOTES, 'UTF-8');
+        $seller      = htmlspecialchars((string)($gira['vendedor_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $period      = htmlspecialchars((string)($gira['periodo_mes'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $amount      = number_format((float)($gira['monto_asignado'] ?? 0), 0, ',', '.');
+        $startDate   = htmlspecialchars((string)($gira['fecha_inicio'] ?? '—'), ENT_QUOTES, 'UTF-8');
+        $endDate     = htmlspecialchars((string)($gira['fecha_fin'] ?? '—'), ENT_QUOTES, 'UTF-8');
+        $justif      = nl2br(htmlspecialchars((string)($gira['justificacion_gira'] ?? ''), ENT_QUOTES, 'UTF-8'));
+        $treasury    = nl2br(htmlspecialchars(trim($comentarioTesoreria), ENT_QUOTES, 'UTF-8'));
+        $approver    = htmlspecialchars($approverNameRaw, ENT_QUOTES, 'UTF-8');
+        $ttlHours    = defined('RENDICIONES_TOKEN_TTL_HOURS') ? RENDICIONES_TOKEN_TTL_HOURS : 48;
+        $reviewUrl   = PORTAL_BASE_URL . '/rendiciones/aprobar_gira.php?token=' . rawurlencode($rawToken);
+
+        $subject = '[APROBACIÓN REQUERIDA] Gira comercial: ' . strip_tags($tourName);
+        $html    = '<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto;color:#1e293b;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden">'
+            . '<div style="background:#172554;color:#fff;padding:24px"><h2 style="margin:0">Aprobación de Gira Comercial</h2>'
+            . '<p style="margin:6px 0 0;color:#bfdbfe">' . $tourName . '</p></div>'
+            . '<div style="padding:24px"><p>Hola <strong>' . $approver . '</strong> (' . htmlspecialchars($approverTitle, ENT_QUOTES, 'UTF-8') . '),</p>'
+            . '<p>Tesorería solicita tu aprobación para la siguiente gira comercial:</p>'
+            . '<table style="width:100%;border-collapse:collapse;background:#f8fafc;margin:16px 0;font-size:0.93rem">'
+            . '<tr><td style="padding:9px;font-weight:600;color:#64748b;width:35%">Vendedor</td><td style="padding:9px">' . $seller . '</td></tr>'
+            . '<tr><td style="padding:9px;font-weight:600;color:#64748b">Nombre de gira</td><td style="padding:9px">' . $tourName . '</td></tr>'
+            . '<tr><td style="padding:9px;font-weight:600;color:#64748b">Período base</td><td style="padding:9px">' . $period . '</td></tr>'
+            . '<tr><td style="padding:9px;font-weight:600;color:#64748b">Fechas</td><td style="padding:9px">' . $startDate . ' → ' . $endDate . '</td></tr>'
+            . '<tr><td style="padding:9px;font-weight:600;color:#0f172a">Presupuesto solicitado</td><td style="padding:9px;font-weight:700;color:#0f172a">$' . $amount . '</td></tr>'
+            . '</table>'
+            . ($justif !== '' ? '<div style="background:#f0fdf4;border-left:3px solid #16a34a;padding:12px;margin:14px 0"><strong>Justificación</strong><br>' . $justif . '</div>' : '')
+            . ($treasury !== '' ? '<div style="background:#eff6ff;border-left:3px solid #2563eb;padding:12px;margin:14px 0"><strong>Nota de Tesorería</strong><br>' . $treasury . '</div>' : '')
+            . '<div style="text-align:center;margin:28px 0">'
+            . '<a href="' . htmlspecialchars($reviewUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#1d4ed8;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block;font-size:1rem">Revisar y resolver solicitud</a>'
+            . '</div>'
+            . '<p style="font-size:12px;color:#64748b">Abrir el enlace no registra una decisión. La aprobación o rechazo requieren confirmación explícita. El enlace vence en ' . $ttlHours . ' horas y sólo puede usarse una vez.</p>'
+            . '</div></div>';
+
+        return self::sendSmtp($recipient, $subject, $html);
+    }
+
+    /**
+     * Notifica al vendedor la decisión tomada sobre su gira (cuando Tesorería la habilita).
+     */
+    public static function notificarDecisionGira(array $gira, string $decision): bool
+    {
+        $recipient = trim((string)($gira['vendedor_email'] ?? ''));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            error_log('[MailService] Gira sin correo válido de vendedor para notificar resolución.');
+            return false;
+        }
+        $tourName = htmlspecialchars((string)($gira['nombre_gira'] ?? 'Gira'), ENT_QUOTES, 'UTF-8');
+        $seller   = htmlspecialchars((string)($gira['vendedor_nombre'] ?? 'Vendedor'), ENT_QUOTES, 'UTF-8');
+        $approved = $decision === 'APROBADA';
+        $label    = $approved ? 'aprobada' : 'rechazada';
+        $color    = $approved ? '#15803d' : '#b91c1c';
+        $icon     = $approved ? '✓' : '✕';
+        $subject  = '[GIRAS] ' . ucfirst($label) . ': ' . strip_tags($tourName);
+        $html     = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1e293b;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">'
+            . '<div style="background:' . $color . ';color:#fff;padding:22px"><h2 style="margin:0">' . $icon . ' Gira ' . ucfirst($label) . '</h2></div>'
+            . '<div style="padding:22px"><p>Hola <strong>' . $seller . '</strong>,</p>'
+            . '<p>La gira comercial <strong>' . $tourName . '</strong> ha sido <strong>' . $label . '</strong> por Jefatura.</p>'
+            . ($approved ? '<p>Podrá enviar rendiciones asociadas a esta gira desde el portal de vendedores.</p>' : '<p>Si tiene dudas, por favor contacte a Tesorería.</p>')
+            . '</div></div>';
         return self::sendSmtp($recipient, $subject, $html);
     }
 

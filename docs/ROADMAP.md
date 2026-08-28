@@ -208,6 +208,26 @@ Fase 5 ██████████ 100% — WebView App Eclipse, Smart Client
 
 ---
 
+## Fase 8 — Topes Presupuestarios y Aprobación Previa de Giras
+
+**Estado:** 🟨 Plan documentado; pendiente de confirmación explícita para implementar.
+
+**Objetivo:** Convertir el presupuesto mensual en tope ordinario de reembolso, conservar una excepción gerencial opcional y exigir aprobación previa de un responsable para habilitar fondos de gira.
+
+**Fuente de verdad del alcance:** [`PLAN_TOPES_Y_APROBACIONES_RENDICIONES.md`](./PLAN_TOPES_Y_APROBACIONES_RENDICIONES.md).
+
+**Entregables previstos:**
+
+- Modelo reusable de solicitudes de aprobación con token de uso único.
+- Reserva de saldo pendiente separada del gasto aprobado real.
+- Liquidación FIFO y pago con tope presupuestario.
+- Excepción mensual que no bloquea ni rechaza la rendición base.
+- Giras ocultas hasta su aprobación por el responsable elegido.
+- Reenvío, cambio de responsable, cancelación, auditoría y Dashboard actualizado.
+- Migración local/productiva, sincronización dual y QA de la matriz completa.
+
+---
+
 ## Decisiones Diferidas (No en Roadmap Actual)
 
 Estas funcionalidades fueron identificadas pero excluidas del alcance actual:
@@ -218,5 +238,4 @@ Estas funcionalidades fueron identificadas pero excluidas del alcance actual:
 | App Android nativa de fotografía | Ya se usa `capture="environment"` en WebView |
 | Firma digital electrónica | Complejidad legal (Ley 19.799 Chile) |
 | Integración bancaria para depósitos | Fuera del alcance, se hace manualmente |
-
 

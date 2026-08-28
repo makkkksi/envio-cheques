@@ -10,9 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-startSecureSession();
+startAdminSession();
 requireCsrfToken();
-clearAdminSession();
-session_regenerate_id(true);
+destroyCurrentSession(SESSION_CONTEXT_ADMIN);
 
 echo json_encode(['success' => true, 'message' => 'Sesión cerrada correctamente.']);

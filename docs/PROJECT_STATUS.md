@@ -18,6 +18,11 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 
 ## Componentes Entregados (Fase 1 y 2)
 
+- [x] **Topes y aprobaciones — Fases A/B** — Esquema aditivo aplicado localmente, solicitudes versionadas para giras/excepciones, historial inmutable y servicio transaccional central con token hasheado, expiración, reenvío, cancelación y resolución. QA local: 28 PASS con rollback, instalación limpia y migración de clon legado sin pérdida de filas. Producción aún no debe usar el nuevo contrato hasta completar la integración C–H e importar `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql`.
+- [x] **Sesiones resilientes Admin/Vendedor** — Cookies PHP separadas por contexto, TTL físico coherente, heartbeat, recuperación silenciosa tras `401`, persistencia temporal de identidad multiempresa y retorno seguro al módulo administrativo solicitado. El token del portal comercial se renueva durante actividad. SQL nuevo: ninguno.
+
+- [x] **Logo oficial en Shell ERP** — La cabecera compartida de Cheques, Cuentas Corrientes, Rendiciones y Usuarios utiliza el recurso oficial del holding desde la raíz de la aplicación, manteniendo altura compacta y adaptación móvil.
+
 - [x] `config/setup.sql` — Script DDL completo y alineado con columnas de seguridad (`token_expires_at`).
 - [x] `config/app.php` — Constantes de entorno y configuración.
 - [x] `config/db.php` — Clase Database PDO.
@@ -72,10 +77,21 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 - [x] **Identidad ERP en presupuestos administrativos** — Tesorería selecciona empresa y vendedor desde los catálogos ERP reales; nombre, correo y código quedan bloqueados contra escritura libre y se revalidan en backend antes de persistir. El directorio muestra la homologación por correo y los códigos locales por empresa. Un presupuesto mensual permite agregar una gira sin volver a capturar la identidad. Validación local: 19 comprobaciones con rollback completo. SQL nuevo: ninguno.
 - [x] **Presupuesto vendedor con resolución real** — El cupo mensual y las giras distinguen monto aprobado, monto pendiente de Tesorería y saldo disponible. La barra segmentada evita presentar una rendición en revisión como gasto aprobado, mientras el pendiente continúa reservado contra doble uso. SQL nuevo: ninguno.
 - [x] **Bloqueo de envío sin presupuesto** — La interfaz detiene la consolidación cuando el vendedor no posee un presupuesto activo y le indica solicitarlo a Gerencia. Los avisos de exceso ya no exponen el nombre de la persona aprobadora. SQL nuevo: ninguno.
+- [x] **Aprobación de excesos configurable** — El portal permite a un Administrador mantener dos responsables (nombre, cargo y correo); Tesorería selecciona el destinatario al emitir o reenviar la solicitud. El correo y la página Magic Token entregan el contexto financiero, comprobantes y datos SII antes de resolver. Requiere importar `config/migrations/2026_08_26_aprobadores_rendiciones.sql` en cada base desplegada.
+- [x] **Migración y QA local de aprobadores** — La migración 2026-08-26 quedó aplicada e idempotente en Laragon: tabla, seis columnas snapshot y restricciones verificadas; 28 comprobaciones de Rendiciones superadas, CSRF negativo HTTP 403 y paridad root/dist certificada.
+- [x] **Configuraciones separadas sin regresión** — El botón global “Configuración” conserva el panel histórico de Cuentas Corrientes (corte, correos, digitadoras, empresas y Google Sheets). En Rendiciones, “Aprobadores” abre separadamente la configuración de Gerencia/Jefatura, también disponible desde Vendedores.
+- [x] **Modal global de configuración visible** — Corregida la colisión entre `hidden` y `display:none` que impedía mostrar el panel compartido aunque sus datos cargaran correctamente. Los tres portales referencian la versión CSS renovada.
+- [x] **Comprobante PDF de exceso aprobado** — La resolución Magic Token queda cerrada visualmente tras la decisión y Tesorería puede abrir/imprimir una constancia con resumen, comprobantes, fecha, código de verificación y firma textual (nombre/cargo) del responsable seleccionado. El documento certifica el exceso, no el pago final. SQL nuevo: ninguno.
+- [x] **PDF optimizado para impresión B/N** — La constancia elimina cabeceras y bloques con tinta sólida; utiliza blanco, negro, grises, bordes finos y jerarquía tipográfica para conservar legibilidad con bajo consumo de tóner.
+- [x] **Rechazo preventivo de excesos por Tesorería** — Una rendición con exceso puede cancelarse antes de escalarla; exige motivo, libera fondos, invalida enlaces existentes y conserva auditoría sin enviar correo nuevo. SQL nuevo: ninguno.
+- [x] **Recarga interna del Shell y Dashboard financiero corregido** — Los módulos pueden actualizar datos sin recargar la sesión. Rendiciones mide exclusivamente montos efectivamente aprobados/pagados y excluye rechazados de KPIs, categorías y comparativas. SQL nuevo: ninguno.
+- [x] **Analítica histórica de vendedores** — El Dashboard compara 6/12 meses de presupuesto, aprobado, pendiente y fricción por identidad ERP/empresa. Incluye detalle mensual seleccionable, ticket promedio y señales accionables de concentración, baja ejecución, excesos recurrentes, rechazos y cupos próximos al límite. El escenario local demostrativo es reproducible e idempotente; no requiere migración SQL.
+- [x] **Giras comerciales endurecidas** — Alta administrativa con período derivado desde la fecha inicial y validaciones específicas; comprobantes restringidos al rango del viaje; saldo, exceso, correo y auditoría asociados al fondo de gira seleccionado. El Dashboard compara Mensual/Gira mediante métricas estandarizadas y omite nombres libres. Demo local: 36 fondos mensuales + 3 giras; 38 pruebas PASS. SQL nuevo: ninguno.
 
 ## Próximo trabajo inmediato
 
-1. **Módulo 3 — Fase 5:** desplegar `config/setup_rendiciones.sql` y, si las tablas ya existían, la migración `nota_vendedor` de `docs/SQL_PRODUCCION.md`; subir el paquete sincronizado y ejecutar el flujo end-to-end con fotografías y correo real de aprobación de exceso.
+1. **Nueva política de Rendiciones — continuar Fases C–H:** integrar reserva hasta tope en consolidación, liquidación FIFO de Tesorería, endpoints/correos/UI de aprobación previa de giras y excepción mensual opcional, y métricas separadas. Fases A/B ya están completas y verificadas localmente.
+2. **Módulo 3 — Fase 5:** importar `config/migrations/2026_08_26_aprobadores_rendiciones.sql`, configurar los dos responsables desde el portal y ejecutar un smoke test SMTP controlado del flujo de exceso.
 2. **Subida y Prueba Interna en Host:** Desplegar el sistema al host de pruebas (en la nube usando el directorio `dist/` o la raíz).
    - *Importante:* Recordar editar el archivo `.htaccess` subido con los datos reales de BD.
 2. Probar el flujo completo en ambiente de pruebas (Tesorería validando y modificando cobranzas).

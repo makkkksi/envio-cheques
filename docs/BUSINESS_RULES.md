@@ -263,6 +263,10 @@ Para priorizar la operatividad del vendedor, la vista de seguimiento está divid
 - Un rechazo total libera el monto comprometido. Una aprobación parcial libera la diferencia entre el total rendido y el aprobado.
 - No se puede desactivar un presupuesto con fondos comprometidos ni reducirlo por debajo de ese monto.
 - Los fondos de una gira nunca se descuentan del presupuesto mensual.
+- En una gira, `periodo_mes` se deriva de `fecha_inicio`; la fecha de término no puede ser anterior al inicio.
+- Todos los comprobantes imputados a una gira deben tener `fecha_emision` dentro de su rango de viaje.
+- El exceso de una gira se calcula contra el saldo de esa gira y se identifica como tal en vendedor, Tesorería, correo y resolución gerencial.
+- La analítica de giras se consolida únicamente por tipo `GIRA`; los nombres operativos ingresados por usuarios no se usan como dimensión del Dashboard.
 
 ### 9.4 Estados permitidos
 
@@ -279,9 +283,15 @@ No se admiten regresiones desde estados finales ni estados arbitrarios enviados 
 ### 9.5 Magic Token
 
 - Se generan 32 bytes aleatorios y en la BD sólo se almacena SHA-256.
+- El vendedor no genera ni recibe el token. Una rendición con exceso queda pendiente hasta que Tesorería elige uno de los dos responsables activos y emite la solicitud.
+- Nombre, cargo y correo se resuelven desde `aprobadores_rendiciones`; nunca se aceptan descriptores libres del navegador. La rendición conserva snapshots para mantener la atribución histórica.
 - Vigencia predeterminada: 48 horas.
 - La mutación ocurre mediante `POST` después de una confirmación humana; un `GET` del correo nunca consume el token.
 - El primer uso se registra atómicamente. Los usos posteriores son rechazados.
+- Cada reenvío rota el token anterior. Rechazar exige un motivo y aprobar permite un comentario opcional.
+- Antes de escalar a Jefatura, Tesorería puede rechazar una rendición con exceso por error operativo del vendedor. El rechazo exige motivo, libera todo el monto comprometido, no envía correo y deja inutilizable cualquier enlace que hubiese sido emitido previamente.
+- Tras resolver, la página pública elimina comentario y acciones y presenta una confirmación final inequívoca.
+- Una aprobación habilita un comprobante PDF de exceso con fecha, documentos, código de verificación y firma electrónica textual basada en el snapshot de nombre y cargo. El comprobante no acredita pago ni sustituye la revisión final de Tesorería.
 
 ### 9.6 Revisión parcial
 
@@ -289,3 +299,19 @@ No se admiten regresiones desde estados finales ni estados arbitrarios enviados 
 - Cada rechazo requiere motivo.
 - `monto_validado` puede reducir el monto declarado, pero no aumentarlo sin una nueva aprobación formal de exceso.
 - Cada decisión genera una entrada individual y una transición de cabecera en `rendicion_historial_estados`.
+- El Dashboard administrativo considera ejecución real únicamente en estados `APROBADA`, `APROBADA_PARCIAL` y `PAGADA`. Rendiciones pendientes o rechazadas no aportan monto, categorías, consumo por empresa ni tasa de exceso aprobada.
+
+### 9.7 Política directiva de topes y aprobación de giras — pendiente de implementación
+
+Las decisiones aprobadas para la próxima iteración se especifican íntegramente en `docs/PLAN_TOPES_Y_APROBACIONES_RENDICIONES.md`. Hasta su implementación y migración, el código conserva el flujo operativo anterior.
+
+- El presupuesto mensual será el máximo ordinario reembolsable.
+- Si queda saldo, se permitirá un último informe que lo exceda, advirtiendo que el pago quedará limitado al saldo.
+- Con saldo operativo cero —aprobado más pendiente reservado— no se podrán enviar nuevos informes mensuales.
+- Los documentos se liquidarán mediante FIFO (`fecha_emision`, `id`) y el último podrá recibir reembolso parcial sin dejar el lote abierto.
+- Tesorería podrá solicitar opcionalmente autorización sólo por el exceso. Rechazarla no rechazará la rendición base.
+- Cada gira requerirá aprobación previa de uno de los dos responsables configurados, seleccionado por Tesorería.
+- Una gira pendiente no será visible para el vendedor; una aprobación de gira autoriza el fondo, no sus comprobantes futuros.
+- Aumentar el monto de una gira aprobada exigirá nueva autorización. Disminuciones y correcciones no monetarias serán flexibles, auditadas y compatibles con compromisos existentes.
+- Los enlaces vencerán a las 48 horas, pero la solicitud seguirá pendiente y podrá reenviarse con rotación de token.
+- Una rendición liquidada por debajo de lo presentado podrá terminar como `PAGADA` con la etiqueta operativa “Pagada con tope presupuestario”.

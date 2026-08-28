@@ -110,17 +110,46 @@ class RendicionesService
         if (!in_array($tipo, self::TIPOS_PRESUPUESTO, true)) {
             throw new InvalidArgumentException('Tipo de presupuesto no válido.');
         }
-        self::validatePeriod($periodo);
-
         if ($tipo === 'MENSUAL') {
+            self::validatePeriod($periodo);
             return "MENSUAL|{$empresaId}|{$vendedorId}|{$periodo}";
         }
 
-        $giraKey = self::normalizeTextKey((string)$nombreGira);
-        if ($giraKey === '' || !$fechaInicio || !$fechaFin || $fechaInicio > $fechaFin) {
-            throw new InvalidArgumentException('La gira requiere nombre y un rango de fechas válido.');
+        $tourName = trim((string)$nombreGira);
+        $giraKey = self::normalizeTextKey($tourName);
+        $tourNameLength = preg_match_all('/./us', $tourName, $characters);
+        if ($giraKey === '' || $tourNameLength === false || $tourNameLength < 3 || $tourNameLength > 100) {
+            throw new InvalidArgumentException('Ingrese un nombre de gira válido, entre 3 y 100 caracteres.');
         }
+        if (!$fechaInicio || !self::isValidDate($fechaInicio)) {
+            throw new InvalidArgumentException('Ingrese una fecha de inicio válida para la gira.');
+        }
+        if (!$fechaFin || !self::isValidDate($fechaFin)) {
+            throw new InvalidArgumentException('Ingrese una fecha de término válida para la gira.');
+        }
+        if ($fechaInicio > $fechaFin) {
+            throw new InvalidArgumentException('La fecha de término no puede ser anterior al inicio de la gira.');
+        }
+        $periodo = substr($fechaInicio, 0, 7);
         return "GIRA|{$empresaId}|{$vendedorId}|{$periodo}|{$giraKey}|{$fechaInicio}|{$fechaFin}";
+    }
+
+    public static function assertDocumentsFitBudget(array $budget, array $documents): void
+    {
+        if (($budget['tipo_presupuesto'] ?? '') !== 'GIRA') {
+            return;
+        }
+        $startDate = (string)($budget['fecha_inicio'] ?? '');
+        $endDate = (string)($budget['fecha_fin'] ?? '');
+        if (!self::isValidDate($startDate) || !self::isValidDate($endDate) || $startDate > $endDate) {
+            throw new DomainException('La gira seleccionada no tiene un rango de fechas válido. Solicite a Tesorería corregirla.');
+        }
+        foreach ($documents as $document) {
+            $documentDate = (string)($document['fecha_emision'] ?? '');
+            if (!self::isValidDate($documentDate) || $documentDate < $startDate || $documentDate > $endDate) {
+                throw new DomainException('Todos los comprobantes imputados a una gira deben tener fecha dentro del período de viaje.');
+            }
+        }
     }
 
     public static function createDocumentHash(array $document, int $vendedorId, int $empresaId): string

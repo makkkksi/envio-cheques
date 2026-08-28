@@ -2,10 +2,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../config/auth.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+startSellerSession();
 
 $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 ?>
@@ -443,7 +442,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
                 <h3 class="rg-modal-title">¿Enviar Rendición?</h3>
                 <p class="rg-modal-text" id="txtConfirmMessage">Se enviará el informe a Tesorería para revisión y validación.</p>
                 <div class="rg-modal-alert" id="boxExcessWarning" hidden>
-                    <strong>Aviso de Exceso:</strong> El monto total sobrepasa tu presupuesto asignado. Se enviará una solicitud de aprobación de exceso a Gerencia.
+                    <strong>Aviso de exceso:</strong> <span id="txtExcessWarning">El monto total sobrepasa el fondo seleccionado. Se enviará una solicitud de aprobación a Gerencia.</span>
                 </div>
                 <div class="rg-modal-buttons">
                     <button type="button" class="rg-modal-btn-cancel" id="btnCancelSubmit">Cancelar</button>
@@ -493,6 +492,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 
     <!-- Toast container & scripts -->
     <div id="toastContainer" class="toast-container"></div>
-    <script src="vendedor.js?v=20260825-no-budget-1" defer></script>
+    <script src="../seller_session.js?v=20260828-session-1" defer></script>
+    <script src="vendedor.js?v=20260828-session-1" defer></script>
 </body>
 </html>

@@ -20,6 +20,9 @@ empresas ──< cobranzas >── usuarios
                 └──< historial_estados >── usuarios
 
 empresas ──< presupuestos_vendedores ──< rendiciones_gastos
+usuarios ──< aprobadores_rendiciones ──< solicitudes_aprobacion
+presupuestos_vendedores ──< solicitudes_aprobacion >── rendiciones_gastos
+solicitudes_aprobacion ──< solicitud_aprobacion_historial
                                                 │
                                                 ├──< rendicion_documentos
                                                 └──< rendicion_historial_estados
@@ -222,12 +225,22 @@ El DDL completo está disponible en [`config/setup_rendiciones.sql`](../config/s
 | `periodo_mes` | Periodo contable `YYYY-MM`; el saldo mensual no se acumula. |
 | `monto_asignado` | Cupo autorizado por Tesorería. |
 | `monto_utilizado` | Monto comprometido por rendiciones activas; se actualiza dentro de transacciones con bloqueo de fila. |
+| `estado_aprobacion` | `NO_APLICA` para mensual; una gira transita por `PENDIENTE`, `APROBADA` o `RECHAZADA`. Sólo `APROBADA` podrá exponerse al vendedor cuando se integre el nuevo flujo. |
+| `justificacion_gira` | Motivo comercial obligatorio, máximo 500 caracteres, enviado al responsable seleccionado. |
+| `solicitud_aprobacion_id` | Solicitud vigente de la gira. Versiones anteriores permanecen en `solicitudes_aprobacion`. |
+| `aprobado_at` | Fecha en que el responsable autorizó el fondo; no certifica gastos ni pago. |
 | `periodo_clave` | Clave canónica única que impide duplicar un presupuesto equivalente. |
 | `activo` | Baja lógica. Nunca se elimina físicamente un presupuesto. |
 
 El saldo disponible se deriva siempre como `monto_asignado - monto_utilizado`; no se persiste como un tercer valor mutable.
 
 Para presentación al vendedor, `monto_aprobado` se deriva de `rendiciones_gastos.monto_total_aprobado` en estados `APROBADA`, `APROBADA_PARCIAL` o `PAGADA`; el monto pendiente se calcula como `monto_utilizado - monto_aprobado`. Son valores derivados y no requieren columnas adicionales.
+
+#### Tabla: `aprobadores_rendiciones`
+
+Catálogo central de los dos responsables habilitados para resolver excesos. El Administrador configura `nombre`, `cargo` y `email`; `orden` identifica las posiciones 1 y 2 y `activo` permite baja lógica. Los correos nunca se definen en código ni en variables de entorno.
+
+Las solicitudes nuevas conservan el responsable elegido y sus snapshots en `solicitudes_aprobacion`. Los campos equivalentes de `rendiciones_gastos` se mantienen temporalmente para lectura histórica del flujo anterior; no son el contrato del nuevo dominio.
 
 #### Tabla: `rendiciones_gastos`
 
@@ -236,6 +249,10 @@ Cabecera consolidada vinculada obligatoriamente a un presupuesto. Mantiene snaps
 | Campo | Regla |
 |-------|-------|
 | `nota_vendedor` | Observación opcional de hasta 500 caracteres, enviada al consolidar la rendición. Se almacena en la cabecera y en la bitácora `ENVIAR_RENDICION`; Tesorería la visualiza en el detalle. |
+| `monto_maximo_aprobable` | Máximo pagable de esa rendición según saldo ordinario reservado y excepciones aprobadas. |
+| `monto_exceso_no_reembolsable` | Diferencia presentada que queda fuera de pago mientras no exista una excepción aprobada. |
+| `aplico_tope_presupuestario` | Indica que la liquidación fue limitada por el tope del fondo. |
+| `solicitud_excepcion_id` | Solicitud excepcional vigente; su rechazo no rechaza la rendición base. |
 
 Estados válidos:
 
@@ -252,6 +269,27 @@ PAGADA
 ```
 
 El Magic Token nunca se almacena en texto plano. `token_aprobacion_exceso_hash` contiene exclusivamente SHA-256; `token_exceso_expira` y `token_exceso_usado_at` controlan las 48 horas de vigencia y el uso único.
+
+Los campos de token anteriores permanecen sólo por compatibilidad. Las solicitudes creadas por el flujo unificado usan `solicitudes_aprobacion.token_hash`, `token_expira_at`, `token_usado_at` y `token_version`.
+
+#### Tabla: `solicitudes_aprobacion`
+
+Entidad transaccional común para `GIRA` y `EXCEPCION_MENSUAL`. Una fila apunta exactamente a `presupuesto_id` o `rendicion_id`, nunca a ambos. Cada nueva autorización incrementa `solicitud_version`; cada reenvío invalida el enlace anterior incrementando `token_version` y rotando el hash SHA-256.
+
+| Grupo | Campos y regla |
+|-------|----------------|
+| Objetivo | `tipo_solicitud`, `presupuesto_id`, `rendicion_id`, con `CHECK` de exclusividad. |
+| Responsable | `aprobador_id` y snapshots inmutables de nombre, cargo y correo. Sólo uno de los dos responsables resuelve cada versión. |
+| Montos | `monto_base_aprobable` y `monto_solicitado`; una excepción decide exclusivamente sobre el exceso. |
+| Token | 32 bytes aleatorios entregados una vez; BD guarda sólo `token_hash`, vigencia, uso y versión. |
+| Estados | `PENDIENTE_ENVIO`, `PENDIENTE_DECISION`, `ENVIO_FALLIDO`, `VENCIDA`, `APROBADA`, `RECHAZADA`, `CANCELADA`. |
+| Auditoría | Solicitante, decisión, comentarios, correo, cancelación y timestamps; `activo = 0` sólo para cancelación lógica. |
+
+Una decisión de gira habilita o rechaza el fondo, pero no aprueba comprobantes. Aprobar una excepción mensual amplía `monto_maximo_aprobable` sólo por el importe solicitado; rechazarla conserva el tope y la rendición continúa en revisión.
+
+#### Tabla: `solicitud_aprobacion_historial`
+
+Bitácora append-only del ciclo de la solicitud: creación, resultado de correo, rotación de token/responsable, vencimiento, cancelación y decisión. Guarda actor, transición, comentario, metadatos, IP y user-agent. No admite eliminación física.
 
 #### Tabla: `rendicion_documentos`
 
@@ -277,9 +315,12 @@ UNIQUE KEY uq_presupuesto_periodo_clave (periodo_clave);
 UNIQUE KEY uq_rendicion_codigo (codigo_rendicion);
 UNIQUE KEY uq_rendicion_token_hash (token_aprobacion_exceso_hash);
 UNIQUE KEY uq_rendicion_document_hash (document_hash);
+UNIQUE KEY uq_solicitud_token_hash (token_hash);
+UNIQUE KEY uq_solicitud_presupuesto_version (tipo_solicitud, presupuesto_id, solicitud_version);
+UNIQUE KEY uq_solicitud_rendicion_version (tipo_solicitud, rendicion_id, solicitud_version);
 ```
 
-> **Entorno actual:** como no hay datos reales, al alinear el esquema con el flujo dividido se recreará la base local desde `config/setup.sql`; no se requiere migración de preservación de datos.
+> **Entorno actual:** la migración aditiva `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql` está aplicada en Laragon. No modifica datos ERP ni elimina registros; en servidores debe importarse manualmente desde phpMyAdmin antes de integrar las Fases C–H.
 
 ---
 

@@ -64,7 +64,7 @@ SetEnv DB_PASS 2wkPnhSa4x
 SetEnv DB_NAME_CENTRAL bd_modulo_cobranzas
 
 # Rutas Base de la Aplicación
-SetEnv PORTAL_BASE_URL "https://www.autotec.cl/cobranza_cheques"
+SetEnv PORTAL_BASE_URL "https://www.autotec.cl/cobranza_cheques/app"
 SetEnv UPLOADS_BASE_URL "https://www.autotec.cl/cobranza_cheques/uploads"
 
 # Correo (SMTP Externo Host)

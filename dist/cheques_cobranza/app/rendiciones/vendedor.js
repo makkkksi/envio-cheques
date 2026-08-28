@@ -51,6 +51,15 @@
     }
 
     function bindEvents() {
+        document.addEventListener('seller-session-restored', (event) => {
+            const session = event.detail || {};
+            state.seller = session.seller || state.seller;
+            state.csrfToken = session.csrfToken || state.csrfToken;
+        });
+        document.addEventListener('seller-session-expired', (event) => {
+            showSessionError(event.detail?.message || 'Tu sesión venció y no pudo recuperarse. Vuelve a ingresar desde el portal comercial.');
+        });
+
         // Volver al portal comercial
         $('#btnBackPortal')?.addEventListener('click', () => {
             if (window.history.length > 1) {
@@ -266,27 +275,9 @@
     // 1. GESTIÓN DE SESIÓN DEL VENDEDOR
     // ==========================================
     async function initializeSellerSession() {
-        const params = new URLSearchParams(window.location.search);
-        const sellerId = params.get('vendedor_id') || params.get('vendedor');
-        const sellerEmail = params.get('vendedor_email');
-
-        if (sellerId || sellerEmail) {
-            const authParams = new URLSearchParams();
-            if (sellerId) authParams.set('vendedor_id', sellerId);
-            if (sellerEmail) authParams.set('vendedor_email', sellerEmail);
-            ['empresa', 'empresa_id', 'vendedor_nombre', 'nombre'].forEach((key) => {
-                if (params.get(key)) authParams.set(key, params.get(key));
-            });
-
-            const response = await fetch(`../api/auth_seller.php?${authParams.toString()}`, { credentials: 'same-origin' });
-            const payload = await response.json();
-            if (!response.ok || !payload.success) {
-                throw new Error(payload.message || 'La sesión del vendedor no es válida.');
-            }
-            state.seller = payload.data;
-            state.csrfToken = payload.data.csrf_token || state.csrfToken;
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
+        const session = await window.SellerSession.initialize();
+        state.seller = session.seller || null;
+        state.csrfToken = session.csrfToken || state.csrfToken;
     }
 
     // ==========================================
@@ -919,7 +910,7 @@
         if (budget) {
             const available = Number(budget.saldo_disponible || 0);
             const remaining = available - total;
-            $('#lblReportBudgetRemaining').textContent = `Saldo rest: ${formatMoney(remaining)}`;
+            $('#lblReportBudgetRemaining').textContent = `${budget.tipo_presupuesto === 'GIRA' ? 'Saldo gira' : 'Saldo mensual'}: ${formatMoney(remaining)}`;
             $('#lblReportBudgetRemaining').style.color = remaining < 0 ? 'var(--rg-red)' : 'var(--rg-text-muted)';
         }
     }
@@ -940,9 +931,15 @@
 
         const total = selectedDocs.reduce((sum, d) => sum + Number(d.monto || 0), 0);
         const available = Number(budget.saldo_disponible || 0);
+        const isTour = budget.tipo_presupuesto === 'GIRA';
+        const fundLabel = isTour ? `la gira “${budget.nombre_gira || 'Gira comercial'}”` : `el presupuesto mensual de ${formatPeriodMonth(budget.periodo_mes)}`;
+        const excess = Math.max(0, total - available);
 
-        $('#txtConfirmMessage').textContent = `Se enviarán ${selectedDocs.length} boletas por un total de ${formatMoney(total)} CLP a Tesorería.`;
-        $('#boxExcessWarning').hidden = total <= available;
+        $('#txtConfirmMessage').textContent = `Se imputarán ${selectedDocs.length} boletas por ${formatMoney(total)} CLP a ${fundLabel}.`;
+        $('#boxExcessWarning').hidden = excess <= 0;
+        $('#txtExcessWarning').textContent = isTour
+            ? `El informe supera en ${formatMoney(excess)} el saldo de esta gira. La solicitud de aprobación quedará asociada exclusivamente al fondo de gira, sin afectar el presupuesto mensual.`
+            : `El informe supera en ${formatMoney(excess)} el saldo mensual. Se enviará una solicitud de aprobación de exceso a Gerencia.`;
 
         $('#modalConfirmSubmit').hidden = false;
     }

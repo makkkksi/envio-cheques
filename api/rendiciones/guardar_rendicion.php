@@ -7,7 +7,6 @@ require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../../config/auth.php';
 require_once __DIR__ . '/../../services/RendicionesService.php';
-require_once __DIR__ . '/../../services/MailService.php';
 
 RendicionesService::requireMethod('POST');
 
@@ -34,7 +33,8 @@ try {
     $pdo->beginTransaction();
     $stmtBudget = $pdo->prepare(
         'SELECT id, empresa_id, vendedor_id, tipo_presupuesto, periodo_mes,
-                nombre_gira, fecha_inicio, fecha_fin, monto_asignado, monto_utilizado
+                nombre_gira, fecha_inicio, fecha_fin, monto_asignado, monto_utilizado,
+                estado_aprobacion
          FROM presupuestos_vendedores
          WHERE id = :id
            AND empresa_id = :empresa_id
@@ -52,6 +52,14 @@ try {
     $budget = $stmtBudget->fetch(PDO::FETCH_ASSOC);
     if (!$budget) {
         throw new DomainException('El presupuesto no existe, está inactivo o no pertenece al vendedor.');
+    }
+    if ($budget['tipo_presupuesto'] === 'GIRA' && ($budget['estado_aprobacion'] ?? '') !== 'APROBADO') {
+        throw new DomainException('Esta gira no se encuentra aprobada o no está disponible para rendir.');
+    }
+
+    $available = max(0.0, (float)$budget['monto_asignado'] - (float)$budget['monto_utilizado']);
+    if ($available <= 0.00) {
+        throw new DomainException('Ya has alcanzado o comprometido el tope máximo de este presupuesto. No es posible enviar nuevas rendiciones.');
     }
 
     $stmtDocument = $pdo->prepare(
@@ -84,33 +92,37 @@ try {
         $documents[] = $document;
         $total += (float)$document['monto'];
     }
+    RendicionesService::assertDocumentsFitBudget($budget, $documents);
 
-    $available = (float)$budget['monto_asignado'] - (float)$budget['monto_utilizado'];
-    $excess = max(0, $total - $available);
-    $requiresApproval = $excess > 0;
-    $targetState = $requiresApproval ? 'PENDIENTE_APROBACION_EXCESO' : 'EN_REVISION_TESORERIA';
-    $historyComment = $requiresApproval
-        ? 'Rendición enviada con exceso de presupuesto.'
+    $maximoPagable = min($total, $available);
+    $excesoNoReembolsable = max(0.0, $total - $maximoPagable);
+    $aplicoTope = $excesoNoReembolsable > 0.00 ? 1 : 0;
+    $targetState = 'EN_REVISION_TESORERIA';
+
+    $historyComment = $aplicoTope
+        ? 'Rendición enviada con tope presupuestario. Máximo reembolsable: $' . number_format($maximoPagable, 0, ',', '.') . ' (Exceso: $' . number_format($excesoNoReembolsable, 0, ',', '.') . ').'
         : 'Rendición enviada a Tesorería.';
+    if ($budget['tipo_presupuesto'] === 'GIRA') {
+        $historyComment .= ' Fondo imputado: gira comercial ' . (string)$budget['nombre_gira'] . '.';
+    }
     if ($sellerNote !== '') {
         $historyComment .= ' Nota del vendedor: ' . $sellerNote;
     }
-    $rawToken = $requiresApproval ? bin2hex(random_bytes(32)) : null;
-    $tokenHash = $rawToken !== null ? hash('sha256', $rawToken) : null;
-    $tokenExpires = $requiresApproval ? date('Y-m-d H:i:s', time() + (RENDICIONES_TOKEN_TTL_HOURS * 3600)) : null;
     $code = RendicionesService::generateRenditionCode();
 
     $stmtInsert = $pdo->prepare(
         'INSERT INTO rendiciones_gastos (
             codigo_rendicion, empresa_id, vendedor_id, vendedor_nombre, vendedor_email, nota_vendedor,
             presupuesto_id, periodo_mes, tipo_rendicion, monto_total_rendido,
-            monto_presupuesto_asignado, saldo_disponible_al_enviar, monto_exceso,
+            monto_presupuesto_asignado, saldo_disponible_al_enviar, monto_maximo_aprobable,
+            monto_exceso_no_reembolsable, aplico_tope_presupuestario, monto_exceso,
             requiere_aprobacion_exceso, token_aprobacion_exceso_hash,
             token_exceso_expira, notificacion_exceso_estado, estado, enviada_at
          ) VALUES (
             :codigo, :empresa_id, :vendedor_id, :vendedor_nombre, :vendedor_email, :nota_vendedor,
             :presupuesto_id, :periodo_mes, :tipo_rendicion, :monto_total_rendido,
-            :monto_presupuesto_asignado, :saldo_disponible, :monto_exceso,
+            :monto_presupuesto_asignado, :saldo_disponible, :monto_maximo_aprobable,
+            :monto_exceso_no_reembolsable, :aplico_tope, :monto_exceso,
             :requiere_aprobacion, :token_hash, :token_expira,
             :notificacion_estado, :estado, NOW()
          )'
@@ -128,11 +140,14 @@ try {
         ':monto_total_rendido' => number_format($total, 2, '.', ''),
         ':monto_presupuesto_asignado' => $budget['monto_asignado'],
         ':saldo_disponible' => number_format($available, 2, '.', ''),
-        ':monto_exceso' => number_format($excess, 2, '.', ''),
-        ':requiere_aprobacion' => $requiresApproval ? 1 : 0,
-        ':token_hash' => $tokenHash,
-        ':token_expira' => $tokenExpires,
-        ':notificacion_estado' => $requiresApproval ? 'PENDIENTE' : 'NO_APLICA',
+        ':monto_maximo_aprobable' => number_format($maximoPagable, 2, '.', ''),
+        ':monto_exceso_no_reembolsable' => number_format($excesoNoReembolsable, 2, '.', ''),
+        ':aplico_tope' => $aplicoTope,
+        ':monto_exceso' => number_format($excesoNoReembolsable, 2, '.', ''),
+        ':requiere_aprobacion' => 0,
+        ':token_hash' => null,
+        ':token_expira' => null,
+        ':notificacion_estado' => 'NO_APLICA',
         ':estado' => $targetState,
     ]);
     $renditionId = (int)$pdo->lastInsertId();
@@ -163,7 +178,7 @@ try {
          SET monto_utilizado = monto_utilizado + :monto
          WHERE id = :id AND activo = :activo'
     );
-    $stmtCommitBudget->execute([':monto' => number_format($total, 2, '.', ''), ':id' => $budgetId, ':activo' => 1]);
+    $stmtCommitBudget->execute([':monto' => number_format($maximoPagable, 2, '.', ''), ':id' => $budgetId, ':activo' => 1]);
 
     RendicionesService::logHistory($pdo, [
         'rendicion_id' => $renditionId,
@@ -174,52 +189,37 @@ try {
         'estado_anterior' => 'ENVIADA',
         'estado_nuevo' => $targetState,
         'comentario' => $historyComment,
-        'metadata' => ['monto_total' => $total, 'monto_exceso' => $excess, 'documentos' => count($documents), 'nota_vendedor' => $sellerNote !== '' ? $sellerNote : null],
+        'metadata' => [
+            'monto_total' => $total,
+            'monto_maximo_aprobable' => $maximoPagable,
+            'monto_exceso_no_reembolsable' => $excesoNoReembolsable,
+            'aplico_tope_presupuestario' => $aplicoTope,
+            'documentos' => count($documents),
+            'nota_vendedor' => $sellerNote !== '' ? $sellerNote : null,
+            'presupuesto_id' => $budgetId,
+            'tipo_presupuesto' => $budget['tipo_presupuesto'],
+            'nombre_gira' => $budget['tipo_presupuesto'] === 'GIRA' ? $budget['nombre_gira'] : null,
+        ],
     ]);
     $pdo->commit();
 
-    $warnings = [];
-    if ($requiresApproval) {
-        try {
-            $mailSent = MailService::enviarSolicitudExcesoRendicion([
-                'id' => $renditionId,
-                'codigo_rendicion' => $code,
-                'vendedor_nombre' => $seller['nombre'],
-                'periodo_mes' => $budget['periodo_mes'],
-                'tipo_rendicion' => $budget['tipo_presupuesto'],
-                'nombre_gira' => $budget['nombre_gira'],
-                'monto_total_rendido' => $total,
-                'monto_presupuesto_asignado' => (float)$budget['monto_asignado'],
-                'monto_exceso' => $excess,
-            ], $documents, (string)$rawToken);
-            $stmtMail = $pdo->prepare(
-                'UPDATE rendiciones_gastos
-                 SET notificacion_exceso_estado = :estado
-                 WHERE id = :id AND estado = :rendicion_estado'
-            );
-            $stmtMail->execute([
-                ':estado' => $mailSent ? 'ENVIADA' : 'FALLIDA',
-                ':id' => $renditionId,
-                ':rendicion_estado' => 'PENDIENTE_APROBACION_EXCESO',
-            ]);
-        } catch (Throwable $mailException) {
-            $mailSent = false;
-            error_log('[rendiciones.guardar_rendicion.mail] ' . $mailException->getMessage());
-        }
-        if (!$mailSent) {
-            $warnings[] = 'La rendición fue guardada, pero el correo de aprobación no pudo enviarse.';
-        }
-    }
+    $responseMessage = $aplicoTope
+        ? 'Rendición enviada a Tesorería. Supera tu saldo disponible por $' . number_format($excesoNoReembolsable, 0, ',', '.') . ' CLP; el monto máximo reembolsable será de $' . number_format($maximoPagable, 0, ',', '.') . ' CLP.'
+        : 'Rendición enviada a Tesorería.';
 
     RendicionesService::jsonResponse(true, [
-        'message' => $requiresApproval ? 'Rendición enviada y pendiente de aprobación del exceso.' : 'Rendición enviada a Tesorería.',
+        'message' => $responseMessage,
         'data' => [
             'rendicion_id' => $renditionId,
             'codigo_rendicion' => $code,
             'estado' => $targetState,
             'monto_total' => $total,
-            'monto_exceso' => $excess,
-            'warnings' => $warnings,
+            'monto_maximo_aprobable' => $maximoPagable,
+            'monto_exceso' => $excesoNoReembolsable,
+            'aplico_tope' => (bool)$aplicoTope,
+            'tipo_presupuesto' => $budget['tipo_presupuesto'],
+            'nombre_gira' => $budget['tipo_presupuesto'] === 'GIRA' ? $budget['nombre_gira'] : null,
+            'warnings' => [],
         ],
     ], 201);
 } catch (InvalidArgumentException $exception) {

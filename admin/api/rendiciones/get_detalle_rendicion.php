@@ -58,24 +58,59 @@ try {
     );
     $stmtHistory->execute([':rendicion_id' => $renditionId]);
     $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
+    // Castear campos de tope y montos en header
+    if ($rendition) {
+        $rendition['monto_total_rendido']         = (float)($rendition['monto_total_rendido'] ?? 0);
+        $rendition['monto_total_aprobado']        = (float)($rendition['monto_total_aprobado'] ?? 0);
+        $rendition['monto_exceso']                = (float)($rendition['monto_exceso'] ?? 0);
+        $rendition['monto_maximo_aprobable']      = (float)($rendition['monto_maximo_aprobable'] ?? $rendition['monto_total_rendido']);
+        $rendition['monto_exceso_no_reembolsable'] = (float)($rendition['monto_exceso_no_reembolsable'] ?? 0);
+        $rendition['aplico_tope_presupuestario']  = (bool)($rendition['aplico_tope_presupuestario'] ?? false);
+        $rendition['presupuesto_monto_actual']    = (float)($rendition['presupuesto_monto_actual'] ?? 0);
+        $rendition['presupuesto_monto_utilizado'] = (float)($rendition['presupuesto_monto_utilizado'] ?? 0);
+        $rendition['documentos_fisicos_recibidos'] = (bool)($rendition['documentos_fisicos_recibidos'] ?? false);
+    }
+
     foreach ($documents as &$document) {
-        $document['id'] = (int)$document['id'];
-        $document['monto'] = (float)$document['monto'];
+        $document['id']           = (int)$document['id'];
+        $document['monto']        = (float)$document['monto'];
         $document['monto_validado'] = $document['monto_validado'] !== null ? (float)$document['monto_validado'] : null;
     }
     unset($document);
     foreach ($history as &$entry) {
-        $entry['id'] = (int)$entry['id'];
+        $entry['id']           = (int)$entry['id'];
         $entry['documento_id'] = $entry['documento_id'] !== null ? (int)$entry['documento_id'] : null;
-        $entry['metadata'] = $entry['metadata_json'] ? json_decode($entry['metadata_json'], true) : null;
+        $entry['metadata']     = isset($entry['metadata_json']) && $entry['metadata_json']
+            ? json_decode($entry['metadata_json'], true)
+            : null;
         unset($entry['metadata_json']);
     }
     unset($entry);
 
+    // Solicitud de exceso: todos los campos relevantes ya vienen en $rendition (SELECT r.*)
+    $solicitudExceso = null;
+    if ($rendition && !empty($rendition['token_aprobacion_exceso_hash'])) {
+        $solicitudExceso = [
+            'tiene_solicitud'      => true,
+            'aprobador_id'         => $rendition['aprobador_solicitado_id'] ?? null,
+            'aprobador_nombre'     => $rendition['aprobador_nombre_snapshot'] ?? null,
+            'aprobador_cargo'      => $rendition['aprobador_cargo_snapshot'] ?? null,
+            'aprobador_email'      => $rendition['aprobador_email_snapshot'] ?? null,
+            'decision'             => $rendition['decision_exceso'] ?? null,
+            'token_expira'         => $rendition['token_exceso_expira'] ?? null,
+            'token_usado_at'       => $rendition['token_exceso_usado_at'] ?? null,
+            'notificacion_estado'  => $rendition['notificacion_exceso_estado'] ?? null,
+            'solicitud_enviada_at' => $rendition['solicitud_exceso_enviada_at'] ?? null,
+        ];
+    } else {
+        $solicitudExceso = ['tiene_solicitud' => false];
+    }
+
     RendicionesService::jsonResponse(true, ['data' => [
-        'rendicion' => $rendition,
-        'documentos' => $documents,
-        'historial' => $history,
+        'rendicion'       => $rendition,
+        'documentos'      => $documents,
+        'historial'       => $history,
+        'solicitud_exceso' => $solicitudExceso,
     ]]);
 } catch (InvalidArgumentException $exception) {
     RendicionesService::jsonResponse(false, ['message' => $exception->getMessage()], 422);

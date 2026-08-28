@@ -8,6 +8,7 @@ require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../services/RendicionesService.php';
 require_once __DIR__ . '/../services/ErpSellerDirectoryService.php';
+require_once __DIR__ . '/../services/RendicionApprovalPdf.php';
 
 if (APP_ENV !== 'local') {
     fwrite(STDERR, "Este script sólo puede ejecutarse con APP_ENV=local.\n");
@@ -29,6 +30,7 @@ try {
     $pdo = Database::getCobranzasConnection();
     $requiredTables = [
         'presupuestos_vendedores',
+        'aprobadores_rendiciones',
         'rendiciones_gastos',
         'rendicion_documentos',
         'rendicion_historial_estados',
@@ -47,8 +49,19 @@ try {
          FROM information_schema.COLUMNS
          WHERE TABLE_SCHEMA = :schema_name AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
     );
-    $stmtColumn->execute([':schema_name' => DB_NAME_CENTRAL, ':table_name' => 'rendiciones_gastos', ':column_name' => 'nota_vendedor']);
-    assertRendiciones((int)$stmtColumn->fetchColumn() === 1, 'Falta la columna nota_vendedor en rendiciones_gastos.');
+    $requiredRenditionColumns = [
+        'nota_vendedor',
+        'aprobador_solicitado_id',
+        'aprobador_nombre_snapshot',
+        'aprobador_cargo_snapshot',
+        'aprobador_email_snapshot',
+        'solicitud_exceso_enviada_at',
+        'solicitud_exceso_enviada_por',
+    ];
+    foreach ($requiredRenditionColumns as $columnName) {
+        $stmtColumn->execute([':schema_name' => DB_NAME_CENTRAL, ':table_name' => 'rendiciones_gastos', ':column_name' => $columnName]);
+        assertRendiciones((int)$stmtColumn->fetchColumn() === 1, "Falta la columna {$columnName} en rendiciones_gastos.");
+    }
 
     $normalHashA = RendicionesService::createDocumentHash([
         'tipo_documento' => 'BOLETA_ELECTRONICA',
@@ -80,7 +93,44 @@ try {
     ], 56, 1);
     assertRendiciones(!hash_equals($tollHashA, $tollHashB), 'El hash de peaje no separa vendedores.');
     assertRendiciones(RendicionesService::canTransition('EN_REVISION_TESORERIA', 'DOCUMENTOS_FISICOS_RECIBIDOS'), 'Falta transición de recepción física.');
+    assertRendiciones(RendicionesService::canTransition('PENDIENTE_APROBACION_EXCESO', 'RECHAZADA'), 'Tesorería no puede rechazar un exceso pendiente.');
     assertRendiciones(!RendicionesService::canTransition('PAGADA', 'EN_REVISION_TESORERIA'), 'Se permitió una regresión desde estado final.');
+
+    $validTourKey = RendicionesService::createBudgetKey(1, 20, 'GIRA', '2026-09', 'Gira Zona Norte', '2026-09-02', '2026-09-08');
+    assertRendiciones(str_starts_with($validTourKey, 'GIRA|1|20|2026-09|GIRA-ZONA-NORTE|'), 'La clave canónica de gira no conserva su identidad y período.');
+    $derivedTourKey = RendicionesService::createBudgetKey(1, 20, 'GIRA', '', 'Gira Sur', '2026-10-03', '2026-10-07');
+    assertRendiciones(str_starts_with($derivedTourKey, 'GIRA|1|20|2026-10|GIRA-SUR|'), 'La gira no deriva el período desde su fecha de inicio cuando el campo mensual viene vacío.');
+    $tourNameError = '';
+    try {
+        RendicionesService::createBudgetKey(1, 20, 'GIRA', '2026-09', '', '2026-09-02', '2026-09-08');
+    } catch (InvalidArgumentException $exception) {
+        $tourNameError = $exception->getMessage();
+    }
+    assertRendiciones(str_contains($tourNameError, 'nombre de gira'), 'La validación de gira no identifica específicamente un nombre inválido.');
+    $tourRangeError = '';
+    try {
+        RendicionesService::createBudgetKey(1, 20, 'GIRA', '2026-09', 'Gira QA', '2026-09-08', '2026-09-02');
+    } catch (InvalidArgumentException $exception) {
+        $tourRangeError = $exception->getMessage();
+    }
+    assertRendiciones(str_contains($tourRangeError, 'término'), 'La validación de gira no identifica específicamente un rango invertido.');
+    RendicionesService::assertDocumentsFitBudget([
+        'tipo_presupuesto' => 'GIRA',
+        'fecha_inicio' => '2026-09-02',
+        'fecha_fin' => '2026-09-08',
+    ], [['fecha_emision' => '2026-09-05']]);
+    assertRendiciones(true, 'Un comprobante dentro de la gira fue rechazado.');
+    $outsideTourBlocked = false;
+    try {
+        RendicionesService::assertDocumentsFitBudget([
+            'tipo_presupuesto' => 'GIRA',
+            'fecha_inicio' => '2026-09-02',
+            'fecha_fin' => '2026-09-08',
+        ], [['fecha_emision' => '2026-09-12']]);
+    } catch (DomainException $exception) {
+        $outsideTourBlocked = true;
+    }
+    assertRendiciones($outsideTourBlocked, 'Una boleta fuera del período pudo imputarse a la gira.');
 
     $companies = ErpSellerDirectoryService::getCompanies($pdo);
     assertRendiciones(count($companies) === 4, 'El directorio ERP no resolvió las cuatro empresas autorizadas.');
@@ -322,6 +372,37 @@ try {
     assertRendiciones($stmtConsume->rowCount() === 1, 'El primer uso del Magic Token no fue aceptado.');
     $stmtConsume->execute([':decision' => 'APROBADO', ':id' => $renditionId]);
     assertRendiciones($stmtConsume->rowCount() === 0, 'El Magic Token pudo utilizarse más de una vez.');
+
+    $pdfFixture = [
+        'id' => $renditionId,
+        'codigo_rendicion' => 'RND-QA-PDF',
+        'empresa_nombre' => 'Automarco LTDA',
+        'vendedor_nombre' => 'Vendedor QA',
+        'vendedor_id' => $sellerId,
+        'tipo_rendicion' => 'MENSUAL',
+        'periodo_mes' => '2026-08',
+        'monto_presupuesto_asignado' => 100000,
+        'saldo_disponible_al_enviar' => 80000,
+        'monto_total_rendido' => 90000,
+        'monto_exceso' => 10000,
+        'aprobado_exceso_at' => '2026-08-26 12:00:00',
+        'aprobador_nombre_snapshot' => 'Responsable QA',
+        'aprobador_cargo_snapshot' => 'Gerencia QA',
+        'aprobador_email_snapshot' => 'responsable.qa@example.test',
+    ];
+    $pdfDocument = [[
+        'tipo_documento' => 'BOLETA_ELECTRONICA',
+        'categoria_gasto' => 'COLACION',
+        'rut_proveedor' => '761234567',
+        'razon_social_proveedor' => 'Proveedor QA',
+        'numero_documento' => '123',
+        'fecha_emision' => '2026-08-21',
+        'monto' => 90000,
+    ]];
+    $pdfBytes = RendicionApprovalPdf::build($pdfFixture, $pdfDocument);
+    assertRendiciones(str_starts_with($pdfBytes, '%PDF-'), 'El comprobante de aprobación no generó un PDF válido.');
+    assertRendiciones(strlen($pdfBytes) > 1500, 'El comprobante PDF quedó vacío o incompleto.');
+    assertRendiciones(strpos($pdfBytes, hash('sha256', 'token-qa-no-publicar')) === false, 'El PDF expuso material de token.');
 
     $pdo->rollBack();
     echo "OK: {$checks} comprobaciones de Rendiciones superadas.\n";

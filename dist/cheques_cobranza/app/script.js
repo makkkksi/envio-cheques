@@ -1,14 +1,3 @@
-// Asegurar que TODAS las llamadas fetch envíen las cookies de sesión (CRÍTICO para Android WebView)
-const originalFetch = window.fetch;
-window.fetch = async function(...args) {
-    let [resource, config] = args;
-    if (config === undefined) {
-        config = {};
-    }
-    config.credentials = 'same-origin';
-    return originalFetch(resource, config);
-};
-
 document.addEventListener('DOMContentLoaded', async () => {
     // Detectar entorno Android WebView y adaptar interfaz
     const isAndroidApp = window.Android !== undefined || /wv|Android.*Version\/[\d.]+/.test(navigator.userAgent);
@@ -95,52 +84,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     let vendedorIdParam = urlParams.get('vendedor_id') || urlParams.get('vendedor');
     let empresaParam    = urlParams.get('empresa')     || urlParams.get('empresa_id');
-    const emailParam    = urlParams.get('vendedor_email') || urlParams.get('email');
-    const nombreParam   = urlParams.get('vendedor_nombre') || urlParams.get('nombre');
-
-    // Fallback: Recuperar identidad en caso de recarga limpia de pestaña en Tablet
-    if (!vendedorIdParam && !emailParam) {
-        vendedorIdParam = localStorage.getItem('cached_vendedor_id');
-    }
     const vendedorIdInput = document.getElementById('vendedorIdInput');
-    if (vendedorIdInput && vendedorIdParam) {
-        vendedorIdInput.value = vendedorIdParam;
-    }
 
-    // Guardia de acceso: inicializar sesión PHP
-    try {
-        const authFormData = new FormData();
-        if (vendedorIdParam) authFormData.append('vendedor_id', vendedorIdParam);
-        if (empresaParam) authFormData.append('empresa', empresaParam);
-        if (emailParam) authFormData.append('vendedor_email', emailParam);
-        if (nombreParam) authFormData.append('vendedor_nombre', nombreParam);
-
-        const authRes = await fetch('api/auth_seller.php', { method: 'POST', body: authFormData });
-        const authData = await authRes.json();
-        
-        if (!authRes.ok || !authData.success) {
-            throw new Error(authData.message || 'Error de autenticación');
-        }
-        
-        // Persistir en local para evitar pérdida si el usuario recarga la página
-        if (authData.data && authData.data.vendedor_id) {
-            localStorage.setItem('cached_vendedor_id', authData.data.vendedor_id);
-            if (vendedorIdInput) vendedorIdInput.value = authData.data.vendedor_id;
-        }
-        
-        console.log("Sesión de vendedor validada:", authData.data);
-
-        // Limpieza estética y de seguridad de la barra de direcciones (IDOR mitigation UI)
-        if (window.history && window.history.replaceState) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-    } catch (e) {
-        // Ocultar todo el contenido del formulario
+    function showSellerAccessBlocker(message) {
         const appWrapper = document.querySelector('.app-wrapper');
         if (appWrapper) appWrapper.style.display = 'none';
+        if (document.getElementById('sellerSessionBlocker')) return;
 
-        // Mostrar pantalla de error bloqueante
         const blocker = document.createElement('div');
+        blocker.id = 'sellerSessionBlocker';
         blocker.style.cssText = `
             position: fixed; inset: 0; z-index: 9999;
             display: flex; flex-direction: column;
@@ -151,15 +103,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             <svg width="52" height="52" fill="none" viewBox="0 0 24 24" stroke="#dc2626" stroke-width="1.5" style="margin-bottom:16px;">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
             </svg>
-            <h2 style="font-size:1.2rem; font-weight:700; color:#0f172a; margin:0 0 8px;">Acceso no autorizado</h2>
-            <p style="font-size:0.9rem; color:#64748b; max-width:320px; line-height:1.5; margin:0 0 20px;">
-                ${e.message}<br>
-                Asegúrate de abrir este formulario desde la app oficial.
+            <h2 style="font-size:1.2rem; font-weight:700; color:#0f172a; margin:0 0 8px;">Sesión no disponible</h2>
+            <p style="font-size:0.9rem; color:#64748b; max-width:360px; line-height:1.5; margin:0 0 20px;">
+                ${message}<br>Vuelve a abrir el formulario desde el portal oficial.
             </p>
         `;
         document.body.appendChild(blocker);
+    }
 
-        // Detener toda ejecución del script
+    document.addEventListener('seller-session-expired', (event) => {
+        showSellerAccessBlocker(event.detail?.message || 'No fue posible recuperar tu sesión de vendedor.');
+    });
+
+    // Guardia de acceso con recuperación automática de la identidad completa.
+    try {
+        const sellerSession = await window.SellerSession.initialize();
+        const seller = sellerSession.seller || {};
+        vendedorIdParam = String(seller.vendedor_id || vendedorIdParam || '');
+        empresaParam = String(seller.empresa_origen || empresaParam || '');
+        if (vendedorIdInput) vendedorIdInput.value = vendedorIdParam;
+        console.log('Sesión de vendedor validada:', seller);
+    } catch (e) {
+        showSellerAccessBlocker(e.message);
         return;
     }
 
@@ -1375,9 +1340,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             formData.set('email_tesoreria', document.getElementById('emailTesoreria').value);
             if (vendedorIdInput && vendedorIdInput.value) {
                 formData.set('vendedor_id', vendedorIdInput.value);
-            } else {
-                const cachedId = localStorage.getItem('cached_vendedor_id');
-                if (cachedId) formData.set('vendedor_id', cachedId);
             }
             const badgeVendedorEl = document.getElementById('lblHeaderNombreVendedor');
             if (badgeVendedorEl && badgeVendedorEl.textContent) {

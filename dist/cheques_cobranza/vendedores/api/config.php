@@ -10,7 +10,8 @@ define('DB_NAME', 'autotec_ecom');
 
 define('IVA_PORCENTAJE', 19);
 define('EMP_ID', '1');
-define('SESSION_TTL', 28800);
+define('SESSION_TTL', 43200);
+define('SESSION_REFRESH_THRESHOLD', 14400);
 define('BASE_URL', 'https://www.autotec.cl/vendedores');
 
 // ============================================================
@@ -76,15 +77,32 @@ function requireAuth(): array {
 
     $pdo  = getDB();
     $stmt = $pdo->prepare("
-        SELECT u.*, s.token 
+        SELECT u.*, s.token, s.expira_en
         FROM web_sesiones s 
         JOIN web_usuarios u ON u.id = s.usuario_id
-        WHERE s.token = ? AND s.expira_en > NOW() AND u.activo = 1
+        WHERE s.token = :token AND s.expira_en > NOW() AND u.activo = 1
     ");
-    $stmt->execute([$token]);
+    $stmt->execute([':token' => $token]);
     $user = $stmt->fetch();
     if (!$user) jsonResponse(false, null, 'Sesión inválida o expirada');
+    refreshPortalSession($pdo, $token, (string) $user['expira_en']);
     return $user;
+}
+
+function refreshPortalSession(PDO $pdo, string $token, string $currentExpiry): void {
+    $remaining = strtotime($currentExpiry) - time();
+    if ($remaining > SESSION_REFRESH_THRESHOLD) return;
+
+    $newExpiry = date('Y-m-d H:i:s', time() + SESSION_TTL);
+    $stmt = $pdo->prepare('UPDATE web_sesiones SET expira_en = :expira_en WHERE token = :token');
+    $stmt->execute([':expira_en' => $newExpiry, ':token' => $token]);
+    setcookie('at_token', $token, [
+        'expires' => time() + SESSION_TTL,
+        'path' => '/',
+        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
 }
 
 function formatoPrecio(int $valor): string {

@@ -40,14 +40,21 @@ define('DB_NAME_CENTRAL', getenv('DB_NAME_CENTRAL') ?: 'bd_modulo_cobranzas');
 // Autenticación en desarrollo local (Modo Bypass)
 define('AUTH_BYPASS_USER_ID', 1);
 
+// Sesiones web. El TTL físico de PHP debe ser mayor que los TTL lógicos para
+// evitar que el recolector elimine sesiones activas antes de tiempo.
+define('SESSION_SERVER_TTL_SECONDS', max(86400, (int)(getenv('SESSION_SERVER_TTL_SECONDS') ?: 86400)));
+define('ADMIN_SESSION_IDLE_SECONDS', max(3600, (int)(getenv('ADMIN_SESSION_IDLE_SECONDS') ?: 43200)));
+define('ADMIN_SESSION_ABSOLUTE_SECONDS', max(ADMIN_SESSION_IDLE_SECONDS, (int)(getenv('ADMIN_SESSION_ABSOLUTE_SECONDS') ?: 57600)));
+define('SELLER_SESSION_IDLE_SECONDS', max(3600, (int)(getenv('SELLER_SESSION_IDLE_SECONDS') ?: 43200)));
+define('SELLER_SESSION_ABSOLUTE_SECONDS', max(SELLER_SESSION_IDLE_SECONDS, (int)(getenv('SELLER_SESSION_ABSOLUTE_SECONDS') ?: 86400)));
+define('SESSION_COOKIE_REFRESH_SECONDS', max(60, (int)(getenv('SESSION_COOKIE_REFRESH_SECONDS') ?: 300)));
+
 // Rutas de Almacenamiento de Archivos (Uploads)
 define('UPLOADS_BASE_PATH', getenv('UPLOADS_BASE_PATH') ?: __DIR__ . '/../uploads');
 define('UPLOADS_BASE_URL', getenv('UPLOADS_BASE_URL') ?: 'https://www.autotec.cl/cobranza_cheques/uploads');
 define('PORTAL_BASE_URL', rtrim(getenv('PORTAL_BASE_URL') ?: 'https://www.autotec.cl/cobranza_cheques', '/'));
 
 // Módulo de Rendiciones de Gastos
-define('RENDICIONES_APPROVER_EMAIL', trim(getenv('RENDICIONES_APPROVER_EMAIL') ?: ''));
-define('RENDICIONES_APPROVER_NAME', trim(getenv('RENDICIONES_APPROVER_NAME') ?: 'Francisco J.'));
 define('RENDICIONES_TOKEN_TTL_HOURS', max(1, (int)(getenv('RENDICIONES_TOKEN_TTL_HOURS') ?: 48)));
 define('RENDICIONES_MAX_UPLOAD_BYTES', 10 * 1024 * 1024);
 

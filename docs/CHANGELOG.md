@@ -4,6 +4,75 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Módulo 3 — Fases A y B de topes y aprobaciones (2026-08-28)
+- Se incorporó el contrato aditivo para topes: máximo aprobable, exceso no reembolsable y marca de aplicación del tope en cada rendición; las giras incorporan estado de aprobación, justificación y solicitud vigente.
+- Nueva entidad `solicitudes_aprobacion` para versionar por separado autorizaciones de gira y excepciones mensuales, con selección de un responsable, snapshots, tokens SHA-256 de 48 horas, reenvío, fallo de correo, cancelación lógica y decisión de uso único.
+- Nueva bitácora append-only `solicitud_aprobacion_historial` para registrar creación, envío, fallo, rotación, vencimiento, cancelación y resolución.
+- `ApprovalWorkflowService` concentra el flujo transaccional y preserva la regla clave: rechazar una excepción no rechaza la rendición base; aprobarla sólo amplía su máximo pagable. Autorizar una gira habilita el fondo, no sus comprobantes.
+- Migración `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql` aplicada e idempotente en Laragon. QA reforzado: 28 comprobaciones transaccionales PASS con rollback, instalación limpia, doble ejecución y migración sobre un clon temporal del esquema anterior conservando 41 presupuestos, 44 rendiciones, 46 documentos, 53 hitos y 2 aprobadores. Integración visible de endpoints/UI queda en Fases C–H.
+
+### Documentación — Política futura de topes y giras (2026-08-28)
+- Se documentó, sin modificar aún el comportamiento operativo, la política directiva de tope mensual, reserva de pendientes, último informe con exceso, liquidación FIFO y excepción gerencial opcional.
+- El plan incorpora aprobación previa de fondos de gira por uno de dos responsables equivalentes, seleccionado por Tesorería, con token de 48 horas, reenvío y gira oculta hasta aprobación.
+- Se agregó la matriz integral M01–M20 y G01–G19 en `docs/PLAN_TOPES_Y_APROBACIONES_RENDICIONES.md`, junto con fases, archivos, seguridad y criterios de aceptación.
+- El plan fue aprobado; Fases A y B completadas. Las Fases C–H permanecen pendientes y el flujo operativo actual todavía no consume el nuevo servicio.
+
+### Suite ERP — Estabilización integral de sesiones (2026-08-28)
+- Admin y vendedores dejan de compartir `PHPSESSID`: usan cookies independientes (`AUTOMARCO_ADMIN_SID` y `AUTOMARCO_SELLER_SID`), por lo que cerrar el portal vendedor ya no destruye la sesión administrativa abierta en el mismo navegador.
+- El almacenamiento físico de PHP se amplía a 24 horas y queda por encima de los límites lógicos: Admin admite 12 horas de inactividad con máximo absoluto de 16 horas; vendedor, 12 horas de inactividad y máximo de 24 horas.
+- El Shell y ambos formularios de vendedor incorporan heartbeat cada cinco minutos, renovación controlada de cookie y recuperación automática ante un primer `401`, con un solo reintento para evitar bucles.
+- La identidad recuperable del vendedor conserva código ERP **y empresa** en `sessionStorage`; ya no usa el antiguo ID aislado en `localStorage`, que podía cruzar empresas o fallar tras limpiar la URL.
+- El login administrativo conserva la página solicitada mediante `return_to` seguro y muestra una salida clara cuando la sesión realmente terminó.
+- El portal comercial legado extiende su token activo hasta 12 horas y lo renueva de forma deslizante durante el uso, manteniendo cookie `HttpOnly` y `SameSite=Lax`.
+- Nuevos endpoints de estado: `GET /admin/api/auth/session_status.php` y `GET /api/auth/session_vendedor.php`. SQL nuevo para phpMyAdmin: ninguno.
+
+### Módulo 3 — Flujo integral de giras y analítica estandarizada (2026-08-26)
+- La creación de giras deja de depender de un período mensual oculto: `fecha_inicio` determina `periodo_mes`, y nombre, inicio, término y orden cronológico entregan errores separados y precisos.
+- El formulario solicita únicamente identidad ERP, nombre operativo, fechas y monto; el nombre queda limitado a 100 caracteres según el esquema vigente.
+- Al consolidar, el backend bloquea comprobantes fuera del rango de la gira y calcula saldo/exceso exclusivamente contra el fondo seleccionado, sin afectar el presupuesto mensual concurrente.
+- Portal vendedor, detalle de Tesorería, correo y página Magic Token identifican explícitamente cuando un exceso corresponde a una gira.
+- El Dashboard agrega comparación estandarizada `Presupuestos mensuales` vs. `Giras comerciales` con fondos activos, promedio, asignado, aprobado, pendiente, ejecución y excesos aprobados; no agrupa ni expone nombres libres de giras.
+- Seeder local ampliado a 39 fondos demo, incluidos 3 de gira. Validación: 38 comprobaciones PASS; SQL nuevo para phpMyAdmin: ninguno.
+
+### Módulo 3 — Analítica histórica por vendedor (2026-08-26)
+- El Dashboard incorpora un analizador de 6/12 meses por identidad `(empresa_id, vendedor_id ERP)`, con presupuesto, gasto aprobado real, monto pendiente, ejecución, ticket promedio, excesos y rechazos.
+- La comparación permite seleccionar un vendedor y revisar su trayectoria mensual contra el tope asignado; rechazados no suman gasto y pendientes se muestran separados.
+- Se agregan señales transparentes para decisiones: fondos sin ejecución, montos pendientes, concentración del gasto, excesos recurrentes, alta tasa de rechazo y cupos próximos al límite.
+- Nuevo endpoint consolidado de sólo lectura `get_dashboard_analitico.php`, protegido por `rendiciones.view`, que evita el patrón N+1 para la historia temporal.
+- Seeder local idempotente `scripts/seed_rendiciones_dashboard_demo.php`: consulta seis identidades ERP reales en modo lectura y genera seis meses de escenarios demostrativos únicamente con `APP_ENV=local`.
+- Validación local: 36 presupuestos, 38 rendiciones/documentos/hitos históricos demo; una segunda ejecución creó cero duplicados. SQL nuevo para phpMyAdmin: ninguno.
+
+### Suite ERP — Recarga interna y métricas aprobadas (2026-08-26)
+- El Shell incorpora “Recargar”, que actualiza por API el módulo activo sin navegación, sin F5 y conservando sesión, filtros, pestaña y selección cuando corresponde.
+- El Dashboard de Rendiciones excluye pendientes y rechazadas: monto, ejecución, categorías y empresas se calculan sólo con `APROBADA`, `APROBADA_PARCIAL` y `PAGADA`, usando `monto_total_aprobado`/`monto_validado`.
+- La píldora “Aprobadas” incluye rendiciones pagadas, ya que representan aprobaciones cerradas.
+- SQL nuevo para phpMyAdmin: ninguno.
+
+### Módulo 3 — Cancelación de excesos por Tesorería (2026-08-26)
+- Una rendición en `PENDIENTE_APROBACION_EXCESO` incorpora “Rechazar sin enviar” antes del correo y “Cancelar solicitud y rechazar” si ya existía una emisión.
+- El motivo es obligatorio; la transacción rechaza documentos, libera el total comprometido, invalida el Magic Token y registra historial/auditoría sin enviar una nueva notificación.
+- SQL nuevo para phpMyAdmin: ninguno.
+
+### Suite ERP — Identidad visual del holding (2026-08-26)
+- La cabecera compartida reemplaza la cápsula textual “AUTOMARCO” por el logotipo oficial `LOGO-HOLDING-AUTOMARCO.png`, con dimensiones responsive y sin alterar el App Switcher.
+
+### Módulo 3 — Comprobante de aprobación gerencial (2026-08-26)
+- **Resolución pública inequívoca**: después de aprobar o rechazar, la página Magic Token retira textarea y botones y deja un único estado final con responsable y continuidad operativa.
+- **PDF imprimible**: toda aprobación de exceso dispone en el detalle de Tesorería de un comprobante generado en demanda con rendición, montos, documentos, fecha, código de verificación y firma textual del responsable (nombre y cargo).
+- **Semántica preservada**: el PDF certifica la autorización del exceso, no el pago ni la aprobación final; la rendición continúa en revisión de Tesorería.
+- **SQL nuevo para phpMyAdmin**: ninguno; utiliza los snapshots y campos de auditoría existentes.
+- **Impresión económica**: el comprobante adopta una composición documental monocromática, sin fondos sólidos ni rectángulos rellenos, con líneas finas y contraste optimizado para impresoras láser o tinta en blanco y negro.
+
+### Módulo 3 — Responsables configurables y correo de exceso (2026-08-26)
+- **Cero destinatarios hardcodeados**: el Administrador configura exactamente dos responsables con nombre, cargo y correo; Tesorería elige a cuál enviar cada solicitud.
+- **Emisión controlada por Tesorería**: el vendedor sólo deja el exceso pendiente. El Magic Token se genera al seleccionar responsable, y cada reenvío invalida el enlace anterior.
+- **Decisión informada**: correo y página segura muestran empresa, vendedor/código ERP, presupuesto, comprometido previo, saldo, rendido, exceso, notas, comprobantes y antecedentes SII de cenas.
+- **Auditoría histórica**: la rendición conserva snapshots del responsable, usuario emisor y fecha; la resolución atribuye al destinatario seleccionado, incluso si la configuración cambia después.
+- **SQL para phpMyAdmin**: importar `config/migrations/2026_08_26_aprobadores_rendiciones.sql`; migración aditiva e idempotente, sin eliminaciones.
+- **Certificación local**: migración aplicada y reejecutada en MySQL 8.4.3 de Laragon; 28 pruebas transaccionales PASS, POST sin CSRF rechazado con HTTP 403 y release con 205 archivos root/dist idénticos.
+- **Configuración global restaurada**: “Configuración” vuelve a abrir en toda la Suite el panel histórico de corte, correos internos, digitadoras, asignaciones por empresa y Google Sheets. Rendiciones incorpora “Aprobadores” como acceso independiente, además del disponible en Vendedores.
+- **Modal compartido reparado**: `modal_config_cc.css` ahora muestra `#modalConfigCC` cuando JavaScript retira `hidden`; anteriormente la regla base `display:none` prevalecía y el diálogo quedaba invisible aunque el botón y la API funcionaran. Se renovó la versión CSS en Cheques, Cuentas Corrientes y Rendiciones.
+
 ### Módulo 3 — Bloqueo claro sin presupuesto (2026-08-25)
 - **Consolidación protegida**: un vendedor sin presupuesto activo ya no puede abrir ni confirmar el envío de una rendición; recibe un aviso que indica solicitar la asignación a Gerencia.
 - **Privacidad operativa**: el aviso de exceso deja de identificar al aprobador por nombre y comunica únicamente que la solicitud será enviada a Gerencia.

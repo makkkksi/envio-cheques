@@ -189,6 +189,7 @@ async function resetearPassword(event) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    window.registerSuiteRefresh?.(cargarUsuarios);
     document.getElementById('btnNuevoUsuario').addEventListener('click', openNewUser);
     document.getElementById('formUsuario').addEventListener('submit', guardarUsuario);
     document.getElementById('formResetPassword').addEventListener('submit', resetearPassword);
