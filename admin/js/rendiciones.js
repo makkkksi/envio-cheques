@@ -381,14 +381,14 @@
     }
 
     function renderStepper(status) {
-        const steps = ['Enviada', 'En revisión', 'Físicos recibidos', 'Aprobada / Pagada'];
+        const steps = ['Enviada', 'En revisión', 'Aprobada', 'Pagada'];
         const indexMap = {
             ENVIADA: 0,
             PENDIENTE_APROBACION_EXCESO: 1,
             EN_REVISION_TESORERIA: 1,
-            DOCUMENTOS_FISICOS_RECIBIDOS: 2,
-            APROBADA: 3,
-            APROBADA_PARCIAL: 3,
+            DOCUMENTOS_FISICOS_RECIBIDOS: 1,
+            APROBADA: 2,
+            APROBADA_PARCIAL: 2,
             PAGADA: 3
         };
         const current = indexMap[status] ?? 0;
