@@ -291,6 +291,8 @@
         }
     }
 
+    const loadDetail = selectRendition;
+
     function renderDetail() {
         const data = state.detail;
         const rendition = data.rendicion;
@@ -784,7 +786,7 @@
         const selectedId = state.selectedId;
         await loadRenditions(false);
         if (selectedId && state.renditions.some((item) => Number(item.id) === Number(selectedId))) {
-            await loadDetail(selectedId);
+            await selectRendition(selectedId, true);
         }
     }
 
