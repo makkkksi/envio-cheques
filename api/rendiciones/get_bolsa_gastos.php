@@ -50,7 +50,7 @@ try {
          WHERE p.empresa_id = :empresa_id
            AND p.vendedor_id = :vendedor_id
            AND p.activo = :activo
-           AND (p.tipo_presupuesto = :tipo_mensual OR p.estado_aprobacion = :estado_aprobado)
+           AND (p.tipo_presupuesto = :tipo_mensual OR p.estado_aprobacion IN (:estado_aprobada, :estado_aprobado))
          ORDER BY p.periodo_mes DESC, p.tipo_presupuesto ASC, p.id DESC'
     );
     $stmtBudgets->execute([

@@ -53,7 +53,7 @@ try {
     if (!$budget) {
         throw new DomainException('El presupuesto no existe, está inactivo o no pertenece al vendedor.');
     }
-    if ($budget['tipo_presupuesto'] === 'GIRA' && ($budget['estado_aprobacion'] ?? '') !== 'APROBADO') {
+    if ($budget['tipo_presupuesto'] === 'GIRA' && !in_array($budget['estado_aprobacion'] ?? '', ['APROBADA', 'APROBADO'], true)) {
         throw new DomainException('Esta gira no se encuentra aprobada o no está disponible para rendir.');
     }
 
