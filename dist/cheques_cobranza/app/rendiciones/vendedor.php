@@ -376,13 +376,25 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
 
                 <div class="rg-form-body">
                     
-                    <div class="rg-form-group">
-                        <label class="rg-field-row">
-                            <span class="rg-field-label">Presupuesto a Imputar</span>
-                            <select id="reportBudgetSelect" class="rg-field-input">
-                                <option value="">Cargando presupuestos...</option>
-                            </select>
-                        </label>
+                    <!-- SELECTOR DE PRESUPUESTO / FONDO A IMPUTAR -->
+                    <div class="rg-budget-selector-block">
+                        <div class="rg-budget-selector-header">
+                            <div>
+                                <label class="rg-budget-selector-title" id="lblBudgetGroupTitle">Presupuesto a Imputar</label>
+                                <span class="rg-budget-selector-subtitle">Selecciona a qué fondo se cargarán estos gastos:</span>
+                            </div>
+                            <span class="rg-budget-badge-counter" id="lblBudgetOptionsCount">Cargando...</span>
+                        </div>
+
+                        <!-- Lista de tarjetas de fondos interactivas -->
+                        <div class="rg-budget-choice-list" id="reportBudgetCardsList" role="radiogroup" aria-labelledby="lblBudgetGroupTitle">
+                            <!-- Se puebla dinámicamente desde vendedor.js -->
+                        </div>
+
+                        <!-- Select nativo oculto pero sincronizado para interoperabilidad total -->
+                        <select id="reportBudgetSelect" class="rg-native-select" aria-hidden="true" tabindex="-1">
+                            <option value="">Cargando presupuestos...</option>
+                        </select>
                     </div>
 
                     <div class="rg-form-group">
@@ -441,6 +453,27 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
                 </div>
                 <h3 class="rg-modal-title">¿Enviar Rendición?</h3>
                 <p class="rg-modal-text" id="txtConfirmMessage">Se enviará el informe a Tesorería para revisión y validación.</p>
+
+                <!-- Resumen estructurado del fondo y montos -->
+                <div class="rg-modal-summary-box" id="boxModalFundSummary">
+                    <div class="rg-modal-summary-row">
+                        <span class="rg-modal-summary-label">Fondo de Imputación:</span>
+                        <strong class="rg-modal-summary-val" id="lblModalFundDest">—</strong>
+                    </div>
+                    <div class="rg-modal-summary-row">
+                        <span class="rg-modal-summary-label">Boletas seleccionadas:</span>
+                        <span class="rg-modal-summary-val" id="lblModalDocsCount">0 boletas</span>
+                    </div>
+                    <div class="rg-modal-summary-row">
+                        <span class="rg-modal-summary-label">Total a Rendir:</span>
+                        <strong class="rg-modal-summary-val rg-modal-summary-val--total" id="lblModalTotalRendir">$0 CLP</strong>
+                    </div>
+                    <div class="rg-modal-summary-row">
+                        <span class="rg-modal-summary-label">Saldo disponible fondo:</span>
+                        <span class="rg-modal-summary-val" id="lblModalSaldoFondo">$0 CLP</span>
+                    </div>
+                </div>
+
                 <div class="rg-modal-alert" id="boxExcessWarning" hidden>
                     <strong>Aviso de exceso:</strong> <span id="txtExcessWarning">El monto total sobrepasa el fondo seleccionado. Se enviará una solicitud de aprobación a Gerencia.</span>
                 </div>

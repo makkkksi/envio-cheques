@@ -841,15 +841,128 @@
 
     function populateReportBudgetSelector() {
         const select = $('#reportBudgetSelect');
+        const cardsContainer = $('#reportBudgetCardsList');
+        const countBadge = $('#lblBudgetOptionsCount');
+
         select.innerHTML = '';
+        if (cardsContainer) cardsContainer.innerHTML = '';
+
+        if (!state.budgets || state.budgets.length === 0) {
+            if (countBadge) countBadge.textContent = '0 disponibles';
+            if (cardsContainer) {
+                cardsContainer.innerHTML = `
+                    <div class="rg-budget-empty-card">
+                        <div class="rg-budget-empty-icon">⚠️</div>
+                        <div class="rg-budget-empty-text">No tienes presupuestos asignados ni giras aprobadas disponibles.</div>
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        if (countBadge) {
+            const count = state.budgets.length;
+            countBadge.textContent = `${count} ${count === 1 ? 'fondo disponible' : 'fondos disponibles'}`;
+        }
+
+        // Si ya había uno seleccionado en el select y sigue existiendo, mantenerlo; sino preseleccionar el primero
+        let activeBudgetId = Number(select.value);
+        if (!state.budgets.some((b) => b.id === activeBudgetId)) {
+            activeBudgetId = state.budgets[0].id;
+        }
+
+        // Llenar select nativo (mantenido sincronizado por debajo)
         state.budgets.forEach((b) => {
             const opt = document.createElement('option');
             opt.value = b.id;
             opt.textContent = b.tipo_presupuesto === 'GIRA'
                 ? `Gira: ${b.nombre_gira} (Saldo: ${formatMoney(b.saldo_disponible)})`
                 : `Mensual: ${formatPeriodMonth(b.periodo_mes)} (Saldo: ${formatMoney(b.saldo_disponible)})`;
+            if (b.id === activeBudgetId) opt.selected = true;
             select.appendChild(opt);
         });
+
+        // Llenar tarjetas interactivas accesibles
+        if (cardsContainer) {
+            cardsContainer.innerHTML = state.budgets.map((b) => {
+                const isSelected = b.id === activeBudgetId;
+                const isTour = b.tipo_presupuesto === 'GIRA';
+                const available = Number(b.saldo_disponible || 0);
+                const isExhausted = available <= 0;
+                const isLow = available > 0 && available <= Number(b.monto_asignado || 0) * 0.2;
+
+                const typeLabel = isTour ? 'Gira Comercial' : 'Presupuesto Mensual';
+                const typeClass = isTour ? 'rg-budget-type-badge--gira' : 'rg-budget-type-badge--mensual';
+                const typeIcon = isTour ? '✈️' : '📅';
+
+                const title = isTour ? (b.nombre_gira || 'Gira Comercial') : `Presupuesto ${formatPeriodMonth(b.periodo_mes)}`;
+
+                let dateOrPeriodMeta = '';
+                if (isTour && (b.fecha_inicio || b.fecha_fin)) {
+                    dateOrPeriodMeta = `<span>📅 ${formatDateShort(b.fecha_inicio)} al ${formatDateShort(b.fecha_fin)}</span> · `;
+                }
+
+                let balanceBadgeClass = 'is-healthy';
+                let balanceBadgeText = `Saldo: ${formatMoney(available)}`;
+                if (isExhausted) {
+                    balanceBadgeClass = 'is-exhausted';
+                    balanceBadgeText = `Saldo agotado ($0)`;
+                } else if (isLow) {
+                    balanceBadgeClass = 'is-low';
+                    balanceBadgeText = `Saldo bajo: ${formatMoney(available)}`;
+                }
+
+                return `
+                    <div class="rg-budget-choice-card ${isSelected ? 'is-selected' : ''}" 
+                         role="radio" 
+                         aria-checked="${isSelected ? 'true' : 'false'}"
+                         tabindex="0"
+                         data-budget-id="${b.id}">
+                        <div class="rg-budget-choice-radio" aria-hidden="true">
+                            <span class="rg-budget-choice-dot"></span>
+                        </div>
+                        <div class="rg-budget-choice-content">
+                            <div class="rg-budget-choice-top">
+                                <span class="rg-budget-type-badge ${typeClass}">
+                                    ${typeIcon} ${typeLabel}
+                                </span>
+                                <span class="rg-budget-balance-badge ${balanceBadgeClass}">
+                                    ${balanceBadgeText}
+                                </span>
+                            </div>
+                            <div class="rg-budget-choice-title">${escapeHtml(title)}</div>
+                            <div class="rg-budget-choice-meta">
+                                ${dateOrPeriodMeta}
+                                <span>Cupo asignado: <strong>${formatMoney(b.monto_asignado)}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Vincular click y teclado a cada tarjeta
+            cardsContainer.querySelectorAll('.rg-budget-choice-card').forEach((card) => {
+                const bId = Number(card.dataset.budgetId);
+                const selectCard = () => {
+                    cardsContainer.querySelectorAll('.rg-budget-choice-card').forEach((c) => {
+                        const active = Number(c.dataset.budgetId) === bId;
+                        c.classList.toggle('is-selected', active);
+                        c.setAttribute('aria-checked', active ? 'true' : 'false');
+                    });
+                    select.value = bId;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    updateReportTotalizer();
+                };
+
+                card.addEventListener('click', selectCard);
+                card.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        selectCard();
+                    }
+                });
+            });
+        }
     }
 
     function renderReportExpenseChecklist() {
@@ -932,14 +1045,36 @@
         const total = selectedDocs.reduce((sum, d) => sum + Number(d.monto || 0), 0);
         const available = Number(budget.saldo_disponible || 0);
         const isTour = budget.tipo_presupuesto === 'GIRA';
-        const fundLabel = isTour ? `la gira “${budget.nombre_gira || 'Gira comercial'}”` : `el presupuesto mensual de ${formatPeriodMonth(budget.periodo_mes)}`;
+        const fundTitle = isTour ? (budget.nombre_gira || 'Gira Comercial') : formatPeriodMonth(budget.periodo_mes);
+        const fundLabel = isTour ? `la gira “${fundTitle}”` : `el presupuesto mensual de ${fundTitle}`;
         const excess = Math.max(0, total - available);
 
         $('#txtConfirmMessage').textContent = `Se imputarán ${selectedDocs.length} boletas por ${formatMoney(total)} CLP a ${fundLabel}.`;
+
+        // Actualizar desglose visual en modal
+        const fundDestEl = $('#lblModalFundDest');
+        if (fundDestEl) {
+            const badgeHtml = `<span class="rg-budget-type-badge ${isTour ? 'rg-budget-type-badge--gira' : 'rg-budget-type-badge--mensual'}">${isTour ? '✈️ Gira' : '📅 Mensual'}</span>`;
+            fundDestEl.innerHTML = `${badgeHtml} <span>${escapeHtml(fundTitle)}</span>`;
+        }
+        const docsCountEl = $('#lblModalDocsCount');
+        if (docsCountEl) {
+            docsCountEl.textContent = `${selectedDocs.length} boleta${selectedDocs.length !== 1 ? 's' : ''}`;
+        }
+        const totalRendirEl = $('#lblModalTotalRendir');
+        if (totalRendirEl) {
+            totalRendirEl.textContent = `${formatMoney(total)} CLP`;
+        }
+        const saldoFondoEl = $('#lblModalSaldoFondo');
+        if (saldoFondoEl) {
+            saldoFondoEl.textContent = `${formatMoney(available)} CLP`;
+            saldoFondoEl.style.color = available <= 0 ? 'var(--rg-red)' : 'var(--rg-text-main)';
+        }
+
         $('#boxExcessWarning').hidden = excess <= 0;
         $('#txtExcessWarning').textContent = isTour
-            ? `El informe supera en ${formatMoney(excess)} el saldo de esta gira. La solicitud de aprobación quedará asociada exclusivamente al fondo de gira, sin afectar el presupuesto mensual.`
-            : `El informe supera en ${formatMoney(excess)} el saldo mensual. Se enviará una solicitud de aprobación de exceso a Gerencia.`;
+            ? `El informe supera en ${formatMoney(excess)} el saldo de esta gira. Si se aprueba, se reembolsará hasta el tope del saldo disponible (${formatMoney(available)}).`
+            : `El informe supera en ${formatMoney(excess)} el saldo mensual. Se pagará hasta el tope disponible (${formatMoney(available)}) y Tesorería podrá solicitar excepción a Gerencia.`;
 
         $('#modalConfirmSubmit').hidden = false;
     }

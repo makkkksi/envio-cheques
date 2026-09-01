@@ -871,6 +871,215 @@ html, body {
 /* ==========================================
  * 6. VISTA Y CHECKLIST DE CONSOLIDACIÓN DE INFORMES
  * ========================================== */
+
+/* Selector de Fondo/Presupuesto en Drawer de Consolidación */
+.rg-budget-selector-block {
+    background: #ffffff;
+    border: 1px solid var(--rg-border);
+    border-radius: var(--rg-radius-card);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rg-budget-selector-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.rg-budget-selector-title {
+    display: block;
+    font-family: var(--rg-font-heading);
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--rg-text-main);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+.rg-budget-selector-subtitle {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--rg-text-muted);
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+.rg-budget-badge-counter {
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: var(--rg-radius-pill);
+    white-space: nowrap;
+    border: 1px solid var(--rg-border);
+}
+
+.rg-budget-choice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rg-budget-choice-card {
+    width: 100%;
+    min-height: 58px;
+    background: #ffffff;
+    border: 1.5px solid var(--rg-border);
+    border-radius: 12px;
+    padding: 11px 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.16s ease;
+    user-select: none;
+}
+
+.rg-budget-choice-card:hover {
+    border-color: #93c5fd;
+    background: #fbfdff;
+}
+
+.rg-budget-choice-card:focus-visible {
+    outline: 2px solid var(--rg-accent);
+    outline-offset: 2px;
+}
+
+.rg-budget-choice-card.is-selected {
+    border-color: var(--rg-accent);
+    background: #f0f7ff;
+    box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
+}
+
+/* Custom Radio Indicator */
+.rg-budget-choice-radio {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+    transition: all 0.15s ease;
+    background: #ffffff;
+}
+
+.rg-budget-choice-card.is-selected .rg-budget-choice-radio {
+    border-color: var(--rg-accent);
+}
+
+.rg-budget-choice-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--rg-accent);
+    transform: scale(0);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rg-budget-choice-card.is-selected .rg-budget-choice-dot {
+    transform: scale(1);
+}
+
+.rg-budget-choice-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.rg-budget-choice-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.rg-budget-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.rg-budget-type-badge--mensual {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.rg-budget-type-badge--gira {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.rg-budget-balance-badge {
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.rg-budget-balance-badge.is-healthy {
+    color: #16a34a;
+}
+
+.rg-budget-balance-badge.is-low {
+    color: #d97706;
+}
+
+.rg-budget-balance-badge.is-exhausted {
+    color: #dc2626;
+}
+
+.rg-budget-choice-title {
+    font-family: var(--rg-font-heading);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--rg-text-main);
+    line-height: 1.25;
+    margin-top: 1px;
+}
+
+.rg-budget-choice-meta {
+    font-size: 0.76rem;
+    color: var(--rg-text-muted);
+    line-height: 1.35;
+}
+
+.rg-budget-choice-meta strong {
+    color: #334155;
+}
+
+.rg-budget-card-dates {
+    color: #475569;
+    font-weight: 500;
+}
+
+.rg-budget-empty-card {
+    padding: 16px;
+    text-align: center;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    color: var(--rg-text-muted);
+    font-size: 0.85rem;
+}
+
 .rg-totalizer-strip {
     background: #ffffff;
     border: 1px solid var(--rg-border);
@@ -1372,6 +1581,55 @@ html, body {
     font-size: 0.88rem;
     color: var(--rg-text-muted);
     margin-bottom: 12px;
+}
+
+/* Resumen estructurado en modal de confirmación */
+.rg-modal-summary-box {
+    background: #f8fafc;
+    border: 1px solid var(--rg-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 8px 0 14px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.rg-modal-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--rg-text-muted);
+    padding-bottom: 5px;
+    border-bottom: 1px dashed #e2e8f0;
+}
+
+.rg-modal-summary-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.rg-modal-summary-label {
+    font-weight: 500;
+}
+
+.rg-modal-summary-val {
+    font-weight: 600;
+    color: var(--rg-text-main);
+    text-align: right;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rg-modal-summary-val--total {
+    font-family: var(--rg-font-heading);
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--rg-blue-amount);
 }
 
 .rg-modal-alert {
