@@ -97,6 +97,47 @@ try {
     ]);
     $renditionRows = $renditionStatement->fetchAll(PDO::FETCH_ASSOC);
 
+    $approvalStatement = $pdo->prepare(
+        'SELECT sa.tipo_solicitud,
+                COUNT(sa.id) AS solicitudes_total,
+                SUM(CASE WHEN sa.estado IN (:pendiente_envio, :pendiente_decision) AND sa.activo = :activa THEN 1 ELSE 0 END) AS pendientes,
+                SUM(CASE WHEN sa.estado = :envio_fallido AND sa.activo = :activa_fallo THEN 1 ELSE 0 END) AS correos_fallidos,
+                SUM(CASE WHEN sa.estado = :aprobada THEN 1 ELSE 0 END) AS aprobadas,
+                SUM(CASE WHEN sa.estado = :rechazada THEN 1 ELSE 0 END) AS rechazadas,
+                SUM(CASE WHEN sa.estado = :vencida THEN 1 ELSE 0 END) AS vencidas,
+                SUM(CASE WHEN sa.estado = :cancelada THEN 1 ELSE 0 END) AS canceladas,
+                AVG(CASE WHEN sa.resuelto_at IS NOT NULL
+                         THEN TIMESTAMPDIFF(MINUTE, COALESCE(sa.correo_enviado_at, sa.created_at), sa.resuelto_at) / 60
+                         ELSE NULL END) AS horas_respuesta_promedio,
+                MAX(CASE WHEN sa.estado IN (:pendiente_envio_antigua, :pendiente_decision_antigua, :envio_fallido_antiguo)
+                              AND sa.activo = :activa_antigua
+                         THEN TIMESTAMPDIFF(HOUR, COALESCE(sa.correo_enviado_at, sa.created_at), NOW())
+                         ELSE 0 END) AS horas_pendiente_mas_antigua
+         FROM solicitudes_aprobacion sa
+         WHERE DATE_FORMAT(sa.created_at, :formato_periodo) BETWEEN :periodo_inicio AND :periodo_fin
+         GROUP BY sa.tipo_solicitud
+         ORDER BY sa.tipo_solicitud ASC'
+    );
+    $approvalStatement->execute([
+        ':pendiente_envio' => 'PENDIENTE_ENVIO',
+        ':pendiente_decision' => 'PENDIENTE_DECISION',
+        ':activa' => 1,
+        ':envio_fallido' => 'ENVIO_FALLIDO',
+        ':activa_fallo' => 1,
+        ':aprobada' => 'APROBADA',
+        ':rechazada' => 'RECHAZADA',
+        ':vencida' => 'VENCIDA',
+        ':cancelada' => 'CANCELADA',
+        ':pendiente_envio_antigua' => 'PENDIENTE_ENVIO',
+        ':pendiente_decision_antigua' => 'PENDIENTE_DECISION',
+        ':envio_fallido_antiguo' => 'ENVIO_FALLIDO',
+        ':activa_antigua' => 1,
+        ':formato_periodo' => '%Y-%m',
+        ':periodo_inicio' => $startPeriod,
+        ':periodo_fin' => $endPeriod,
+    ]);
+    $approvalRows = $approvalStatement->fetchAll(PDO::FETCH_ASSOC);
+
     $sellerMap = [];
     $trendMap = [];
     $fundTypeMap = [
@@ -210,6 +251,55 @@ try {
     }
     unset($fundType);
 
+    $approvalSummary = [
+        'solicitudes_total' => 0,
+        'pendientes' => 0,
+        'correos_fallidos' => 0,
+        'aprobadas' => 0,
+        'rechazadas' => 0,
+        'vencidas' => 0,
+        'canceladas' => 0,
+        'horas_respuesta_promedio' => 0.0,
+        'horas_pendiente_mas_antigua' => 0,
+        'tasa_aprobacion_pct' => 0.0,
+    ];
+    $approvalResponseHours = 0.0;
+    $approvalResolvedWithTime = 0;
+    $approvalsByType = [];
+    foreach ($approvalRows as $row) {
+        $resolved = (int)$row['aprobadas'] + (int)$row['rechazadas'];
+        $averageHours = $row['horas_respuesta_promedio'] !== null ? round((float)$row['horas_respuesta_promedio'], 1) : 0.0;
+        $typed = [
+            'tipo' => (string)$row['tipo_solicitud'],
+            'solicitudes_total' => (int)$row['solicitudes_total'],
+            'pendientes' => (int)$row['pendientes'],
+            'correos_fallidos' => (int)$row['correos_fallidos'],
+            'aprobadas' => (int)$row['aprobadas'],
+            'rechazadas' => (int)$row['rechazadas'],
+            'vencidas' => (int)$row['vencidas'],
+            'canceladas' => (int)$row['canceladas'],
+            'horas_respuesta_promedio' => $averageHours,
+            'horas_pendiente_mas_antigua' => max(0, (int)$row['horas_pendiente_mas_antigua']),
+            'tasa_aprobacion_pct' => $resolved > 0 ? round(((int)$row['aprobadas'] / $resolved) * 100, 1) : 0.0,
+        ];
+        $approvalsByType[] = $typed;
+        foreach (['solicitudes_total', 'pendientes', 'correos_fallidos', 'aprobadas', 'rechazadas', 'vencidas', 'canceladas'] as $metric) {
+            $approvalSummary[$metric] += $typed[$metric];
+        }
+        $approvalSummary['horas_pendiente_mas_antigua'] = max($approvalSummary['horas_pendiente_mas_antigua'], $typed['horas_pendiente_mas_antigua']);
+        if ($resolved > 0 && $row['horas_respuesta_promedio'] !== null) {
+            $approvalResponseHours += $averageHours * $resolved;
+            $approvalResolvedWithTime += $resolved;
+        }
+    }
+    $resolvedTotal = $approvalSummary['aprobadas'] + $approvalSummary['rechazadas'];
+    $approvalSummary['horas_respuesta_promedio'] = $approvalResolvedWithTime > 0
+        ? round($approvalResponseHours / $approvalResolvedWithTime, 1)
+        : 0.0;
+    $approvalSummary['tasa_aprobacion_pct'] = $resolvedTotal > 0
+        ? round(($approvalSummary['aprobadas'] / $resolvedTotal) * 100, 1)
+        : 0.0;
+
     RendicionesService::jsonResponse(true, ['data' => [
         'periodo_inicio' => $startPeriod,
         'periodo_fin' => $endPeriod,
@@ -228,6 +318,10 @@ try {
         ],
         'tendencia_holding' => array_values($trendMap),
         'fondos_por_tipo' => array_values($fundTypeMap),
+        'aprobaciones' => [
+            'resumen' => $approvalSummary,
+            'por_tipo' => $approvalsByType,
+        ],
         'vendedores' => $sellers,
     ]]);
 } catch (InvalidArgumentException $exception) {

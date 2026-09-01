@@ -8,6 +8,7 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../services/ApprovalWorkflowService.php';
 
 header('Cache-Control: no-store, private');
 header('Pragma: no-cache');
@@ -25,6 +26,10 @@ $resolvedDecision = '';
 if ($validTokenFormat) {
     try {
         $pdo = Database::getCobranzasConnection();
+        $request = ApprovalWorkflowService::getByToken($pdo, $token);
+        if (($request['tipo_solicitud'] ?? '') !== ApprovalWorkflowService::TYPE_TOUR) {
+            throw new InvalidArgumentException('El enlace no corresponde a una aprobación de gira.');
+        }
         $stmt = $pdo->prepare(
             'SELECT sa.*, p.nombre_gira, p.vendedor_nombre, p.vendedor_email,
                     p.monto_asignado, p.periodo_mes, p.fecha_inicio, p.fecha_fin,
@@ -32,12 +37,10 @@ if ($validTokenFormat) {
              FROM solicitudes_aprobacion sa
              INNER JOIN presupuestos_vendedores p ON p.id = sa.presupuesto_id
              INNER JOIN empresas e ON e.id = p.empresa_id
-             WHERE sa.token_hash = :token_hash
-               AND sa.tipo_solicitud = :tipo
-               AND sa.activo = :activo
-             LIMIT 1'
+             WHERE sa.id = :solicitud_id
+               LIMIT 1'
         );
-        $stmt->execute([':token_hash' => hash('sha256', $token), ':tipo' => 'GIRA', ':activo' => 1]);
+        $stmt->execute([':solicitud_id' => (int)$request['id']]);
         $solicitud = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$solicitud) {
             $pageError = 'El enlace no existe o fue reemplazado por una solicitud más reciente.';
@@ -48,7 +51,7 @@ if ($validTokenFormat) {
             }
         } elseif (!$solicitud['token_expira_at'] || strtotime((string)$solicitud['token_expira_at']) < time()) {
             $pageError = 'El enlace expiró. Solicite a Tesorería que emita una nueva solicitud.';
-        } elseif (!in_array($solicitud['estado'], ['PENDIENTE_DECISION', 'PENDIENTE_ENVIO'], true)) {
+        } elseif ($solicitud['estado'] !== ApprovalWorkflowService::STATE_PENDING_DECISION || !(bool)$solicitud['activo']) {
             $pageError = 'Esta solicitud ya fue resuelta o cancelada.';
         } else {
             $canResolve = true;
@@ -203,7 +206,7 @@ $justif        = nl2br(htmlspecialchars((string)($solicitud['justificacion_gira'
       document.querySelectorAll('#confirm-reject-row button').forEach(b => b.disabled = true);
 
       try {
-        const res = await fetch('/api/rendiciones/resolver_gira.php', {
+        const res = await fetch('../api/rendiciones/resolver_gira.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
           body: JSON.stringify({ token: TOKEN, decision, comentario: reason }),
@@ -218,9 +221,12 @@ $justif        = nl2br(htmlspecialchars((string)($solicitud['justificacion_gira'
           msg.style.color      = decision === 'APROBADA' ? '#166534' : '#991b1b';
           msg.style.padding    = '1rem';
           msg.style.borderRadius = '8px';
+          const treasuryMessage = data.data?.tesoreria_notificada
+            ? ' Tesorería fue notificada por correo.'
+            : ' La decisión ya está disponible en el panel de Tesorería.';
           msg.textContent = decision === 'APROBADA'
-            ? '✓ Gira aprobada correctamente. Tesorería recibirá la notificación.'
-            : '✕ Gira rechazada. Tesorería recibirá la notificación.';
+            ? '✓ Gira aprobada correctamente.' + treasuryMessage
+            : '✕ Gira rechazada.' + treasuryMessage;
         } else {
           msg.style.color = '#dc2626';
           msg.textContent = data.message ?? 'Ocurrió un error. Por favor intente nuevamente.';

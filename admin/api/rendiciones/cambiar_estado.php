@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../../config/auth.php';
 require_once __DIR__ . '/../../../services/AuditService.php';
 require_once __DIR__ . '/../../../services/RendicionesService.php';
 require_once __DIR__ . '/../../../services/MailService.php';
+require_once __DIR__ . '/../../../services/ApprovalWorkflowService.php';
 
 RendicionesService::requireMethod('POST');
 
@@ -21,7 +22,7 @@ try {
     $renditionId = filter_var($input['rendicion_id'] ?? null, FILTER_VALIDATE_INT);
     $action = strtoupper(trim((string)($input['accion'] ?? '')));
     $comment = trim((string)($input['comentario'] ?? ''));
-    $allowedActions = ['RECIBIR_FISICOS', 'APROBAR_TOTAL', 'APROBAR_PARCIAL', 'RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'MARCAR_PAGADA', 'REENVIAR_EXCESO'];
+    $allowedActions = ['RECIBIR_FISICOS', 'APROBAR_TOTAL', 'APROBAR_PARCIAL', 'RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'MARCAR_PAGADA', 'REENVIAR_EXCESO', 'SOLICITAR_EXCEPCION'];
     if (!$renditionId || !in_array($action, $allowedActions, true)) {
         throw new InvalidArgumentException('Rendición o acción no válida.');
     }
@@ -37,6 +38,89 @@ try {
     $rendition = $stmtRendition->fetch(PDO::FETCH_ASSOC);
     if (!$rendition) {
         throw new DomainException('Rendición no encontrada.');
+    }
+
+    if (in_array($action, ['SOLICITAR_EXCEPCION', 'REENVIAR_EXCESO'], true) && $rendition['estado'] === 'EN_REVISION_TESORERIA') {
+        if ($rendition['tipo_rendicion'] !== 'MENSUAL' || (float)($rendition['monto_exceso_no_reembolsable'] ?? 0) <= 0) {
+            throw new DomainException('Esta rendición no tiene un exceso mensual pendiente que pueda solicitarse.');
+        }
+        $approverId = filter_var($input['aprobador_id'] ?? null, FILTER_VALIDATE_INT);
+        $justification = RendicionesService::truncateText(trim((string)($input['comentario'] ?? '')), 500);
+        if (!$approverId || $justification === '') {
+            throw new InvalidArgumentException('Seleccione un responsable e indique la justificación de la excepción.');
+        }
+
+        $workflow = null;
+        $requestId = (int)($rendition['solicitud_excepcion_id'] ?? 0);
+        if ($requestId > 0) {
+            $stmtRequest = $pdo->prepare('SELECT id, estado, activo FROM solicitudes_aprobacion WHERE id = :id AND tipo_solicitud = :tipo LIMIT 1 FOR UPDATE');
+            $stmtRequest->execute([':id' => $requestId, ':tipo' => ApprovalWorkflowService::TYPE_MONTHLY_EXCEPTION]);
+            $currentRequest = $stmtRequest->fetch(PDO::FETCH_ASSOC);
+            if ($currentRequest && (bool)$currentRequest['activo'] && in_array($currentRequest['estado'], ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'], true)) {
+                $workflow = ApprovalWorkflowService::rotateToken($pdo, $requestId, (int)$approverId, [
+                    'id' => (int)$admin['id'], 'nombre' => $admin['nombre'], 'email' => $admin['email'],
+                ]);
+            }
+        }
+        if ($workflow === null) {
+            $workflow = ApprovalWorkflowService::createRequest($pdo, [
+                'tipo_solicitud' => ApprovalWorkflowService::TYPE_MONTHLY_EXCEPTION,
+                'rendicion_id' => $renditionId, 'aprobador_id' => $approverId,
+                'solicitado_por' => (int)$admin['id'],
+                'monto_solicitado' => (float)$rendition['monto_exceso_no_reembolsable'],
+                'justificacion' => $justification,
+                'actor_nombre' => $admin['nombre'], 'actor_email' => $admin['email'],
+            ]);
+        }
+        $request = $workflow['solicitud'];
+        $stmtMailDocuments = $pdo->prepare(
+            'SELECT id, monto, tipo_documento, categoria_gasto, fecha_emision,
+                    razon_social_proveedor, rut_proveedor, numero_documento,
+                    descripcion, foto_documento_url, cliente_invitado_nombre,
+                    cliente_invitado_rut, cliente_invitado_empresa,
+                    cliente_invitado_cargo, proposito_comercial
+             FROM rendicion_documentos
+             WHERE rendicion_id = :rendicion_id AND activo = :activo
+             ORDER BY fecha_emision ASC, id ASC'
+        );
+        $stmtMailDocuments->execute([':rendicion_id' => $renditionId, ':activo' => 1]);
+        $mailDocuments = $stmtMailDocuments->fetchAll(PDO::FETCH_ASSOC);
+        $stmtContext = $pdo->prepare(
+            'SELECT e.nombre AS empresa_nombre, p.nombre_gira
+             FROM empresas e
+             INNER JOIN presupuestos_vendedores p ON p.id = :presupuesto_id
+             WHERE e.id = :empresa_id LIMIT 1'
+        );
+        $stmtContext->execute([':presupuesto_id' => (int)$rendition['presupuesto_id'], ':empresa_id' => (int)$rendition['empresa_id']]);
+        $context = $stmtContext->fetch(PDO::FETCH_ASSOC) ?: [];
+        RendicionesService::logHistory($pdo, [
+            'rendicion_id' => $renditionId, 'usuario_id' => (int)$admin['id'],
+            'actor_tipo' => 'TESORERIA', 'actor_nombre' => $admin['nombre'], 'actor_email' => $admin['email'],
+            'accion' => 'SOLICITAR_EXCEPCION_MENSUAL', 'estado_anterior' => $rendition['estado'],
+            'estado_nuevo' => $rendition['estado'], 'comentario' => $justification,
+            'metadata' => ['solicitud_id' => (int)$request['id'], 'monto_solicitado' => (float)$request['monto_solicitado']],
+        ]);
+        $pdo->commit();
+
+        $approver = [
+            'id' => (int)$request['aprobador_id'], 'nombre' => $request['aprobador_nombre_snapshot'],
+            'cargo' => $request['aprobador_cargo_snapshot'], 'email' => $request['aprobador_email_snapshot'],
+        ];
+        $mailSent = false;
+        try {
+            $mailSent = MailService::enviarSolicitudExcesoRendicion(array_merge($rendition, $context, [
+                'monto_exceso' => (float)$request['monto_solicitado'],
+            ]), $mailDocuments, $workflow['raw_token'], $approver, $justification);
+        } catch (Throwable $mailException) {
+            error_log('[admin.rendiciones.excepcion.mail] ' . $mailException->getMessage());
+        }
+        $pdo->beginTransaction();
+        ApprovalWorkflowService::markEmailResult($pdo, (int)$request['id'], $mailSent, $mailSent ? null : 'El servidor SMTP no confirmó la entrega del correo.');
+        $pdo->commit();
+        RendicionesService::jsonResponse(true, [
+            'message' => $mailSent ? 'Solicitud excepcional enviada correctamente.' : 'La excepción quedó pendiente, pero el correo falló. Puede reenviarla.',
+            'data' => ['rendicion_id' => $renditionId, 'solicitud_id' => (int)$request['id'], 'correo_enviado' => $mailSent],
+        ]);
     }
 
     if ($action === 'REENVIAR_EXCESO') {
@@ -121,7 +205,7 @@ try {
             'accion' => 'ENVIAR_SOLICITUD_EXCESO',
             'estado_anterior' => $rendition['estado'],
             'estado_nuevo' => $rendition['estado'],
-            'comentario' => $comment !== '' ? mb_substr($comment, 0, 1000) : null,
+            'comentario' => $comment !== '' ? RendicionesService::truncateText($comment, 1000) : null,
             'metadata' => [
                 'aprobador_id' => (int)$approver['id'],
                 'aprobador_nombre' => $approver['nombre'],
@@ -321,7 +405,7 @@ try {
             $stmtDecision->execute([
                 ':estado_nuevo'   => $itemState,
                 ':monto_validado' => $validatedAmount !== null ? number_format($validatedAmount, 2, '.', '') : null,
-                ':motivo_rechazo' => $itemReason !== '' ? mb_substr($itemReason, 0, 500) : null,
+                ':motivo_rechazo' => $itemReason !== '' ? RendicionesService::truncateText($itemReason, 500) : null,
                 ':id'             => $documentId,
                 ':rendicion_id'   => $renditionId,
                 ':estado_actual'  => 'PENDIENTE',
@@ -336,7 +420,7 @@ try {
                 'accion'          => $itemDecision === 'APROBAR' ? 'APROBAR_DOCUMENTO' : 'RECHAZAR_DOCUMENTO',
                 'estado_anterior' => 'PENDIENTE',
                 'estado_nuevo'    => $itemState,
-                'comentario'      => $itemReason !== '' ? mb_substr($itemReason, 0, 1000) : null,
+                'comentario'      => $itemReason !== '' ? RendicionesService::truncateText($itemReason, 1000) : null,
                 'metadata'        => [
                     'monto_validado'   => $validatedAmount,
                     'aplico_fifo_tope' => $aplicoTope && $itemDecision === 'APROBAR' && $validatedAmount < ($decisionAmounts[$documentId][1] ?? 0),
@@ -354,7 +438,7 @@ try {
         );
         $stmtReject->execute([
             ':estado_nuevo' => 'RECHAZADO',
-            ':motivo' => mb_substr($comment, 0, 500),
+            ':motivo' => RendicionesService::truncateText($comment, 500),
             ':rendicion_id' => $renditionId,
             ':estado_actual' => 'PENDIENTE',
         ]);
@@ -413,7 +497,7 @@ try {
         ':documentos_recibidos' => $received,
         ':fecha_recepcion' => $receivedAt,
         ':recibido_por' => $receivedBy,
-        ':motivo_rechazo' => in_array($action, ['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA'], true) ? mb_substr($comment, 0, 500) : $rendition['motivo_rechazo'],
+        ':motivo_rechazo' => in_array($action, ['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA'], true) ? RendicionesService::truncateText($comment, 500) : $rendition['motivo_rechazo'],
         ':id' => $renditionId,
         ':estado_actual' => $currentState,
     ]);
@@ -430,7 +514,7 @@ try {
         'accion' => $action,
         'estado_anterior' => $currentState,
         'estado_nuevo' => $nextState,
-        'comentario' => $comment !== '' ? mb_substr($comment, 0, 1000) : null,
+        'comentario' => $comment !== '' ? RendicionesService::truncateText($comment, 1000) : null,
         'metadata' => ['monto_aprobado' => $approvedTotal],
     ]);
     AuditService::log(

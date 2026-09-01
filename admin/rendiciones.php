@@ -25,7 +25,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
     <link rel="stylesheet" href="styles.css?v=4">
     <link rel="stylesheet" href="css/shell.css?v=20260828-session-1">
     <link rel="stylesheet" href="css/modal_config_cc.css?v=20260826-4">
-    <link rel="stylesheet" href="css/rendiciones.css?v=20260826-4">
+    <link rel="stylesheet" href="css/rendiciones.css?v=20260901-1">
 </head>
 <body data-can-manage-rendiciones="<?= $canManageRenditions ? '1' : '0' ?>" data-can-configure-approvers="<?= $canConfigureApprovers ? '1' : '0' ?>">
     <!--
@@ -120,6 +120,16 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                                 <header><div><h3 id="fundComparisonTitle">Composición de fondos</h3><p>Comparación estandarizada entre operación mensual y giras comerciales; no utiliza nombres ingresados por usuarios.</p></div></header>
                                 <div class="rd-fund-comparison__rows" id="dashboardFundTypes"><div class="rd-bar-empty">Consolidando tipos de fondo…</div></div>
                             </section>
+                            <section class="rd-approval-analytics" aria-labelledby="approvalAnalyticsTitle">
+                                <header><div><h3 id="approvalAnalyticsTitle">Aprobaciones de Gerencia</h3><p>Salud operativa de giras y excepciones mensuales en el horizonte seleccionado.</p></div><span id="dashboardApprovalTotal">0 solicitudes</span></header>
+                                <div class="rd-approval-analytics__metrics" id="dashboardApprovalMetrics">
+                                    <div><span>Esperando decisión</span><strong>0</strong><small>Solicitudes activas</small></div>
+                                    <div class="is-warning"><span>Correos fallidos</span><strong>0</strong><small>Requieren reenvío</small></div>
+                                    <div><span>Respuesta promedio</span><strong>—</strong><small>Desde envío hasta decisión</small></div>
+                                    <div><span>Tasa de aprobación</span><strong>—</strong><small>Sobre decisiones resueltas</small></div>
+                                </div>
+                                <div class="rd-approval-analytics__types" id="dashboardApprovalTypes"><div class="rd-bar-empty">Consolidando aprobaciones…</div></div>
+                            </section>
                             <div class="rd-seller-analytics__body">
                                 <section class="rd-seller-ranking" aria-labelledby="sellerRankingTitle">
                                     <header><div><h3 id="sellerRankingTitle">Comparativa de vendedores</h3><p id="sellerAnalyticsStatus" role="status">Preparando análisis histórico…</p></div><label class="rd-seller-filter"><span class="rd-visually-hidden">Buscar vendedor</span><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="dashboardSellerSearch" type="search" placeholder="Buscar vendedor o empresa…" autocomplete="off"></label></header>
@@ -181,7 +191,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                     <label id="budgetPeriodField"><span>Período</span><input type="month" id="budgetPeriod" required></label>
                     <label class="rd-span-2"><span>Monto asignado</span><input type="number" id="budgetAmount" min="1" step="1" required></label>
                 </div>
-                <fieldset id="tourFields" hidden><legend>Datos de la gira</legend><div class="rd-form-grid"><label class="rd-span-2"><span>Nombre de gira</span><input type="text" id="budgetTourName" minlength="3" maxlength="100"><small class="rd-field-help">Uso operativo; el Dashboard consolida las giras por tipo y no utiliza este nombre.</small></label><label><span>Inicio</span><input type="date" id="budgetStartDate"></label><label><span>Término</span><input type="date" id="budgetEndDate"></label></div></fieldset>
+                <fieldset id="tourFields" hidden><legend>Datos y aprobación de la gira</legend><div class="rd-form-grid"><label class="rd-span-2"><span>Nombre de gira</span><input type="text" id="budgetTourName" minlength="3" maxlength="100"><small class="rd-field-help">Uso operativo; el Dashboard consolida las giras por tipo y no utiliza este nombre.</small></label><label><span>Inicio</span><input type="date" id="budgetStartDate"></label><label><span>Término</span><input type="date" id="budgetEndDate"></label><label class="rd-span-2"><span>Justificación comercial</span><textarea id="budgetTourJustification" rows="3" maxlength="500" placeholder="Objetivo, zona y antecedentes necesarios para autorizar el fondo."></textarea></label><label class="rd-span-2"><span>Responsable de aprobación</span><select id="budgetTourApprover"><option value="">Selecciona un responsable</option></select><small class="rd-field-help">La solicitud se enviará sólo a la persona seleccionada.</small></label></div></fieldset>
                 <div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" id="clearBudgetForm" type="button">Limpiar</button><button class="rd-btn rd-btn--primary" id="saveBudgetButton" type="submit">Guardar presupuesto</button></div>
             </form>
         </div>
@@ -196,7 +206,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
 
     <script src="js/shared_ui.js?v=20260828-session-1"></script>
     <script src="js/modal_config_cc.js?v=20260826-3"></script>
-    <script src="js/rendiciones.js?v=20260826-7" defer></script>
+    <script src="js/rendiciones.js?v=20260901-2" defer></script>
     <?php if (userHasPermission($rolUsuario, 'cc.manage') || userHasPermission($rolUsuario, 'companies.manage')): ?>
     <?php include __DIR__ . '/components/modal_config_cc.php'; ?>
     <?php endif; ?>

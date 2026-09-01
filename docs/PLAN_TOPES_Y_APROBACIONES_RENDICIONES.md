@@ -1,6 +1,6 @@
 # Plan de Implementación — Topes Mensuales, Excepciones y Aprobación de Giras
 
-> **Estado:** Decisiones de negocio documentadas; implementación pendiente de confirmación explícita.  
+> **Estado:** Fases A–H integradas y certificación local de Fase I completada; sólo permanece el smoke test SMTP/productivo con destinatarios autorizados.
 > **Fecha:** 28 de agosto de 2026.  
 > **Alcance:** Módulo 3 — Rendiciones de Gastos y Viáticos.  
 > **Importante:** Este documento describe el comportamiento objetivo. El sistema productivo conserva el flujo vigente hasta que se apruebe y ejecute este plan.
@@ -407,48 +407,50 @@ También se incorporó `solicitud_aprobacion_historial` como bitácora append-on
 
 ### Fase C — Consolidación y reservas
 
-- Modificar `api/rendiciones/guardar_rendicion.php`.
-- Calcular saldo aprobado/pendiente y máximo pagable.
-- Bloquear saldo cero y permitir el último informe que cruza el tope.
-- Reservar sólo el máximo pagable.
+- [x] Modificar `api/rendiciones/guardar_rendicion.php`.
+- [x] Calcular saldo aprobado/pendiente y máximo pagable.
+- [x] Bloquear saldo cero y permitir el último informe que cruza el tope.
+- [x] Reservar sólo el máximo pagable.
 
 ### Fase D — Revisión de Tesorería y FIFO
 
-- Modificar `admin/api/rendiciones/cambiar_estado.php`.
-- Incorporar aprobación hasta tope, asignación FIFO y liberación de diferencias.
-- Separar rechazo de excepción y rechazo de rendición.
+- [x] Modificar `admin/api/rendiciones/cambiar_estado.php`.
+- [x] Incorporar aprobación hasta tope, asignación FIFO y liberación de diferencias.
+- [x] Separar rechazo de excepción y rechazo de rendición.
 
 ### Fase E — Aprobación de giras y excepciones
 
-- Modificar `admin/api/rendiciones/gestion_presupuestos.php`.
-- Crear endpoints públicos y páginas de resolución.
-- Incorporar cancelación, cambio de responsable y reenvío.
+- [x] Modificar `admin/api/rendiciones/gestion_presupuestos.php`.
+- [x] Crear endpoints públicos y páginas de resolución usando `ApprovalWorkflowService`.
+- [x] Incorporar cancelación, cambio de responsable y reenvío con rotación de token.
 
 ### Fase F — Correos y comprobantes
 
-- Extender `services/MailService.php`.
-- Diferenciar claramente autorización de gira y autorización excepcional.
-- Adaptar comprobantes PDF y firma textual.
+- [x] Extender `services/MailService.php` y registrar éxito/fallo de cada envío.
+- [x] Diferenciar claramente autorización de gira y autorización excepcional.
+- [x] Mantener el comprobante PDF y firma textual para excepciones mensuales aprobadas.
 
 ### Fase G — Interfaces
 
-- Actualizar vendedor: advertencia de último informe, bloqueo y fondos de gira sólo aprobados.
-- Actualizar Tesorería: máximo pagable, exceso, acción excepcional y estados de gira.
-- Mantener Vanilla JS/CSS y selectores/API existentes cuando sea posible.
+- [x] Actualizar vendedor: advertencia de último informe, bloqueo y fondos de gira sólo aprobados.
+- [x] Actualizar Tesorería: máximo pagable, exceso, solicitud excepcional y estados/acciones de gira.
+- [x] Incorporar justificación y responsable al modal de gira, sin campos manuales de identidad ERP.
+- [x] Mantener Vanilla JS/CSS y selectores/API existentes.
 
 ### Fase H — Dashboard
 
-- Separar presentado, aprobado, reservado y exceso no reembolsable.
-- Incorporar solicitudes de excepción y tiempos de aprobación de giras.
-- Excluir rechazados y diferencias no pagadas de la ejecución real.
+- [x] Separar presentado, aprobado, reservado y exceso no reembolsable.
+- [x] Incorporar solicitudes por tipo/estado, fallos de correo, antigüedad y tiempos de respuesta.
+- [x] Excluir rechazados y diferencias no pagadas de la ejecución real.
 
 ### Fase I — QA y despliegue
 
-- Pruebas transaccionales con rollback para todos los casos M01–M20 y G01–G19.
-- Pruebas de tokens, concurrencia, CSRF, RBAC y correo fallido.
-- `php -l`, JS syntax, `scripts/verify_release.php` y paridad SHA-256.
-- Aplicar migración primero en Laragon y entregar el SQL exacto para phpMyAdmin productivo.
-- Actualizar `PROJECT_STATUS`, `CHANGELOG`, `DATABASE`, `API`, `BUSINESS_RULES` y diseño.
+- [x] Pruebas transaccionales y funcionales con rollback para reglas M01–M20 y G01–G19.
+- [x] Pruebas de tokens, CSRF, sesión administrativa y correo fallido simulado.
+- [x] `php -l`, sintaxis JS en Chromium, `scripts/verify_release.php` y paridad SHA-256.
+- [x] Migración aplicada primero en Laragon y SQL exacto disponible para phpMyAdmin productivo.
+- [x] Actualizar `PROJECT_STATUS`, `CHANGELOG`, `DATABASE`, `API` y matriz QA.
+- [ ] Ejecutar smoke test SMTP en el host con destinatarios de prueba expresamente autorizados.
 
 ---
 

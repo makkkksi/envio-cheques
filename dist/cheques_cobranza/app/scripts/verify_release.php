@@ -184,7 +184,8 @@ foreach ($rendicionesCodeFiles as $relative => $absolute) {
     if (preg_match('/\bDELETE\s+FROM\b/i', $source)) {
         $contractErrors[] = "DELETE físico detectado en {$relative}";
     }
-    if (preg_match('/prepare\s*\([^;]*\?/is', $source)) {
+    if (preg_match("/prepare\\s*\\(\\s*'(?:\\\\'|[^'])*\\?/is", $source)
+        || preg_match('/prepare\\s*\\(\\s*"(?:\\\\"|[^"])*\\?/is', $source)) {
         $contractErrors[] = "Placeholder posicional detectado en {$relative}";
     }
 }

@@ -594,7 +594,7 @@ Sólo admite documentos propios en `BORRADOR`. Realiza baja lógica `DESCARTADO`
 }
 ```
 
-Bloquea presupuesto y documentos, recalcula montos y compromete el fondo dentro de una única transacción. Sin exceso pasa a `EN_REVISION_TESORERIA`; con exceso pasa a `PENDIENTE_APROBACION_EXCESO`. Si se informa `nota_vendedor`, se persiste en `rendiciones_gastos.nota_vendedor` y queda incluida en el evento inmutable `ENVIAR_RENDICION`.
+Bloquea presupuesto y documentos, recalcula montos y compromete el fondo dentro de una única transacción. Si existe saldo permite el último informe que cruza el tope, reserva sólo `monto_maximo_aprobable`, registra `monto_exceso_no_reembolsable` y pasa a `EN_REVISION_TESORERIA`. Si el saldo ya está agotado, rechaza el envío. Si se informa `nota_vendedor`, se persiste y queda incluida en el evento inmutable `ENVIAR_RENDICION`.
 
 ### GET `/api/rendiciones/get_mis_rendiciones.php`
 
@@ -608,7 +608,7 @@ Endpoint público de capacidad limitada. La vista `/rendiciones/aprobar_exceso.p
 { "token": "64-caracteres-hex", "decision": "APROBADO", "comentario": "Opcional al aprobar; obligatorio al rechazar" }
 ```
 
-El token expira a las 48 horas y sólo puede consumirse una vez. Aprobar mueve la rendición a `EN_REVISION_TESORERIA`; rechazar la mueve a `RECHAZADA` y libera el presupuesto comprometido.
+El token versionado expira a las 48 horas y sólo puede consumirse una vez. Resuelve exclusivamente una solicitud `EXCEPCION_MENSUAL`: aprobar amplía el máximo pagable de esa rendición por el exceso autorizado; rechazar conserva el máximo ordinario y no rechaza la rendición base.
 
 Al resolver correctamente, la respuesta incorpora `decision`, `aprobador_nombre` y `aprobador_cargo`. La vista reemplaza de inmediato el formulario por un estado final sin controles reutilizables.
 
@@ -622,7 +622,7 @@ Requiere `rendiciones.view`. Filtros: `estado`, `mes`, `vendedor_id`, `empresa_i
 
 ### GET `/admin/api/rendiciones/get_dashboard_analitico.php`
 
-Requiere `rendiciones.view`. Recibe `mes=YYYY-MM` y `ventana=6|12`. Consolida por `(empresa_id, vendedor_id)` presupuesto activo, monto aprobado, monto pendiente, rendiciones aprobadas/rechazadas, casos con exceso aprobado, ticket promedio y tendencia mensual. La respuesta incluye un resumen holding y `fondos_por_tipo`, comparación estandarizada entre `MENSUAL` y `GIRA` con cantidad de fondos, promedio, asignado, aprobado, pendiente, ejecución y excesos. No entrega nombres libres de giras y no considera rendiciones rechazadas como gasto ni como exceso efectivo.
+Requiere `rendiciones.view`. Recibe `mes=YYYY-MM` y `ventana=6|12`. Consolida por `(empresa_id, vendedor_id)` presupuesto activo, monto aprobado, monto pendiente, rendiciones aprobadas/rechazadas, casos con exceso aprobado, ticket promedio y tendencia mensual. La respuesta incluye un resumen holding, `fondos_por_tipo` y `aprobaciones`. Este último bloque agrega por `GIRA` y `EXCEPCION_MENSUAL` solicitudes pendientes, aprobadas, rechazadas, fallidas, vencidas y canceladas, junto con tasa de aprobación, tiempo promedio de respuesta y antigüedad máxima pendiente. No entrega nombres libres ni correos y no considera rechazos o diferencias no pagadas como gasto.
 
 ### GET `/admin/api/rendiciones/get_detalle_rendicion.php?id={id}`
 
@@ -653,7 +653,7 @@ Requiere `rendiciones.manage`. Consulta en modo de sólo lectura el catálogo `t
 
 ### POST `/admin/api/rendiciones/cambiar_estado.php`
 
-Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `APROBAR_TOTAL`, `APROBAR_PARCIAL`, `RECHAZAR`, `RECHAZAR_EXCESO_TESORERIA`, `MARCAR_PAGADA` y `REENVIAR_EXCESO`. Para `REENVIAR_EXCESO` se exige `aprobador_id`; el servidor carga el responsable activo, guarda snapshots y rota el Magic Token anterior. `RECHAZAR_EXCESO_TESORERIA` sólo opera desde `PENDIENTE_APROBACION_EXCESO`, exige motivo, libera íntegramente el compromiso e invalida cualquier enlace emitido sin enviar correo nuevo.
+Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `APROBAR_TOTAL`, `APROBAR_PARCIAL`, `RECHAZAR`, `RECHAZAR_EXCESO_TESORERIA`, `MARCAR_PAGADA`, `SOLICITAR_EXCEPCION` y `REENVIAR_EXCESO`. `SOLICITAR_EXCEPCION` opera sobre una rendición mensual en revisión con exceso no reembolsable; exige `aprobador_id` y justificación, y solicita únicamente la diferencia. `REENVIAR_EXCESO` rota el token abierto. Se conserva compatibilidad con rendiciones históricas en `PENDIENTE_APROBACION_EXCESO`.
 
 ### GET|POST `/admin/api/rendiciones/gestion_aprobadores.php`
 
@@ -662,4 +662,8 @@ Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `AP
 
 ### GET|POST `/admin/api/rendiciones/gestion_presupuestos.php`
 
-Requiere `rendiciones.manage`. `POST` admite `CREAR`, `ACTUALIZAR` y `DESACTIVAR`; no existe operación física de eliminación. En crear y actualizar, el servidor ignora cualquier nombre o correo aportado por el cliente y vuelve a resolver ambos campos mediante `(empresa_id, vendedor_id)` en el ERP correspondiente. Para `GIRA`, exige `nombre_gira` de 3–100 caracteres y fechas válidas; deriva `periodo_mes` desde `fecha_inicio`, por lo que no confía en un período mensual oculto enviado por el navegador.
+Requiere `rendiciones.manage`. `POST` admite `CREAR`, `ACTUALIZAR`, `DESACTIVAR`, `REENVIAR_SOLICITUD_GIRA`, `CAMBIAR_RESPONSABLE_GIRA` y `CANCELAR_SOLICITUD_GIRA`; no existe eliminación física. En crear y actualizar, el servidor vuelve a resolver identidad mediante `(empresa_id, vendedor_id)` en el ERP. Para `GIRA`, exige nombre de 3–100 caracteres, fechas válidas, justificación comercial y `aprobador_id`; deriva `periodo_mes` desde `fecha_inicio`. La gira queda oculta hasta su aprobación. Aumentar el monto de una gira aprobada obliga a una nueva autorización; una disminución conserva la aprobación.
+
+### POST `/api/rendiciones/resolver_gira.php`
+
+Endpoint público de capacidad limitada para el Magic Link de una solicitud `GIRA`. Recibe `{ token, decision: "APROBADO|RECHAZADO", comentario }`, consume el token mediante `ApprovalWorkflowService`, actualiza atómicamente el estado del fondo y notifica el resultado al correo configurable de Tesorería. La ruta usada por `/rendiciones/aprobar_gira.php` es relativa para soportar despliegues bajo subdirectorios.

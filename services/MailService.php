@@ -11,6 +11,7 @@ use PHPMailer\PHPMailer\Exception;
 
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/PdfGenerator.php';
+require_once __DIR__ . '/RendicionesService.php';
 require_once __DIR__ . '/../libs/PHPMailer/src/Exception.php';
 require_once __DIR__ . '/../libs/PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/../libs/PHPMailer/src/SMTP.php';
@@ -27,8 +28,8 @@ class MailService
             }
         }
         try {
-            $stmt = $pdo->prepare("SELECT valor FROM configuraciones_sistema WHERE clave = ?");
-            $stmt->execute([$clave]);
+            $stmt = $pdo->prepare('SELECT valor FROM configuraciones_sistema WHERE clave = :clave');
+            $stmt->execute([':clave' => $clave]);
             $val = $stmt->fetchColumn();
             return (!empty($val) && trim($val) !== '') ? trim($val) : $default;
         } catch (Exception $e) {
@@ -384,7 +385,7 @@ class MailService
         string $comentarioTesoreria = ''
     ): bool
     {
-        $recipient = mb_strtolower(trim((string)($aprobador['email'] ?? '')));
+        $recipient = strtolower(trim((string)($aprobador['email'] ?? '')));
         $approverNameRaw = trim((string)($aprobador['nombre'] ?? ''));
         $approverTitleRaw = trim((string)($aprobador['cargo'] ?? ''));
         if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || $approverNameRaw === '' || $approverTitleRaw === '') {
@@ -490,7 +491,7 @@ class MailService
         array $aprobador,
         string $comentarioTesoreria = ''
     ): bool {
-        $recipient       = mb_strtolower(trim((string)($aprobador['email'] ?? '')));
+        $recipient       = strtolower(trim((string)($aprobador['email'] ?? '')));
         $approverNameRaw = trim((string)($aprobador['nombre'] ?? ''));
         $approverTitle   = trim((string)($aprobador['cargo'] ?? ''));
         if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || $approverNameRaw === '' || $approverTitle === '') {
@@ -557,6 +558,30 @@ class MailService
             . '<p>La gira comercial <strong>' . $tourName . '</strong> ha sido <strong>' . $label . '</strong> por Jefatura.</p>'
             . ($approved ? '<p>Podrá enviar rendiciones asociadas a esta gira desde el portal de vendedores.</p>' : '<p>Si tiene dudas, por favor contacte a Tesorería.</p>')
             . '</div></div>';
+        return self::sendSmtp($recipient, $subject, $html);
+    }
+
+    public static function notificarDecisionGiraTesoreria(?PDO $pdo, array $gira, string $decision): bool
+    {
+        $recipient = self::getConfigValue($pdo, 'email_tesoreria_general', '');
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            error_log('[MailService] No existe un correo general de Tesorería válido para notificar la decisión de gira.');
+            return false;
+        }
+        $approved = strtoupper($decision) === 'APROBADA';
+        $label = $approved ? 'aprobada' : 'rechazada';
+        $tourName = htmlspecialchars((string)($gira['nombre_gira'] ?? 'Gira comercial'), ENT_QUOTES, 'UTF-8');
+        $seller = htmlspecialchars((string)($gira['vendedor_nombre'] ?? 'Vendedor'), ENT_QUOTES, 'UTF-8');
+        $approver = htmlspecialchars((string)($gira['aprobador_nombre_snapshot'] ?? 'Responsable'), ENT_QUOTES, 'UTF-8');
+        $approverTitle = htmlspecialchars((string)($gira['aprobador_cargo_snapshot'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $amount = number_format((float)($gira['monto_asignado'] ?? 0), 0, ',', '.');
+        $subject = '[GIRAS] Solicitud ' . $label . ': ' . strip_tags($tourName);
+        $html = '<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#1e293b;border:1px solid #cbd5e1">'
+            . '<div style="padding:22px"><h2 style="margin-top:0">Gira ' . ucfirst($label) . '</h2>'
+            . '<p>La solicitud de la gira <strong>' . $tourName . '</strong> para <strong>' . $seller . '</strong> fue <strong>' . $label . '</strong>.</p>'
+            . '<p>Monto solicitado: <strong>$' . $amount . '</strong><br>Responsable: <strong>' . $approver . '</strong>'
+            . ($approverTitle !== '' ? ' · ' . $approverTitle : '') . '.</p>'
+            . '<p>La decisión ya está registrada en el panel de Rendiciones y en su historial de auditoría.</p></div></div>';
         return self::sendSmtp($recipient, $subject, $html);
     }
 

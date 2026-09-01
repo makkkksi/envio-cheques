@@ -4,6 +4,22 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Módulo 3 — Dashboard de aprobaciones y certificación local (2026-09-01)
+- El Dashboard agrega una lectura ejecutiva de solicitudes de Gira y Excepción mensual: pendientes, correos fallidos, aprobadas, rechazadas, vencidas, canceladas, tasa de aprobación, respuesta promedio y antigüedad máxima.
+- Las señales de negocio alertan solicitudes sin entregar y esperas superiores a 48 horas, sin exponer correos, responsables ni nombres libres de giras.
+- La prueba oficial `scripts/test_approval_workflow.php` ejecuta 34 comprobaciones transaccionales con rollback, incluyendo fallo/reenvío SMTP simulado y exactitud de métricas; se complementa con 38 pruebas funcionales.
+- Smoke local del Shell: login administrativo, Dashboard HTTP 200, panel y versión JS correctos. El SMTP real no se disparó para evitar mensajes a responsables configurados sin un destinatario de prueba autorizado.
+- SQL nuevo para phpMyAdmin: ninguno; se mantiene como prerrequisito `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql`.
+
+### Módulo 3 — Estabilización de topes y aprobaciones A–G (2026-09-01)
+- El alta y edición de giras solicita justificación comercial y uno de los dos responsables configurados; el botón rápido “Agregar gira” conserva la identidad ERP y evita el error 422 por datos ausentes.
+- `gestion_presupuestos.php`, `resolver_gira.php` y `aprobar_exceso.php` consumen el servicio transaccional común para crear, rotar, cancelar y resolver solicitudes versionadas. El resultado real del correo queda en `PENDIENTE_DECISION` o `ENVIO_FALLIDO` y Tesorería recibe la decisión de la gira mediante su correo configurable.
+- Un aumento de monto en una gira aprobada invalida la autorización monetaria anterior y crea una nueva solicitud; una reducción auditada conserva la aprobación vigente.
+- Tesorería puede solicitar opcionalmente sólo el exceso mensual desde una rendición en revisión. Rechazar esa excepción mantiene la rendición disponible para pago hasta su tope ordinario.
+- Las rutas públicas de Magic Link son relativas al directorio desplegado, por lo que funcionan bajo `/form` y `/cobranza_cheques/app`; las páginas resueltas dejan un estado final inequívoco.
+- Se eliminó la dependencia obligatoria de `mbstring` mediante helpers Unicode con fallback y se reforzó el verificador para detectar placeholders posicionales sólo dentro de `prepare()`.
+- QA local: 28 pruebas del workflow con rollback, 38 pruebas funcionales del módulo, sintaxis PHP y contratos de seguridad aprobados. SQL nuevo para esta corrección: ninguno; utiliza la migración `2026_08_28_topes_y_flujo_aprobaciones.sql`.
+
 ### Módulo 3 — Fases A y B de topes y aprobaciones (2026-08-28)
 - Se incorporó el contrato aditivo para topes: máximo aprobable, exceso no reembolsable y marca de aplicación del tope en cada rendición; las giras incorporan estado de aprobación, justificación y solicitud vigente.
 - Nueva entidad `solicitudes_aprobacion` para versionar por separado autorizaciones de gira y excepciones mensuales, con selección de un responsable, snapshots, tokens SHA-256 de 48 horas, reenvío, fallo de correo, cancelación lógica y decisión de uso único.

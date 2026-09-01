@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../services/ApprovalWorkflowService.php';
 
 header('Cache-Control: no-store, private');
 header('Pragma: no-cache');
@@ -19,26 +20,37 @@ $resolvedDecision = '';
 if ($validTokenFormat) {
     try {
         $pdo = Database::getCobranzasConnection();
+        $request = ApprovalWorkflowService::getByToken($pdo, $token);
+        if (($request['tipo_solicitud'] ?? '') !== ApprovalWorkflowService::TYPE_MONTHLY_EXCEPTION) {
+            throw new InvalidArgumentException('El enlace no corresponde a una excepción mensual.');
+        }
         $stmt = $pdo->prepare(
-            'SELECT r.*, e.nombre AS empresa_nombre, p.nombre_gira
-             FROM rendiciones_gastos r
+            'SELECT r.*, e.nombre AS empresa_nombre, p.nombre_gira,
+                    sa.estado AS solicitud_estado, sa.decision AS solicitud_decision,
+                    sa.aprobador_id AS aprobador_solicitado_id,
+                    sa.aprobador_nombre_snapshot, sa.aprobador_cargo_snapshot,
+                    sa.aprobador_email_snapshot, sa.monto_solicitado AS solicitud_monto,
+                    sa.token_expira_at AS token_exceso_expira,
+                    sa.token_usado_at AS token_exceso_usado_at
+             FROM solicitudes_aprobacion sa
+             INNER JOIN rendiciones_gastos r ON r.id = sa.rendicion_id
              INNER JOIN empresas e ON e.id = r.empresa_id
              INNER JOIN presupuestos_vendedores p ON p.id = r.presupuesto_id
-             WHERE r.token_aprobacion_exceso_hash = :token_hash
+             WHERE sa.id = :solicitud_id
              LIMIT 1'
         );
-        $stmt->execute([':token_hash' => hash('sha256', $token)]);
+        $stmt->execute([':solicitud_id' => (int)$request['id']]);
         $rendition = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$rendition) {
             $pageError = 'El enlace no existe o fue reemplazado por una solicitud más reciente.';
-        } elseif ($rendition['estado'] !== 'PENDIENTE_APROBACION_EXCESO' || $rendition['token_exceso_usado_at'] !== null) {
-            $resolvedDecision = in_array($rendition['decision_exceso'] ?? '', ['APROBADO', 'RECHAZADO'], true)
-                ? (string)$rendition['decision_exceso']
-                : '';
+        } elseif ($rendition['solicitud_estado'] !== ApprovalWorkflowService::STATE_PENDING_DECISION || $rendition['token_exceso_usado_at'] !== null) {
+            $resolvedDecision = ($rendition['solicitud_decision'] ?? '') === ApprovalWorkflowService::DECISION_APPROVED
+                ? 'APROBADO'
+                : (($rendition['solicitud_decision'] ?? '') === ApprovalWorkflowService::DECISION_REJECTED ? 'RECHAZADO' : '');
             if ($resolvedDecision === '') {
                 $pageError = 'Esta solicitud ya fue resuelta y el enlace no puede volver a utilizarse.';
             }
-        } elseif (!$rendition['token_exceso_expira'] || strtotime((string)$rendition['token_exceso_expira']) < time()) {
+        } elseif (!(bool)$request['activo'] || !$rendition['token_exceso_expira'] || strtotime((string)$rendition['token_exceso_expira']) < time()) {
             $pageError = 'El enlace expiró. Solicite a Tesorería que emita una nueva solicitud.';
         } elseif (!filter_var($rendition['aprobador_email_snapshot'] ?? '', FILTER_VALIDATE_EMAIL)) {
             $pageError = 'La solicitud no tiene un responsable válido. Tesorería debe emitir un nuevo enlace.';
@@ -61,12 +73,16 @@ if ($validTokenFormat) {
                 'SELECT comentario
                  FROM rendicion_historial_estados
                  WHERE rendicion_id = :rendicion_id
-                   AND accion = :accion
+                   AND accion IN (:accion_actual, :accion_legacy)
                    AND comentario IS NOT NULL
                  ORDER BY id DESC
                  LIMIT 1'
             );
-            $stmtComment->execute([':rendicion_id' => (int)$rendition['id'], ':accion' => 'ENVIAR_SOLICITUD_EXCESO']);
+            $stmtComment->execute([
+                ':rendicion_id' => (int)$rendition['id'],
+                ':accion_actual' => 'SOLICITAR_EXCEPCION_MENSUAL',
+                ':accion_legacy' => 'ENVIAR_SOLICITUD_EXCESO',
+            ]);
             $treasuryComment = trim((string)($stmtComment->fetchColumn() ?: ''));
         }
     } catch (Throwable $exception) {
@@ -113,7 +129,7 @@ $previouslyCommitted = max(0, $budget - $available);
         <div><span>Empresa y fondo</span><strong><?= approvalEscape($rendition['empresa_nombre']) ?></strong><small><?= approvalEscape($rendition['tipo_rendicion'] === 'GIRA' ? 'Gira comercial: ' . ($rendition['nombre_gira'] ?: 'Sin nombre') : 'Presupuesto mensual') ?> · <?= approvalEscape($rendition['periodo_mes']) ?></small></div>
     </section>
     <section class="approval-metrics" aria-label="Resumen financiero">
-        <div><span>Asignado</span><strong><?= approvalMoney($budget) ?></strong></div><div><span>Comprometido previo</span><strong><?= approvalMoney($previouslyCommitted) ?></strong></div><div><span>Saldo anterior</span><strong><?= approvalMoney($available) ?></strong></div><div class="approval-metrics__total"><span>Total rendido</span><strong><?= approvalMoney($rendition['monto_total_rendido']) ?></strong></div><div class="approval-metrics__excess"><span>Exceso solicitado</span><strong>+<?= approvalMoney($rendition['monto_exceso']) ?></strong></div>
+        <div><span>Asignado</span><strong><?= approvalMoney($budget) ?></strong></div><div><span>Comprometido previo</span><strong><?= approvalMoney($previouslyCommitted) ?></strong></div><div><span>Saldo anterior</span><strong><?= approvalMoney($available) ?></strong></div><div class="approval-metrics__total"><span>Total rendido</span><strong><?= approvalMoney($rendition['monto_total_rendido']) ?></strong></div><div class="approval-metrics__excess"><span>Exceso solicitado</span><strong>+<?= approvalMoney($rendition['solicitud_monto']) ?></strong></div>
     </section>
     <?php if (trim((string)$rendition['nota_vendedor']) !== ''): ?><aside class="approval-note"><strong>Nota del vendedor</strong><p><?= nl2br(approvalEscape($rendition['nota_vendedor'])) ?></p></aside><?php endif; ?>
     <?php if ($treasuryComment !== ''): ?><aside class="approval-note approval-note--treasury"><strong>Comentario de Tesorería</strong><p><?= nl2br(approvalEscape($treasuryComment)) ?></p></aside><?php endif; ?>

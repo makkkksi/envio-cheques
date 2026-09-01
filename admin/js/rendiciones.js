@@ -27,6 +27,7 @@
         sellerAnalyticsLoading: false,
         sellerAnalytics: null,
         selectedAnalyticsSeller: null,
+        approvalContext: null,
         lastFocused: new Map()
     };
     const $ = (selector) => document.querySelector(selector);
@@ -402,6 +403,11 @@
             buttons.push(actionButton('RECHAZAR_EXCESO_TESORERIA', sent ? 'Cancelar solicitud y rechazar' : 'Rechazar sin enviar', 'rd-btn--danger'));
         }
         if (status === 'EN_REVISION_TESORERIA') {
+            if (rendition.tipo_rendicion === 'MENSUAL' && Number(rendition.monto_exceso_no_reembolsable || 0) > 0) {
+                const requestState = rendition.solicitud_excepcion_estado || '';
+                const requestLabel = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(requestState) ? 'Reenviar excepción' : 'Solicitar excepción';
+                buttons.push(actionButton(requestState ? 'REENVIAR_EXCESO' : 'SOLICITAR_EXCEPCION', requestLabel, 'rd-btn--warning'));
+            }
             buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física recibida', 'rd-btn--primary'));
             buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
         }
@@ -492,6 +498,7 @@
             $('#dashboardSellerRows').innerHTML = '<tr><td colspan="6" class="rd-table-message">Sin información histórica disponible.</td></tr>';
             $('#dashboardSellerDetail').innerHTML = '<div class="rd-seller-detail__empty"><h3>Análisis no disponible</h3><p>Actualiza nuevamente o revisa la conexión con la base de datos.</p></div>';
             $('#dashboardBusinessSignals').innerHTML = '<div class="rd-bar-empty">No fue posible calcular señales.</div>';
+            $('#dashboardApprovalTypes').innerHTML = '<div class="rd-bar-empty">No fue posible calcular aprobaciones.</div>';
         } finally {
             state.sellerAnalyticsLoading = false;
         }
@@ -507,6 +514,7 @@
         if (metrics[2]) metrics[2].querySelector('strong').textContent = `${formatPercent(summary.concentracion_principal_pct)}%`;
         setText('sellerAnalyticsStatus', `${summary.vendedores_analizados || 0} vendedor(es) · ${formatMonthShort(analytics.periodo_inicio)} a ${formatMonthShort(analytics.periodo_fin)}`);
         renderFundTypeComparison();
+        renderApprovalWorkflow();
         renderSellerRanking();
         renderAnalyticsSellerDetail();
         renderBusinessSignals();
@@ -525,6 +533,32 @@
                 <div class="rd-fund-row__execution"><span><strong>${formatPercent(execution)}%</strong> ejecutado</span><i><b style="width:${Math.min(execution, 100)}%"></b></i></div>
             </article>`;
         }).join('') || '<div class="rd-bar-empty">No hay fondos en el horizonte seleccionado.</div>';
+    }
+
+    function renderApprovalWorkflow() {
+        const approval = state.sellerAnalytics?.aprobaciones || {};
+        const summary = approval.resumen || {};
+        const metrics = $$('#dashboardApprovalMetrics > div');
+        const responseHours = Number(summary.horas_respuesta_promedio || 0);
+        const resolved = Number(summary.aprobadas || 0) + Number(summary.rechazadas || 0);
+        setText('dashboardApprovalTotal', `${Number(summary.solicitudes_total || 0)} solicitud(es)`);
+        if (metrics[0]) metrics[0].querySelector('strong').textContent = String(Number(summary.pendientes || 0));
+        if (metrics[1]) metrics[1].querySelector('strong').textContent = String(Number(summary.correos_fallidos || 0));
+        if (metrics[2]) metrics[2].querySelector('strong').textContent = responseHours > 0 ? `${formatPercent(responseHours)} h` : '—';
+        if (metrics[3]) metrics[3].querySelector('strong').textContent = resolved > 0 ? `${formatPercent(summary.tasa_aprobacion_pct)}%` : '—';
+        const container = $('#dashboardApprovalTypes');
+        if (!container) return;
+        const labels = { GIRA: 'Fondos de gira', EXCEPCION_MENSUAL: 'Excepciones mensuales' };
+        const rows = approval.por_tipo || [];
+        container.innerHTML = rows.map((row) => {
+            const oldest = Number(row.horas_pendiente_mas_antigua || 0);
+            const attention = Number(row.correos_fallidos || 0) > 0 || oldest >= 48;
+            return `<article class="rd-approval-type ${attention ? 'needs-attention' : ''}">
+                <div><strong>${escapeHtml(labels[row.tipo] || humanize(row.tipo))}</strong><small>${row.solicitudes_total || 0} solicitud(es) en el horizonte</small></div>
+                <dl><div><dt>Pendientes</dt><dd>${row.pendientes || 0}</dd></div><div><dt>Aprobadas</dt><dd>${row.aprobadas || 0}</dd></div><div><dt>Rechazadas</dt><dd>${row.rechazadas || 0}</dd></div><div><dt>Fallidas</dt><dd>${row.correos_fallidos || 0}</dd></div></dl>
+                <span>${oldest > 0 ? `Más antigua: ${oldest} h` : 'Sin espera activa'}</span>
+            </article>`;
+        }).join('') || '<div class="rd-bar-empty">No existen solicitudes de aprobación en este horizonte.</div>';
     }
 
     function renderSellerRanking() {
@@ -608,7 +642,14 @@
         if (!container || !state.sellerAnalytics) return;
         const sellers = state.sellerAnalytics.vendedores || [];
         const summary = state.sellerAnalytics.resumen || {};
+        const approvalSummary = state.sellerAnalytics.aprobaciones?.resumen || {};
         const signals = [];
+        if (Number(approvalSummary.correos_fallidos || 0) > 0) {
+            signals.push({ tone: 'danger', title: 'Solicitudes sin entregar', detail: `${approvalSummary.correos_fallidos} correo(s) de aprobación fallaron y requieren reenvío o cambio de responsable.` });
+        }
+        if (Number(approvalSummary.horas_pendiente_mas_antigua || 0) >= 48) {
+            signals.push({ tone: 'warning', title: 'Aprobación fuera de plazo', detail: `La solicitud pendiente más antigua lleva ${approvalSummary.horas_pendiente_mas_antigua} horas; conviene reenviar o contactar al responsable.` });
+        }
         if (Number(summary.pendiente_total || 0) > 0) {
             signals.push({ tone: 'pending', title: 'Monto pendiente de decisión', detail: `${money.format(Number(summary.pendiente_total))} permanece fuera del gasto aprobado hasta que Tesorería resuelva las rendiciones.` });
         }
@@ -942,6 +983,11 @@
             const presenceMarkup = presence.length
                 ? `<div class="rd-erp-presence">${presence.map((item) => `<span title="${escapeHtml(item.empresa_nombre)} · código ${escapeHtml(item.vendedor_id)}">${escapeHtml(shortCompanyName(item.empresa_nombre))} <b>#${escapeHtml(item.vendedor_id)}</b></span>`).join('')}</div>`
                 : '<span class="rd-cell-secondary">Sin homologación por correo</span>';
+            const approvalState = isTour ? String(budget.solicitud_estado || budget.estado_aprobacion || 'PENDIENTE') : '';
+            const approvalLabel = { PENDIENTE_ENVIO: 'Pendiente de envío', PENDIENTE_DECISION: 'Esperando decisión', ENVIO_FALLIDO: 'Correo fallido', VENCIDA: 'Enlace vencido', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada', PENDIENTE: 'Pendiente' }[approvalState] || approvalState;
+            const tourWorkflowActions = isTour && ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(approvalState)
+                ? `<button class="rd-btn rd-btn--warning rd-btn--small" type="button" data-resend-tour="${Number(budget.id)}">Reenviar aprobación</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-cancel-tour="${Number(budget.id)}">Cancelar solicitud</button>`
+                : '';
             return `<tr class="${active ? '' : 'is-inactive'}">
                 <td><span class="rd-cell-primary">${escapeHtml(budget.vendedor_nombre || 'Sin nombre')}</span><span class="rd-cell-secondary">${escapeHtml(budget.vendedor_email || `Código ERP #${budget.vendedor_id}`)}</span></td>
                 <td><span class="rd-cell-primary">${escapeHtml(budget.empresa_nombre || 'Sin empresa')}</span></td>
@@ -951,13 +997,17 @@
                 <td><span class="rd-cell-money">${money.format(budget.monto_asignado)}</span></td>
                 <td><span class="rd-cell-money">${money.format(budget.monto_utilizado)}</span></td>
                 <td><span class="rd-cell-money">${money.format(budget.saldo_disponible)}</span></td>
-                <td><span class="rd-status ${active ? 'rd-status--success' : ''}">${active ? 'Activo' : 'Inactivo'}</span></td>
-                <td>${active ? `<div class="rd-budget-actions">${!isTour ? `<button class="rd-btn rd-btn--tour rd-btn--small" type="button" data-add-tour="${Number(budget.id)}">+ Agregar gira</button>` : ''}<button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : '—'}</td>
+                <td><span class="rd-status ${active && (!isTour || approvalState === 'APROBADA') ? 'rd-status--success' : ''}">${active ? (isTour ? escapeHtml(approvalLabel) : 'Activo') : 'Inactivo'}</span></td>
+                <td>${active ? `<div class="rd-budget-actions">${!isTour ? `<button class="rd-btn rd-btn--tour rd-btn--small" type="button" data-add-tour="${Number(budget.id)}">+ Agregar gira</button>` : ''}${tourWorkflowActions}<button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : '—'}</td>
             </tr>`;
         }).join('');
     }
 
     function onBudgetAction(event) {
+        const resendTourButton = event.target.closest('[data-resend-tour]');
+        if (resendTourButton) { openTourApprovalModal(Number(resendTourButton.dataset.resendTour)); return; }
+        const cancelTourButton = event.target.closest('[data-cancel-tour]');
+        if (cancelTourButton) { openActionModal('CANCELAR_SOLICITUD_GIRA', { budgetId: Number(cancelTourButton.dataset.cancelTour) }); return; }
         const tourButton = event.target.closest('[data-add-tour]');
         if (tourButton) { addTourFromBudget(Number(tourButton.dataset.addTour)); return; }
         const editButton = event.target.closest('[data-edit-budget]');
@@ -991,11 +1041,13 @@
         $('#budgetTourName').value = budget.nombre_gira || '';
         $('#budgetStartDate').value = budget.fecha_inicio || '';
         $('#budgetEndDate').value = budget.fecha_fin || '';
+        $('#budgetTourJustification').value = budget.justificacion_gira || '';
         $('#budgetFormTitle').textContent = 'Editar presupuesto';
         $('#budgetModalTitle').textContent = 'Editar presupuesto';
         $('#budgetModalDescription').textContent = 'La identidad del vendedor queda vinculada al ERP; puedes ajustar los datos del cupo.';
         setBudgetIdentityLocked(true, false);
         syncTourFields();
+        ensureBudgetApprovers(budget.solicitud_aprobador_id || '');
     }
 
     function addTourFromBudget(id) {
@@ -1015,6 +1067,7 @@
         $('#budgetModalDescription').textContent = 'La empresa y el vendedor ya están definidos. Completa únicamente la gira, sus fechas y el monto.';
         setBudgetIdentityLocked(true, true);
         syncTourFields();
+        ensureBudgetApprovers();
         openModal('budgetModal');
         $('#budgetTourName')?.focus();
     }
@@ -1029,6 +1082,8 @@
         $('#budgetFormTitle').textContent = 'Nuevo presupuesto';
         $('#budgetModalTitle').textContent = 'Asignar presupuesto';
         $('#budgetModalDescription').textContent = 'Selecciona una empresa y un vendedor verificado en su ERP.';
+        $('#budgetTourJustification').value = '';
+        $('#budgetTourApprover').value = '';
         syncTourFields();
     }
 
@@ -1037,8 +1092,8 @@
         const isTour = $('#budgetType').value === 'GIRA';
         $('#tourFields').hidden = !isTour;
         $('#budgetPeriodField').hidden = isTour;
-        ['#budgetTourName', '#budgetStartDate', '#budgetEndDate'].forEach((selector) => { $(selector).required = isTour; });
-        if (isTour) syncTourPeriod();
+        ['#budgetTourName', '#budgetStartDate', '#budgetEndDate', '#budgetTourJustification', '#budgetTourApprover'].forEach((selector) => { $(selector).required = isTour; });
+        if (isTour) { syncTourPeriod(); ensureBudgetApprovers($('#budgetTourApprover').value); }
         else {
             $('#budgetEndDate').min = '';
             $('#budgetEndDate').setCustomValidity('');
@@ -1062,6 +1117,20 @@
         return !invalidRange;
     }
 
+    async function ensureBudgetApprovers(selectedId = '') {
+        const select = $('#budgetTourApprover');
+        if (!select || $('#budgetType')?.value !== 'GIRA') return;
+        try {
+            const desiredId = String(selectedId || select.value || '');
+            const approvers = state.approvers.length ? state.approvers : await loadApprovers();
+            select.innerHTML = '<option value="">Selecciona un responsable</option>' + approvers.map((approver) => `<option value="${Number(approver.id)}">${escapeHtml(approver.nombre)} · ${escapeHtml(approver.cargo)}</option>`).join('');
+            if (desiredId) select.value = desiredId;
+        } catch (error) {
+            select.innerHTML = '<option value="">No fue posible cargar responsables</option>';
+            notify(error.message, 'error');
+        }
+    }
+
     async function saveBudget(event) {
         event.preventDefault();
         if (!Number($('#budgetSellerId').value)) {
@@ -1076,7 +1145,8 @@
             empresa_id: Number($('#budgetCompany').value), vendedor_id: Number($('#budgetSellerId').value),
             tipo_presupuesto: $('#budgetType').value, periodo_mes: $('#budgetPeriod').value,
             monto_asignado: Number($('#budgetAmount').value), nombre_gira: $('#budgetTourName').value.trim(),
-            fecha_inicio: $('#budgetStartDate').value, fecha_fin: $('#budgetEndDate').value
+            fecha_inicio: $('#budgetStartDate').value, fecha_fin: $('#budgetEndDate').value,
+            justificacion_gira: $('#budgetTourJustification').value.trim(), aprobador_id: Number($('#budgetTourApprover').value || 0)
         };
         const button = $('#saveBudgetButton');
         setBusy(button, true, 'Guardando…');
@@ -1094,8 +1164,8 @@
     }
 
     function openActionModal(action, context = {}) {
-        if (action === 'REENVIAR_EXCESO') {
-            openExcessApprovalModal();
+        if (['REENVIAR_EXCESO', 'SOLICITAR_EXCEPCION'].includes(action)) {
+            openExcessApprovalModal({ kind: 'EXCEPCION', action });
             return;
         }
         const actionDetails = {
@@ -1104,7 +1174,8 @@
             RECHAZAR: ['Rechazar rendición', 'La rendición y sus documentos quedarán rechazados. Esta acción requiere un motivo.', true, 'Rechazar'],
             RECHAZAR_EXCESO_TESORERIA: ['Cancelar rendición con exceso', 'Tesorería rechazará la rendición y liberará todo el monto comprometido. No se enviará una nueva solicitud a Jefatura; si ya existía un enlace, quedará invalidado.', true, 'Rechazar y liberar fondos'],
             MARCAR_PAGADA: ['Marcar rendición pagada', 'Se cerrará el flujo financiero de esta rendición.', false, 'Marcar pagada'],
-            DESACTIVAR_PRESUPUESTO: ['Desactivar presupuesto', 'El presupuesto dejará de estar disponible para nuevas rendiciones.', false, 'Desactivar']
+            DESACTIVAR_PRESUPUESTO: ['Desactivar presupuesto', 'El presupuesto dejará de estar disponible para nuevas rendiciones.', false, 'Desactivar'],
+            CANCELAR_SOLICITUD_GIRA: ['Cancelar solicitud de gira', 'El enlace quedará invalidado y la gira dejará de estar disponible. La acción conservará su auditoría.', true, 'Cancelar solicitud']
         };
         const info = actionDetails[action];
         if (!info) return;
@@ -1115,7 +1186,7 @@
         $('#actionComment').required = info[2];
         $('#actionComment').value = '';
         $('#confirmActionButton').textContent = info[3];
-        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO'].includes(action) ? 'rd-btn--danger' : 'rd-btn--primary'}`;
+        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO', 'CANCELAR_SOLICITUD_GIRA'].includes(action) ? 'rd-btn--danger' : 'rd-btn--primary'}`;
         openModal('actionModal');
     }
 
@@ -1125,7 +1196,12 @@
         return state.approvers;
     }
 
-    async function openExcessApprovalModal() {
+    async function openExcessApprovalModal(context = { kind: 'EXCEPCION', action: 'SOLICITAR_EXCEPCION' }) {
+        state.approvalContext = context;
+        const isTour = state.approvalContext.kind === 'GIRA';
+        $('#excessApprovalTitle').textContent = isTour ? 'Reenviar aprobación de gira' : 'Solicitar excepción mensual';
+        $('#excessApprovalComment').closest('label').querySelector('span').textContent = isTour ? 'Comentario para Gerencia (opcional)' : 'Justificación para Gerencia (obligatoria)';
+        $('#excessApprovalComment').required = !isTour;
         $('#approverChoices').innerHTML = '<p class="rd-modal__description">Cargando responsables…</p>';
         $('#approverChoiceStatus').textContent = '';
         $('#excessApprovalComment').value = '';
@@ -1145,23 +1221,30 @@
         }
     }
 
+    function openTourApprovalModal(budgetId) {
+        openExcessApprovalModal({ kind: 'GIRA', budgetId, action: 'REENVIAR_SOLICITUD_GIRA' });
+    }
+
     async function sendExcessApproval() {
         const selected = $('input[name="excessApprover"]:checked');
         if (!selected) { $('#approverChoiceStatus').textContent = 'Selecciona un responsable.'; return; }
+        const context = state.approvalContext || { kind: 'EXCEPCION', action: 'SOLICITAR_EXCEPCION' };
+        const comment = $('#excessApprovalComment').value.trim();
+        if (context.kind !== 'GIRA' && !comment) { $('#approverChoiceStatus').textContent = 'Indica por qué se solicita aprobar este exceso.'; $('#excessApprovalComment').focus(); return; }
         const button = $('#sendExcessApproval');
         setBusy(button, true, 'Enviando…');
         try {
-            const payload = await apiRequest(`${API_BASE}/cambiar_estado.php`, { method: 'POST', body: JSON.stringify({
-                rendicion_id: state.selectedId,
-                accion: 'REENVIAR_EXCESO',
-                aprobador_id: Number(selected.value),
-                comentario: $('#excessApprovalComment').value.trim()
-            }) });
+            const payload = context.kind === 'GIRA'
+                ? await apiRequest(`${API_BASE}/gestion_presupuestos.php`, { method: 'POST', body: JSON.stringify({ accion: context.action, presupuesto_id: context.budgetId, aprobador_id: Number(selected.value), comentario: comment }) })
+                : await apiRequest(`${API_BASE}/cambiar_estado.php`, { method: 'POST', body: JSON.stringify({ rendicion_id: state.selectedId, accion: context.action, aprobador_id: Number(selected.value), comentario: comment }) });
             closeModal('excessApprovalModal');
             notify(payload.message, payload.data?.correo_enviado ? 'success' : 'warning');
-            state.detailCache.delete(Number(state.selectedId));
-            await selectRendition(Number(state.selectedId), true);
-            await loadRenditions();
+            if (context.kind === 'GIRA') await loadBudgets(true);
+            else {
+                state.detailCache.delete(Number(state.selectedId));
+                await selectRendition(Number(state.selectedId), true);
+                await loadRenditions();
+            }
         } catch (error) {
             $('#approverChoiceStatus').textContent = error.message;
         } finally {
@@ -1231,6 +1314,11 @@
                 payload = await apiRequest(`${API_BASE}/gestion_presupuestos.php`, { method: 'POST', body: JSON.stringify({ accion: 'DESACTIVAR', id: state.action.budgetId }) });
                 closeModal('actionModal');
                 await loadBudgets();
+                state.dashboardKey = '';
+            } else if (state.action.action === 'CANCELAR_SOLICITUD_GIRA') {
+                payload = await apiRequest(`${API_BASE}/gestion_presupuestos.php`, { method: 'POST', body: JSON.stringify({ accion: 'CANCELAR_SOLICITUD_GIRA', presupuesto_id: state.action.budgetId, motivo: $('#actionComment').value.trim() }) });
+                closeModal('actionModal');
+                await loadBudgets(true);
                 state.dashboardKey = '';
             } else {
                 payload = await apiRequest(`${API_BASE}/cambiar_estado.php`, { method: 'POST', body: JSON.stringify({ rendicion_id: state.selectedId, accion: state.action.action, comentario: $('#actionComment').value.trim() }) });

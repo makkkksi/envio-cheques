@@ -18,7 +18,8 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 
 ## Componentes Entregados (Fase 1 y 2)
 
-- [x] **Topes y aprobaciones — Fases A/B** — Esquema aditivo aplicado localmente, solicitudes versionadas para giras/excepciones, historial inmutable y servicio transaccional central con token hasheado, expiración, reenvío, cancelación y resolución. QA local: 28 PASS con rollback, instalación limpia y migración de clon legado sin pérdida de filas. Producción aún no debe usar el nuevo contrato hasta completar la integración C–H e importar `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql`.
+- [x] **Topes y aprobaciones — Fases A–G** — Esquema aditivo, reserva hasta el tope, liquidación FIFO, excepción mensual opcional y aprobación previa de giras integrados mediante `ApprovalWorkflowService`. El modal exige justificación y responsable; reenvío/cambio/cancelación rotan tokens y registran el resultado del correo. Aumentar una gira aprobada exige nueva autorización. QA local acumulado: 34 pruebas transaccionales + 38 pruebas funcionales PASS. Para desplegar se debe importar primero `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql`.
+- [x] **Topes y aprobaciones — Fases H/I local** — Dashboard incorpora estado de solicitudes gerenciales, correos fallidos, tasa y tiempo de decisión, antigüedad y desglose estandarizado Gira/Excepción. Certificación local: 34 pruebas transaccionales y 38 funcionales con rollback, HTTP de endpoints/páginas, login y CSRF, sintaxis PHP/JS y paridad root/dist. El único ensayo externo pendiente es SMTP productivo con destinatarios de prueba autorizados.
 - [x] **Sesiones resilientes Admin/Vendedor** — Cookies PHP separadas por contexto, TTL físico coherente, heartbeat, recuperación silenciosa tras `401`, persistencia temporal de identidad multiempresa y retorno seguro al módulo administrativo solicitado. El token del portal comercial se renueva durante actividad. SQL nuevo: ninguno.
 
 - [x] **Logo oficial en Shell ERP** — La cabecera compartida de Cheques, Cuentas Corrientes, Rendiciones y Usuarios utiliza el recurso oficial del holding desde la raíz de la aplicación, manteniendo altura compacta y adaptación móvil.
@@ -90,7 +91,7 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 
 ## Próximo trabajo inmediato
 
-1. **Nueva política de Rendiciones — continuar Fases C–H:** integrar reserva hasta tope en consolidación, liquidación FIFO de Tesorería, endpoints/correos/UI de aprobación previa de giras y excepción mensual opcional, y métricas separadas. Fases A/B ya están completas y verificadas localmente.
+1. **Nueva política de Rendiciones — cierre productivo:** importar la migración, desplegar `dist` y ejecutar un smoke test SMTP controlado con destinatarios autorizados. Las Fases A–H y la certificación local de Fase I están completas.
 2. **Módulo 3 — Fase 5:** importar `config/migrations/2026_08_26_aprobadores_rendiciones.sql`, configurar los dos responsables desde el portal y ejecutar un smoke test SMTP controlado del flujo de exceso.
 2. **Subida y Prueba Interna en Host:** Desplegar el sistema al host de pruebas (en la nube usando el directorio `dist/` o la raíz).
    - *Importante:* Recordar editar el archivo `.htaccess` subido con los datos reales de BD.

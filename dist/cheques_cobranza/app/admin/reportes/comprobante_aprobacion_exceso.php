@@ -25,18 +25,25 @@ try {
     requirePermission($pdo, 'rendiciones.view');
 
     $stmt = $pdo->prepare(
-        'SELECT r.*, e.nombre AS empresa_nombre, p.nombre_gira
+        'SELECT r.*, e.nombre AS empresa_nombre, p.nombre_gira,
+                sa.aprobador_nombre_snapshot, sa.aprobador_cargo_snapshot,
+                sa.aprobador_email_snapshot, sa.resuelto_at AS aprobado_exceso_at,
+                :decision_legacy AS decision_exceso
          FROM rendiciones_gastos r
          INNER JOIN empresas e ON e.id = r.empresa_id
          INNER JOIN presupuestos_vendedores p ON p.id = r.presupuesto_id
+         INNER JOIN solicitudes_aprobacion sa ON sa.id = r.solicitud_excepcion_id
          WHERE r.id = :id
            AND r.activo = :activo
-           AND r.decision_exceso = :decision
-           AND r.aprobado_exceso_at IS NOT NULL
-           AND r.aprobador_nombre_snapshot IS NOT NULL
+           AND sa.tipo_solicitud = :tipo_solicitud
+           AND sa.decision = :decision
+           AND sa.resuelto_at IS NOT NULL
          LIMIT 1'
     );
-    $stmt->execute([':id' => $renditionId, ':activo' => 1, ':decision' => 'APROBADO']);
+    $stmt->execute([
+        ':decision_legacy' => 'APROBADO', ':id' => $renditionId, ':activo' => 1,
+        ':tipo_solicitud' => 'EXCEPCION_MENSUAL', ':decision' => 'APROBADA',
+    ]);
     $rendition = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$rendition) {
         http_response_code(404);

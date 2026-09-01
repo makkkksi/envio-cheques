@@ -70,6 +70,30 @@ class RendicionesService
         return trim((string)preg_replace('/[^A-Z0-9]+/', '-', $safeValue), '-');
     }
 
+    public static function textLength(string $value): int
+    {
+        if (function_exists('mb_strlen')) {
+            return mb_strlen($value, 'UTF-8');
+        }
+        $count = preg_match_all('/./us', $value, $characters);
+        return $count === false ? strlen($value) : $count;
+    }
+
+    public static function truncateText(string $value, int $maxLength): string
+    {
+        if ($maxLength < 1 || self::textLength($value) <= $maxLength) {
+            return $value;
+        }
+        if (function_exists('mb_substr')) {
+            return mb_substr($value, 0, $maxLength, 'UTF-8');
+        }
+        $matched = preg_match_all('/./us', $value, $characters);
+        if ($matched === false) {
+            return substr($value, 0, $maxLength);
+        }
+        return implode('', array_slice($characters[0], 0, $maxLength));
+    }
+
     public static function normalizeMoney($value): string
     {
         if (is_string($value)) {

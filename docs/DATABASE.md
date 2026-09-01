@@ -320,7 +320,7 @@ UNIQUE KEY uq_solicitud_presupuesto_version (tipo_solicitud, presupuesto_id, sol
 UNIQUE KEY uq_solicitud_rendicion_version (tipo_solicitud, rendicion_id, solicitud_version);
 ```
 
-> **Entorno actual:** la migración aditiva `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql` está aplicada en Laragon. No modifica datos ERP ni elimina registros; en servidores debe importarse manualmente desde phpMyAdmin antes de integrar las Fases C–H.
+> **Entorno actual:** la migración aditiva `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql` está aplicada en Laragon. No modifica datos ERP ni elimina registros; en servidores debe importarse manualmente desde phpMyAdmin antes de desplegar el código de las Fases A–H.
 
 ---
 

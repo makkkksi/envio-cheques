@@ -19,7 +19,7 @@ try {
     $budgetId = filter_var($input['presupuesto_id'] ?? null, FILTER_VALIDATE_INT);
     $documentIds = $input['documento_ids'] ?? [];
     $sellerNote = trim((string)($input['nota_vendedor'] ?? ''));
-    if (mb_strlen($sellerNote) > 500) {
+    if (RendicionesService::textLength($sellerNote) > 500) {
         throw new InvalidArgumentException('La nota para Tesorería no puede superar los 500 caracteres.');
     }
     if (!$budgetId || !is_array($documentIds)) {

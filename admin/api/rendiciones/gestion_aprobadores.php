@@ -49,11 +49,11 @@ try {
         $order = filter_var($item['orden'] ?? null, FILTER_VALIDATE_INT);
         $name = trim((string)($item['nombre'] ?? ''));
         $title = trim((string)($item['cargo'] ?? ''));
-        $email = mb_strtolower(trim((string)($item['email'] ?? '')));
+        $email = strtolower(trim((string)($item['email'] ?? '')));
         if (!in_array($order, [1, 2], true) || $name === '' || $title === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException('Nombre, cargo y correo válido son obligatorios para ambos responsables.');
         }
-        if (mb_strlen($name) > 150 || mb_strlen($title) > 120 || mb_strlen($email) > 190) {
+        if (RendicionesService::textLength($name) > 150 || RendicionesService::textLength($title) > 120 || RendicionesService::textLength($email) > 190) {
             throw new InvalidArgumentException('Uno de los datos supera la longitud permitida.');
         }
         if (isset($validated[$order])) {

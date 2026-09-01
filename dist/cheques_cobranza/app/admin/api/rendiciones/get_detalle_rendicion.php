@@ -87,9 +87,45 @@ try {
     }
     unset($entry);
 
-    // Solicitud de exceso: todos los campos relevantes ya vienen en $rendition (SELECT r.*)
-    $solicitudExceso = null;
-    if ($rendition && !empty($rendition['token_aprobacion_exceso_hash'])) {
+    $stmtException = $pdo->prepare(
+        'SELECT id, estado, decision, aprobador_id, aprobador_nombre_snapshot,
+                aprobador_cargo_snapshot, aprobador_email_snapshot,
+                monto_base_aprobable, monto_solicitado, token_expira_at,
+                correo_enviado_at, resuelto_at
+         FROM solicitudes_aprobacion
+         WHERE id = :id AND tipo_solicitud = :tipo
+         LIMIT 1'
+    );
+    $stmtException->execute([
+        ':id' => (int)($rendition['solicitud_excepcion_id'] ?? 0),
+        ':tipo' => 'EXCEPCION_MENSUAL',
+    ]);
+    $genericException = $stmtException->fetch(PDO::FETCH_ASSOC);
+    if ($genericException) {
+        $solicitudExceso = [
+            'tiene_solicitud' => true,
+            'id' => (int)$genericException['id'],
+            'estado' => $genericException['estado'],
+            'decision' => $genericException['decision'],
+            'aprobador_id' => $genericException['aprobador_id'] !== null ? (int)$genericException['aprobador_id'] : null,
+            'aprobador_nombre' => $genericException['aprobador_nombre_snapshot'],
+            'aprobador_cargo' => $genericException['aprobador_cargo_snapshot'],
+            'aprobador_email' => $genericException['aprobador_email_snapshot'],
+            'monto_base_aprobable' => (float)$genericException['monto_base_aprobable'],
+            'monto_solicitado' => (float)$genericException['monto_solicitado'],
+            'token_expira' => $genericException['token_expira_at'],
+            'solicitud_enviada_at' => $genericException['correo_enviado_at'],
+            'resuelto_at' => $genericException['resuelto_at'],
+        ];
+        if ($genericException['decision'] === 'APROBADA') {
+            $rendition['decision_exceso'] = 'APROBADO';
+            $rendition['aprobado_exceso_at'] = $genericException['resuelto_at'];
+            $rendition['aprobador_solicitado_id'] = $genericException['aprobador_id'];
+            $rendition['aprobador_nombre_snapshot'] = $genericException['aprobador_nombre_snapshot'];
+            $rendition['aprobador_cargo_snapshot'] = $genericException['aprobador_cargo_snapshot'];
+            $rendition['aprobador_email_snapshot'] = $genericException['aprobador_email_snapshot'];
+        }
+    } elseif ($rendition && !empty($rendition['token_aprobacion_exceso_hash'])) {
         $solicitudExceso = [
             'tiene_solicitud'      => true,
             'aprobador_id'         => $rendition['aprobador_solicitado_id'] ?? null,
@@ -105,6 +141,8 @@ try {
     } else {
         $solicitudExceso = ['tiene_solicitud' => false];
     }
+
+    $rendition['solicitud_excepcion_estado'] = $solicitudExceso['estado'] ?? null;
 
     RendicionesService::jsonResponse(true, ['data' => [
         'rendicion'       => $rendition,
