@@ -4,6 +4,11 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Módulo 3 — Flujo de 3 opciones de Tesorería ante excesos (2026-09-01)
+- **Opciones de Decisión:** En rendiciones con exceso de presupuesto, Tesorería dispone de 3 acciones inmediatas: (1) Aprobar hasta el tope ordinario disponible con liquidación FIFO, (2) Solicitar aprobación de exceso a Gerencia mediante Magic Link, y (3) Rechazar con motivo obligatorio y liberación de fondos.
+- **Transición Directa:** Se actualizó `RendicionesService::TRANSICIONES` para admitir `EN_REVISION_TESORERIA -> APROBADA`, permitiendo resolver la rendición sin forzar el paso intermedio de recepción física.
+- **Confirmación con Montos Claros:** El diálogo de confirmación en `admin/js/rendiciones.js` desglosa exactamente el monto aprobado hasta el tope y el saldo no reembolsable.
+
 ### Módulo 3 — Acreditación PDF de Giras y Responsive Tablet (2026-09-01)
 - **Comprobante de Gira Aprobada:** Creado `services/GiraApprovalPdf.php` y `admin/reportes/comprobante_aprobacion_gira.php` para emitir en demanda el PDF oficial que certifica la gira comercial autorizada con su resumen financiero, justificación, firma electrónica y hash SHA-256 inmutable.
 - **Acceso Directo en Presupuestos:** Integrado botón "Certificado PDF" en cada fila de presupuesto de gira en estado `APROBADA` dentro de `admin/js/rendiciones.js`.

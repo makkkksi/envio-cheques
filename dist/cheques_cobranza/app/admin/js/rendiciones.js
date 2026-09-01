@@ -402,21 +402,48 @@
             buttons.push(actionButton('REENVIAR_EXCESO', sent ? 'Reenviar aprobación' : 'Enviar aprobación', 'rd-btn--warning'));
             buttons.push(actionButton('RECHAZAR_EXCESO_TESORERIA', sent ? 'Cancelar solicitud y rechazar' : 'Rechazar sin enviar', 'rd-btn--danger'));
         }
-        if (status === 'EN_REVISION_TESORERIA') {
-            if (rendition.tipo_rendicion === 'MENSUAL' && Number(rendition.monto_exceso_no_reembolsable || 0) > 0) {
-                const requestState = rendition.solicitud_excepcion_estado || '';
-                const requestLabel = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(requestState) ? 'Reenviar excepción' : 'Solicitar excepción';
-                buttons.push(actionButton(requestState ? 'REENVIAR_EXCESO' : 'SOLICITAR_EXCEPCION', requestLabel, 'rd-btn--warning'));
+        if (status === 'EN_REVISION_TESORERIA' || status === 'DOCUMENTOS_FISICOS_RECIBIDOS') {
+            const excess = Number(rendition.monto_exceso_no_reembolsable || 0);
+            const hasActiveExcess = excess > 0 && rendition.decision_exceso !== 'APROBADO';
+            const requestState = rendition.solicitud_excepcion_estado || '';
+            const isTour = rendition.tipo_rendicion === 'GIRA';
+
+            if (hasActiveExcess) {
+                // Flujo con exceso: 3 opciones claras solicitadas
+                // 1. Aprobar (hasta el tope del presupuesto disponible)
+                const maxPayable = Number(rendition.monto_maximo_aprobable || 0);
+                buttons.push(actionButton('APROBAR_TOTAL', `Aprobar hasta el tope (${money.format(maxPayable)})`, 'rd-btn--success'));
+
+                // 2. Solicitar exceso (correo a responsable configurado con Magic Link)
+                if (!isTour) {
+                    const requestLabel = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(requestState)
+                        ? `Reenviar exceso (${money.format(excess)})`
+                        : `Solicitar exceso (${money.format(excess)})`;
+                    buttons.push(actionButton(requestState ? 'REENVIAR_EXCESO' : 'SOLICITAR_EXCEPCION', requestLabel, 'rd-btn--warning'));
+                }
+
+                // 3. Rechazar rendición
+                buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
+
+                // Opción auxiliar si aún está en revisión y la empresa desea marcar físicos
+                if (status === 'EN_REVISION_TESORERIA') {
+                    buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física', 'rd-btn--secondary'));
+                }
+            } else {
+                // Flujo normal (sin exceso o con exceso ya aprobado por Gerencia)
+                const isApprovedExcess = rendition.decision_exceso === 'APROBADO';
+                const approveLabel = isApprovedExcess ? `Aprobar rendición (${money.format(rendition.monto_maximo_aprobable)})` : 'Aprobar rendición';
+                buttons.push(actionButton('APROBAR_TOTAL', approveLabel, 'rd-btn--success'));
+                buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial</button>');
+                if (status === 'EN_REVISION_TESORERIA') {
+                    buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física', 'rd-btn--secondary'));
+                }
+                buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
             }
-            buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física recibida', 'rd-btn--primary'));
-            buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
         }
-        if (status === 'DOCUMENTOS_FISICOS_RECIBIDOS') {
-            buttons.push(actionButton('APROBAR_TOTAL', 'Aprobar rendición', 'rd-btn--success'));
-            buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial</button>');
-            buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
+        if (['APROBADA', 'APROBADA_PARCIAL'].includes(status)) {
+            buttons.push(actionButton('MARCAR_PAGADA', 'Marcar como pagada', 'rd-btn--success'));
         }
-        if (['APROBADA', 'APROBADA_PARCIAL'].includes(status)) buttons.push(actionButton('MARCAR_PAGADA', 'Marcar como pagada', 'rd-btn--success'));
         return buttons.length ? `<div class="rd-actions">${buttons.join('')}</div>` : '<div class="rd-readonly-note">Esta rendición no tiene acciones pendientes.</div>';
     }
 
@@ -1183,13 +1210,29 @@
         const info = actionDetails[action];
         if (!info) return;
         state.action = { action, ...context };
-        $('#actionModalTitle').textContent = info[0];
-        $('#actionModalDescription').textContent = info[1];
+
+        let modalTitle = info[0];
+        let modalDescription = info[1];
+        let confirmLabel = info[3];
+
+        if (action === 'APROBAR_TOTAL' && state.detail?.rendicion) {
+            const r = state.detail.rendicion;
+            const excess = Number(r.monto_exceso_no_reembolsable || 0);
+            const hasActiveExcess = excess > 0 && r.decision_exceso !== 'APROBADO';
+            if (hasActiveExcess) {
+                modalTitle = 'Aprobar hasta el tope del presupuesto';
+                modalDescription = `Se aprobará la rendición pagando únicamente hasta el saldo disponible de ${money.format(r.monto_maximo_aprobable)}. El exceso de ${money.format(excess)} no será reembolsado al vendedor.`;
+                confirmLabel = `Aprobar por ${money.format(r.monto_maximo_aprobable)}`;
+            }
+        }
+
+        $('#actionModalTitle').textContent = modalTitle;
+        $('#actionModalDescription').textContent = modalDescription;
         $('#actionCommentLabel').textContent = info[2] ? 'Motivo obligatorio' : 'Comentario opcional';
         $('#actionComment').required = info[2];
         $('#actionComment').value = '';
-        $('#confirmActionButton').textContent = info[3];
-        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO', 'CANCELAR_SOLICITUD_GIRA'].includes(action) ? 'rd-btn--danger' : 'rd-btn--primary'}`;
+        $('#confirmActionButton').textContent = confirmLabel;
+        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO', 'CANCELAR_SOLICITUD_GIRA'].includes(action) ? 'rd-btn--danger' : (action === 'APROBAR_TOTAL' ? 'rd-btn--success' : 'rd-btn--primary')}`;
         openModal('actionModal');
     }
 

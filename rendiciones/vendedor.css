@@ -74,13 +74,14 @@ html, body {
     position: sticky;
     top: 0;
     z-index: 40;
+    width: 100%;
     height: 56px;
     background: #ffffff;
     border-bottom: 1px solid var(--rg-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 10px;
+    padding: 0 16px;
     padding-top: env(safe-area-inset-top);
 }
 
@@ -1844,30 +1845,31 @@ html, body {
 
     .mobile-canvas {
         --rg-bottom-nav-height: 68px;
-        width: min(100%, 940px);
-        max-width: 940px;
+        width: 100%;
+        max-width: none;
         min-height: 100dvh;
-        margin: 0 auto;
-        box-shadow: 0 4px 32px rgba(15, 23, 42, 0.08);
+        margin: 0;
+        box-shadow: none;
         background: var(--rg-bg-canvas);
     }
 
     .rg-header {
-        height: 64px;
-        max-width: 940px;
-        margin: 0 auto;
-        padding-inline: 28px;
+        width: 100%;
+        height: 60px;
+        max-width: none;
+        margin: 0;
+        padding-inline: clamp(16px, 3vw, 40px);
     }
 
     .rg-header__title {
-        font-size: 1.3rem;
+        font-size: 1.25rem;
     }
 
     .rg-main-content {
         width: 100%;
-        max-width: 940px;
+        max-width: 1080px;
         margin: 0 auto;
-        padding: 24px 28px calc(var(--rg-bottom-nav-height) + 28px);
+        padding: 24px clamp(20px, 4vw, 48px) calc(var(--rg-bottom-nav-height) + 28px);
     }
 
     .rg-segmented-control {
@@ -1954,17 +1956,17 @@ html, body {
     }
 
     .rg-fab {
-        right: clamp(24px, calc((100vw - 940px) / 2 + 28px), 48px);
+        right: clamp(24px, 4vw, 56px);
         bottom: calc(var(--rg-bottom-nav-height) + 20px);
     }
 
     .rg-bottom-nav {
-        width: min(100%, 940px);
-        max-width: 940px;
+        width: 100%;
+        max-width: none;
         min-height: var(--rg-bottom-nav-height);
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 6px 36px max(8px, env(safe-area-inset-bottom));
+        left: 0;
+        transform: none;
+        padding: 6px clamp(28px, 14vw, 240px) max(8px, env(safe-area-inset-bottom));
     }
 
     .rg-nav-item {
