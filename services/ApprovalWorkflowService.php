@@ -417,13 +417,13 @@ final class ApprovalWorkflowService
         $stmt = $pdo->prepare(
             'SELECT id, monto_total_rendido, monto_maximo_aprobable
              FROM rendiciones_gastos
-             WHERE id = :id AND tipo_rendicion = :tipo AND activo = :activo
+             WHERE id = :id AND activo = :activo
              LIMIT 1 FOR UPDATE'
         );
-        $stmt->execute([':id' => $renditionId, ':tipo' => 'MENSUAL', ':activo' => 1]);
+        $stmt->execute([':id' => $renditionId, ':activo' => 1]);
         $rendition = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$rendition) {
-            throw new DomainException('La rendición mensual no existe o no está activa.');
+            throw new DomainException('La rendición no existe o no está activa.');
         }
         return $rendition;
     }

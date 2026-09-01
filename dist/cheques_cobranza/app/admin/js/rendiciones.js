@@ -381,14 +381,22 @@
     }
 
     function renderStepper(status) {
-        const steps = ['Enviada', 'Aprobación exceso', 'En revisión', 'Físicos recibidos', 'Aprobada / Pagada'];
-        const indexMap = { ENVIADA: 0, PENDIENTE_APROBACION_EXCESO: 1, EN_REVISION_TESORERIA: 2, DOCUMENTOS_FISICOS_RECIBIDOS: 3, APROBADA: 4, APROBADA_PARCIAL: 4, PAGADA: 4 };
+        const steps = ['Enviada', 'En revisión', 'Físicos recibidos', 'Aprobada / Pagada'];
+        const indexMap = {
+            ENVIADA: 0,
+            PENDIENTE_APROBACION_EXCESO: 1,
+            EN_REVISION_TESORERIA: 1,
+            DOCUMENTOS_FISICOS_RECIBIDOS: 2,
+            APROBADA: 3,
+            APROBADA_PARCIAL: 3,
+            PAGADA: 3
+        };
         const current = indexMap[status] ?? 0;
         const rejected = status === 'RECHAZADA';
         return `<div class="rd-stepper" aria-label="Progreso de la rendición">${steps.map((label, index) => {
             const complete = !rejected && index < current;
             const active = !rejected && index === current;
-            const isRejected = rejected && index === 4;
+            const isRejected = rejected && index === 3;
             const className = complete ? 'is-complete' : active ? 'is-active' : isRejected ? 'is-rejected' : '';
             const node = complete ? '✓' : isRejected ? '×' : active ? '•' : String(index + 1);
             return `<div class="rd-step ${className}"><span class="rd-step__node">${node}</span><span class="rd-step__label">${isRejected ? 'Rechazada' : label}</span>${index < steps.length - 1 ? '<span class="rd-step__line"></span>' : ''}</div>`;
@@ -408,21 +416,18 @@
             const excess = Number(rendition.monto_exceso_no_reembolsable || 0);
             const hasActiveExcess = excess > 0 && rendition.decision_exceso !== 'APROBADO';
             const requestState = rendition.solicitud_excepcion_estado || '';
-            const isTour = rendition.tipo_rendicion === 'GIRA';
 
             if (hasActiveExcess) {
-                // Flujo con exceso en revisión: 3 opciones exclusivas
+                // Flujo con exceso en revisión: 3 opciones exclusivas para CUALQUIER tipo de rendición (Mensual o Gira)
                 // 1. Aprobar (hasta el tope del presupuesto disponible)
                 const maxPayable = Number(rendition.monto_maximo_aprobable || 0);
                 buttons.push(actionButton('APROBAR_TOTAL', `Aprobar hasta el tope (${money.format(maxPayable)})`, 'rd-btn--success'));
 
                 // 2. Solicitar exceso (correo a responsable configurado con Magic Link)
-                if (!isTour) {
-                    const requestLabel = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(requestState)
-                        ? `Reenviar exceso (${money.format(excess)})`
-                        : `Solicitar exceso (${money.format(excess)})`;
-                    buttons.push(actionButton(requestState ? 'REENVIAR_EXCESO' : 'SOLICITAR_EXCEPCION', requestLabel, 'rd-btn--warning'));
-                }
+                const requestLabel = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(requestState)
+                    ? `Reenviar exceso (${money.format(excess)})`
+                    : `Solicitar exceso (${money.format(excess)})`;
+                buttons.push(actionButton(requestState ? 'REENVIAR_EXCESO' : 'SOLICITAR_EXCEPCION', requestLabel, 'rd-btn--warning'));
 
                 // 3. Rechazar rendición
                 buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));

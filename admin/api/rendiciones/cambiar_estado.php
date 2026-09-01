@@ -41,8 +41,8 @@ try {
     }
 
     if (in_array($action, ['SOLICITAR_EXCEPCION', 'REENVIAR_EXCESO'], true) && $rendition['estado'] === 'EN_REVISION_TESORERIA') {
-        if ($rendition['tipo_rendicion'] !== 'MENSUAL' || (float)($rendition['monto_exceso_no_reembolsable'] ?? 0) <= 0) {
-            throw new DomainException('Esta rendición no tiene un exceso mensual pendiente que pueda solicitarse.');
+        if ((float)($rendition['monto_exceso_no_reembolsable'] ?? 0) <= 0) {
+            throw new DomainException('Esta rendición no tiene un exceso pendiente que pueda solicitarse.');
         }
         $approverId = filter_var($input['aprobador_id'] ?? null, FILTER_VALIDATE_INT);
         $justification = RendicionesService::truncateText(trim((string)($input['comentario'] ?? '')), 500);

@@ -93,12 +93,11 @@ try {
                 monto_base_aprobable, monto_solicitado, token_expira_at,
                 correo_enviado_at, resuelto_at
          FROM solicitudes_aprobacion
-         WHERE id = :id AND tipo_solicitud = :tipo
+         WHERE id = :id
          LIMIT 1'
     );
     $stmtException->execute([
         ':id' => (int)($rendition['solicitud_excepcion_id'] ?? 0),
-        ':tipo' => 'EXCEPCION_MENSUAL',
     ]);
     $genericException = $stmtException->fetch(PDO::FETCH_ASSOC);
     if ($genericException) {
