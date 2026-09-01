@@ -25,7 +25,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
     <link rel="stylesheet" href="styles.css?v=4">
     <link rel="stylesheet" href="css/shell.css?v=20260828-session-1">
     <link rel="stylesheet" href="css/modal_config_cc.css?v=20260826-4">
-    <link rel="stylesheet" href="css/rendiciones.css?v=20260901-1">
+    <link rel="stylesheet" href="css/rendiciones.css?v=<?= filemtime(__DIR__ . '/css/rendiciones.css') ?>">
 </head>
 <body data-can-manage-rendiciones="<?= $canManageRenditions ? '1' : '0' ?>" data-can-configure-approvers="<?= $canConfigureApprovers ? '1' : '0' ?>">
     <!--
@@ -206,7 +206,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
 
     <script src="js/shared_ui.js?v=20260828-session-1"></script>
     <script src="js/modal_config_cc.js?v=20260826-3"></script>
-    <script src="js/rendiciones.js?v=20260901-2" defer></script>
+    <script src="js/rendiciones.js?v=<?= filemtime(__DIR__ . '/js/rendiciones.js') ?>" defer></script>
     <?php if (userHasPermission($rolUsuario, 'cc.manage') || userHasPermission($rolUsuario, 'companies.manage')): ?>
     <?php include __DIR__ . '/components/modal_config_cc.php'; ?>
     <?php endif; ?>

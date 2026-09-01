@@ -402,14 +402,14 @@
             buttons.push(actionButton('REENVIAR_EXCESO', sent ? 'Reenviar aprobación' : 'Enviar aprobación', 'rd-btn--warning'));
             buttons.push(actionButton('RECHAZAR_EXCESO_TESORERIA', sent ? 'Cancelar solicitud y rechazar' : 'Rechazar sin enviar', 'rd-btn--danger'));
         }
-        if (status === 'EN_REVISION_TESORERIA' || status === 'DOCUMENTOS_FISICOS_RECIBIDOS') {
+        if (status === 'EN_REVISION_TESORERIA') {
             const excess = Number(rendition.monto_exceso_no_reembolsable || 0);
             const hasActiveExcess = excess > 0 && rendition.decision_exceso !== 'APROBADO';
             const requestState = rendition.solicitud_excepcion_estado || '';
             const isTour = rendition.tipo_rendicion === 'GIRA';
 
             if (hasActiveExcess) {
-                // Flujo con exceso: 3 opciones claras solicitadas
+                // Flujo con exceso en revisión: 3 opciones exclusivas
                 // 1. Aprobar (hasta el tope del presupuesto disponible)
                 const maxPayable = Number(rendition.monto_maximo_aprobable || 0);
                 buttons.push(actionButton('APROBAR_TOTAL', `Aprobar hasta el tope (${money.format(maxPayable)})`, 'rd-btn--success'));
@@ -424,22 +424,19 @@
 
                 // 3. Rechazar rendición
                 buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
-
-                // Opción auxiliar si aún está en revisión y la empresa desea marcar físicos
-                if (status === 'EN_REVISION_TESORERIA') {
-                    buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física', 'rd-btn--secondary'));
-                }
             } else {
-                // Flujo normal (sin exceso o con exceso ya aprobado por Gerencia)
+                // Flujo normal sin exceso en revisión (o con exceso ya aprobado por Gerencia)
                 const isApprovedExcess = rendition.decision_exceso === 'APROBADO';
                 const approveLabel = isApprovedExcess ? `Aprobar rendición (${money.format(rendition.monto_maximo_aprobable)})` : 'Aprobar rendición';
                 buttons.push(actionButton('APROBAR_TOTAL', approveLabel, 'rd-btn--success'));
                 buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial</button>');
-                if (status === 'EN_REVISION_TESORERIA') {
-                    buttons.push(actionButton('RECIBIR_FISICOS', 'Recepción física', 'rd-btn--secondary'));
-                }
                 buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
             }
+        }
+        if (status === 'DOCUMENTOS_FISICOS_RECIBIDOS') {
+            buttons.push(actionButton('APROBAR_TOTAL', 'Aprobar rendición', 'rd-btn--success'));
+            buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial</button>');
+            buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
         }
         if (['APROBADA', 'APROBADA_PARCIAL'].includes(status)) {
             buttons.push(actionButton('MARCAR_PAGADA', 'Marcar como pagada', 'rd-btn--success'));
