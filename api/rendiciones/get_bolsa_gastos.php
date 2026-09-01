@@ -44,21 +44,22 @@ try {
                     SELECT SUM(r.monto_total_aprobado)
                     FROM rendiciones_gastos r
                     WHERE r.presupuesto_id = p.id
-                      AND r.estado IN (:estado_aprobada, :estado_parcial, :estado_pagada)
+                      AND r.estado IN (:estado_rendicion_aprobada, :estado_rendicion_parcial, :estado_rendicion_pagada)
                 ), 0) AS monto_aprobado
          FROM presupuestos_vendedores p
          WHERE p.empresa_id = :empresa_id
            AND p.vendedor_id = :vendedor_id
            AND p.activo = :activo
-           AND (p.tipo_presupuesto = :tipo_mensual OR p.estado_aprobacion IN (:estado_aprobada, :estado_aprobado))
+           AND (p.tipo_presupuesto = :tipo_mensual OR p.estado_aprobacion IN (:gira_aprobada, :gira_aprobado))
          ORDER BY p.periodo_mes DESC, p.tipo_presupuesto ASC, p.id DESC'
     );
     $stmtBudgets->execute([
-        ':estado_aprobada' => 'APROBADA',
-        ':estado_parcial' => 'APROBADA_PARCIAL',
-        ':estado_pagada' => 'PAGADA',
+        ':estado_rendicion_aprobada' => 'APROBADA',
+        ':estado_rendicion_parcial' => 'APROBADA_PARCIAL',
+        ':estado_rendicion_pagada' => 'PAGADA',
         ':tipo_mensual' => 'MENSUAL',
-        ':estado_aprobado' => 'APROBADO',
+        ':gira_aprobada' => 'APROBADA',
+        ':gira_aprobado' => 'APROBADO',
         ':empresa_id' => $seller['empresa_id'],
         ':vendedor_id' => $seller['vendedor_id'],
         ':activo' => 1,
