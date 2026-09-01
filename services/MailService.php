@@ -448,7 +448,7 @@ class MailService
             . '<p><strong>' . $seller . '</strong> · código ERP #' . $sellerId . '<br>' . $company . ' · ' . $type . ' · ' . $period . '</p>'
             . '<table style="width:100%;border-collapse:collapse;background:#f8fafc;margin:18px 0">'
             . '<tr><td style="padding:9px">Presupuesto asignado</td><td style="padding:9px;text-align:right">$' . number_format($budget, 0, ',', '.') . '</td></tr>'
-            . '<tr><td style="padding:9px">Comprometido previamente</td><td style="padding:9px;text-align:right">$' . number_format($previouslyCommitted, 0, ',', '.') . '</td></tr>'
+            . '<tr><td style="padding:9px">Rendido previamente</td><td style="padding:9px;text-align:right">$' . number_format($previouslyCommitted, 0, ',', '.') . '</td></tr>'
             . '<tr><td style="padding:9px">Saldo antes de esta rendición</td><td style="padding:9px;text-align:right">$' . number_format($available, 0, ',', '.') . '</td></tr>'
             . '<tr><td style="padding:9px">Total rendido</td><td style="padding:9px;text-align:right">$' . number_format($total, 0, ',', '.') . '</td></tr>'
             . '<tr><td style="padding:9px;font-weight:bold;color:#b91c1c">Exceso</td><td style="padding:9px;text-align:right;font-weight:bold;color:#b91c1c">$' . number_format($excess, 0, ',', '.') . '</td></tr>'

@@ -89,7 +89,7 @@ final class RendicionApprovalPdf extends FPDF
         $this->sectionTitle('Resumen financiero');
         $this->moneyRow([
             ['Asignado', $assigned],
-            ['Comprometido previo', $previouslyCommitted],
+            ['Rendido previamente', $previouslyCommitted],
             ['Saldo anterior', $availableBefore],
         ]);
         $this->moneyRow([
