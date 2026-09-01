@@ -19,7 +19,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="vendedor.css?v=20260825-budget-1">
+    <link rel="stylesheet" href="vendedor.css?v=<?= filemtime(__DIR__ . '/vendedor.css') ?>">
 </head>
 <body>
     <div class="mobile-canvas" id="sellerApp" aria-busy="true">

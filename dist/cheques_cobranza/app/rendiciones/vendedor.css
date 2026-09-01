@@ -1834,27 +1834,29 @@ html, body {
 }
 
 /* ==========================================
- * 10. TABLET Y ESCRITORIO LIGERO
- * ==========================================
- * La operación en terreno conserva su navegación táctil, pero deja de
- * comportarse como un teléfono centrado cuando existe superficie útil.
- */
-@media (min-width: 768px) {
+ * 10. RESPONSIVE: TABLETS Y ESCRITORIO (>= 640px)
+ * ========================================== */
+@media (min-width: 640px) {
     html,
     body {
         background: #eaf0f7;
     }
 
     .mobile-canvas {
-        width: min(100%, 1180px);
-        max-width: 1180px;
+        --rg-bottom-nav-height: 68px;
+        width: min(100%, 940px);
+        max-width: 940px;
         min-height: 100dvh;
-        box-shadow: none;
+        margin: 0 auto;
+        box-shadow: 0 4px 32px rgba(15, 23, 42, 0.08);
+        background: var(--rg-bg-canvas);
     }
 
     .rg-header {
         height: 64px;
-        padding-inline: clamp(24px, 4vw, 52px);
+        max-width: 940px;
+        margin: 0 auto;
+        padding-inline: 28px;
     }
 
     .rg-header__title {
@@ -1863,44 +1865,120 @@ html, body {
 
     .rg-main-content {
         width: 100%;
-        max-width: 1100px;
+        max-width: 940px;
         margin: 0 auto;
-        padding: 22px clamp(24px, 5vw, 56px) calc(var(--rg-bottom-nav-height) + 30px);
+        padding: 24px 28px calc(var(--rg-bottom-nav-height) + 28px);
     }
 
     .rg-segmented-control {
-        max-width: 680px;
+        max-width: 600px;
+        min-height: 50px;
+        margin-bottom: 20px;
+    }
+
+    .rg-segment-btn {
+        min-height: 42px;
+        font-size: 0.88rem;
+    }
+
+    .rg-section-header {
+        margin: 6px 0 16px;
+    }
+
+    .rg-section-title {
+        font-size: 1.05rem;
     }
 
     .rg-expense-list,
-    .rg-report-list,
-    .rg-budget-grid {
+    .rg-report-list {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+        gap: 16px;
     }
 
-    .rg-budget-grid > #toursContainer {
-        display: contents;
+    /* Grilla de Presupuestos en Tablet */
+    .rg-budget-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
     }
 
-    .rg-budget-grid > #toursContainer .rg-section-header {
-        grid-column: 1 / -1;
+    .rg-budget-card {
+        padding: 22px 24px;
+        border-radius: 16px;
+    }
+
+    .rg-budget-label {
+        font-size: 0.95rem;
+    }
+
+    .rg-budget-period,
+    .rg-budget-status {
+        font-size: 0.86rem;
+    }
+
+    .rg-budget-summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, auto);
+        gap: 28px;
+        align-items: end;
+    }
+
+    .rg-budget-breakdown {
+        border-top: none;
+        padding-top: 0;
+        gap: 14px;
+    }
+
+    .rg-budget-breakdown div + div {
+        padding-left: 14px;
+    }
+
+    .rg-budget-breakdown dd {
+        font-size: 1.1rem;
+    }
+
+    .rg-budget-amount {
+        font-size: 2.1rem;
+        margin: 6px 0 8px;
+    }
+
+    .rg-budget-progress-wrap {
+        height: 8px;
+    }
+
+    .rg-tours-list {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
     }
 
     .rg-fab {
-        right: clamp(24px, 4vw, 56px);
-        bottom: calc(var(--rg-bottom-nav-height) + 22px);
+        right: clamp(24px, calc((100vw - 940px) / 2 + 28px), 48px);
+        bottom: calc(var(--rg-bottom-nav-height) + 20px);
     }
 
     .rg-bottom-nav {
-        width: min(100%, 1180px);
-        max-width: 1180px;
-        padding-inline: clamp(28px, 16vw, 220px);
+        width: min(100%, 940px);
+        max-width: 940px;
+        min-height: var(--rg-bottom-nav-height);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 6px 36px max(8px, env(safe-area-inset-bottom));
     }
 
     .rg-nav-item {
-        max-width: 220px;
+        min-height: 52px;
+        gap: 4px;
+    }
+
+    .rg-nav-icon-wrap svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .rg-nav-label {
+        font-size: 0.82rem;
     }
 
     .rg-drawer {
@@ -1910,9 +1988,9 @@ html, body {
     }
 
     .rg-drawer__content {
-        width: min(100%, 1024px);
-        max-width: 1024px;
-        height: min(860px, calc(100dvh - 48px));
+        width: min(100%, 900px);
+        max-width: 900px;
+        height: min(840px, calc(100dvh - 48px));
         border-radius: 20px;
         box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
     }
@@ -2002,207 +2080,7 @@ html, body {
     }
 }
 
-@media (min-width: 1200px) {
-    .rg-main-content {
-        padding-inline: 56px;
-    }
-
-    .rg-expense-list,
-    .rg-report-list {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
-/*
- * Tablet híbrida: aprovecha el ancho para trabajo de revisión sin adoptar
- * la densidad de un escritorio. Las grillas auto-fit evitan tarjetas
- * diminutas cuando sólo existe un gasto, informe o presupuesto.
- */
-@media (min-width: 600px) and (max-width: 1199px) {
-    html,
-    body {
-        background: #eaf0f7;
-    }
-
-    .mobile-canvas {
-        --rg-bottom-nav-height: 76px;
-        width: 100%;
-        max-width: none;
-        min-height: 100dvh;
-        box-shadow: none;
-    }
-
-    .rg-header {
-        height: 64px;
-        padding-inline: clamp(22px, 4vw, 48px);
-    }
-
-    .rg-header__title {
-        font-size: 1.25rem;
-    }
-
-    .rg-main-content {
-        width: 100%;
-        max-width: 1080px;
-        margin: 0 auto;
-        padding: 26px clamp(24px, 5vw, 56px) calc(var(--rg-bottom-nav-height) + 30px);
-    }
-
-    .rg-segmented-control {
-        width: min(100%, 680px);
-        min-height: 52px;
-        margin-bottom: 22px;
-        padding: 4px;
-    }
-
-    .rg-segment-btn {
-        min-height: 44px;
-        font-size: 0.88rem;
-    }
-
-    .rg-section-header {
-        margin: 4px 0 16px;
-    }
-
-    .rg-section-title {
-        font-size: 1rem;
-    }
-
-    .rg-badge-count {
-        min-width: 24px;
-        padding: 4px 9px;
-        font-size: 0.8rem;
-    }
-
-    .rg-expense-list,
-    .rg-report-list,
-    .rg-budget-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-        gap: 18px;
-    }
-
-    .rg-budget-grid > #toursContainer {
-        display: contents;
-    }
-
-    .rg-budget-grid > #toursContainer .rg-section-header {
-        grid-column: 1 / -1;
-    }
-
-    .rg-expense-card {
-        min-height: 112px;
-        padding: 16px;
-        gap: 16px;
-        border-radius: 16px;
-    }
-
-    .rg-expense-thumb {
-        width: 64px;
-        height: 64px;
-        border-radius: 10px;
-    }
-
-    .rg-expense-merchant {
-        font-size: 1.06rem;
-    }
-
-    .rg-expense-meta {
-        margin-top: 5px;
-        font-size: 0.86rem;
-    }
-
-    .rg-expense-amount {
-        font-size: 1.22rem;
-    }
-
-    .rg-expense-status-tag {
-        margin-top: 5px;
-        padding: 4px 8px;
-        font-size: 0.72rem;
-    }
-
-    .rg-report-card {
-        min-height: 132px;
-        padding: 18px;
-        border-radius: 16px;
-    }
-
-    .rg-report-title {
-        font-size: 1.12rem;
-    }
-
-    .rg-budget-card {
-        min-height: 214px;
-        padding: 20px;
-        border-radius: 16px;
-    }
-
-    .rg-budget-label {
-        font-size: 0.9rem;
-    }
-
-    .rg-budget-period,
-    .rg-budget-status {
-        font-size: 0.84rem;
-    }
-
-    .rg-budget-summary {
-        gap: 20px;
-    }
-
-    .rg-budget-breakdown dd {
-        font-size: 1.08rem;
-    }
-
-    .rg-budget-amount {
-        margin: 12px 0;
-        font-size: 2rem;
-    }
-
-    .rg-budget-progress-wrap {
-        height: 8px;
-        margin-bottom: 0;
-    }
-
-    .rg-empty-state {
-        min-height: 260px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .rg-fab {
-        width: 62px;
-        height: 62px;
-        right: clamp(24px, 4vw, 56px);
-        bottom: calc(var(--rg-bottom-nav-height) + 22px);
-    }
-
-    .rg-bottom-nav {
-        width: 100%;
-        max-width: none;
-        min-height: var(--rg-bottom-nav-height);
-        padding: 6px clamp(28px, 16vw, 220px) max(8px, env(safe-area-inset-bottom));
-    }
-
-    .rg-nav-item {
-        min-height: 56px;
-        gap: 5px;
-    }
-
-    .rg-nav-icon-wrap svg {
-        width: 24px;
-        height: 24px;
-    }
-
-    .rg-nav-label {
-        font-size: 0.8rem;
-    }
-}
-
-@media (pointer: coarse) and (min-width: 768px) {
+@media (pointer: coarse) and (min-width: 640px) {
     .rg-check-item,
     .rg-btn-submit-green,
     .rg-field-row {
