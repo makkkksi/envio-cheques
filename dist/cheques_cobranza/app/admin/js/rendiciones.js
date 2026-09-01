@@ -13,6 +13,7 @@
         budgets: [],
         budgetsLoaded: false,
         budgetsAvailable: false,
+        budgetFilter: 'ALL',
         sellerDirectory: [],
         sellerDirectoryLoaded: false,
         sellerOptions: [],
@@ -83,6 +84,8 @@
             $('#budgetForm')?.addEventListener('submit', saveBudget);
             $('#clearBudgetForm')?.addEventListener('click', resetBudgetForm);
             $('#budgetSearch')?.addEventListener('input', renderBudgets);
+            $('#budgetTypeTabs')?.addEventListener('click', onBudgetTypeFilterClick);
+            $('#budgetTablesContainer')?.addEventListener('click', onBudgetAction);
             $('#budgetTableBody')?.addEventListener('click', onBudgetAction);
             $('#confirmActionButton')?.addEventListener('click', confirmAction);
             $('#partialDecisionList')?.addEventListener('change', updatePartialTotal);
@@ -994,47 +997,145 @@
         }
     }
 
+    function onBudgetTypeFilterClick(event) {
+        const button = event.target.closest('[data-budget-filter]');
+        if (!button) return;
+        const filter = button.dataset.budgetFilter;
+        if (state.budgetFilter === filter) return;
+        state.budgetFilter = filter;
+        $$('#budgetTypeTabs [data-budget-filter]').forEach((tab) => {
+            const active = tab.dataset.budgetFilter === filter;
+            tab.classList.toggle('is-active', active);
+            tab.setAttribute('aria-selected', String(active));
+        });
+        renderBudgets();
+    }
+
+    function renderMonthlyBudgetRow(budget) {
+        const active = Number(budget.activo) === 1;
+        const presence = getSellerPresence(budget);
+        const presenceMarkup = presence.length
+            ? `<div class="rd-erp-presence">${presence.map((item) => `<span title="${escapeHtml(item.empresa_nombre)} · código ${escapeHtml(item.vendedor_id)}">${escapeHtml(shortCompanyName(item.empresa_nombre))} <b>#${escapeHtml(item.vendedor_id)}</b></span>`).join('')}</div>`
+            : '<span class="rd-cell-secondary">Sin homologación por correo</span>';
+        return `<tr class="${active ? '' : 'is-inactive'}">
+            <td><span class="rd-cell-primary">${escapeHtml(budget.vendedor_nombre || 'Sin nombre')}</span><span class="rd-cell-secondary">${escapeHtml(budget.vendedor_email || `Código ERP #${budget.vendedor_id}`)}</span></td>
+            <td><span class="rd-cell-primary">${escapeHtml(budget.empresa_nombre || 'Sin empresa')}</span></td>
+            <td>${presenceMarkup}</td>
+            <td><span class="rd-budget-type">Mensual</span></td>
+            <td><span class="rd-cell-primary">${escapeHtml(formatMonthShort(budget.periodo_mes))}</span><span class="rd-cell-secondary">${escapeHtml(formatMonth(budget.periodo_mes))}</span></td>
+            <td><span class="rd-cell-money">${money.format(budget.monto_asignado)}</span></td>
+            <td><span class="rd-cell-money">${money.format(budget.monto_utilizado)}</span></td>
+            <td><span class="rd-cell-money">${money.format(budget.saldo_disponible)}</span></td>
+            <td><span class="rd-status ${active ? 'rd-status--success' : ''}">${active ? 'Activo' : 'Inactivo'}</span></td>
+            <td>${active ? `<div class="rd-budget-actions"><button class="rd-btn rd-btn--tour rd-btn--small" type="button" data-add-tour="${Number(budget.id)}">+ Agregar gira</button><button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : '—'}</td>
+        </tr>`;
+    }
+
+    function renderTourBudgetRow(budget) {
+        const active = Number(budget.activo) === 1;
+        const dates = budget.fecha_inicio && budget.fecha_fin ? `${formatDate(budget.fecha_inicio)} — ${formatDate(budget.fecha_fin)}` : formatMonth(budget.periodo_mes);
+        const presence = getSellerPresence(budget);
+        const presenceMarkup = presence.length
+            ? `<div class="rd-erp-presence">${presence.map((item) => `<span title="${escapeHtml(item.empresa_nombre)} · código ${escapeHtml(item.vendedor_id)}">${escapeHtml(shortCompanyName(item.empresa_nombre))} <b>#${escapeHtml(item.vendedor_id)}</b></span>`).join('')}</div>`
+            : '<span class="rd-cell-secondary">Sin homologación por correo</span>';
+        const approvalState = String(budget.solicitud_estado || budget.estado_aprobacion || 'PENDIENTE');
+        const approvalLabel = { PENDIENTE_ENVIO: 'Pendiente de envío', PENDIENTE_DECISION: 'Esperando decisión', ENVIO_FALLIDO: 'Correo fallido', VENCIDA: 'Enlace vencido', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada', PENDIENTE: 'Pendiente' }[approvalState] || approvalState;
+        const tourWorkflowActions = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(approvalState)
+            ? `<button class="rd-btn rd-btn--warning rd-btn--small" type="button" data-resend-tour="${Number(budget.id)}">Reenviar aprobación</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-cancel-tour="${Number(budget.id)}">Cancelar solicitud</button>`
+            : '';
+        const tourPdfAction = approvalState === 'APROBADA'
+            ? `<a class="rd-btn rd-btn--success rd-btn--small" href="reportes/comprobante_aprobacion_gira.php?id=${Number(budget.id)}" target="_blank" rel="noopener noreferrer" title="Ver / imprimir comprobante PDF de la gira"><svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6V2Zm8 0v6h6M9 13h8m-8 4h5"/></svg>Certificado PDF</a>`
+            : '';
+        return `<tr class="${active ? '' : 'is-inactive'}">
+            <td><span class="rd-cell-primary">${escapeHtml(budget.vendedor_nombre || 'Sin nombre')}</span><span class="rd-cell-secondary">${escapeHtml(budget.vendedor_email || `Código ERP #${budget.vendedor_id}`)}</span></td>
+            <td><span class="rd-cell-primary">${escapeHtml(budget.empresa_nombre || 'Sin empresa')}</span></td>
+            <td>${presenceMarkup}</td>
+            <td><span class="rd-budget-type rd-budget-type--tour">Gira</span></td>
+            <td><span class="rd-cell-primary">${escapeHtml(budget.nombre_gira || 'Gira comercial')}</span><span class="rd-cell-secondary">${escapeHtml(dates)}</span></td>
+            <td><span class="rd-cell-money">${money.format(budget.monto_asignado)}</span></td>
+            <td><span class="rd-cell-money">${money.format(budget.monto_utilizado)}</span></td>
+            <td><span class="rd-cell-money">${money.format(budget.saldo_disponible)}</span></td>
+            <td><span class="rd-status ${active && approvalState === 'APROBADA' ? 'rd-status--success' : ''}">${active ? escapeHtml(approvalLabel) : 'Inactivo'}</span></td>
+            <td>${active ? `<div class="rd-budget-actions">${tourPdfAction}${tourWorkflowActions}<button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : (tourPdfAction ? `<div class="rd-budget-actions">${tourPdfAction}</div>` : '—')}</td>
+        </tr>`;
+    }
+
     function renderBudgets() {
-        const tableBody = $('#budgetTableBody');
-        if (!tableBody) return;
+        const container = $('#budgetTablesContainer') || $('#budgetTableBody');
+        if (!container) return;
+
+        const allMonthly = state.budgets.filter((b) => b.tipo_presupuesto === 'MENSUAL');
+        const allTours = state.budgets.filter((b) => b.tipo_presupuesto === 'GIRA');
+
+        setText('countBudgetTotal', String(state.budgets.length));
+        setText('countBudgetMonthly', String(allMonthly.length));
+        setText('countBudgetTour', String(allTours.length));
+
         const search = normalize($('#budgetSearch')?.value || '');
-        const budgets = state.budgets.filter((budget) => {
+        const matchesSearch = (budget) => {
             const presence = getSellerPresence(budget).map((item) => `${item.empresa_nombre} ${item.vendedor_id}`).join(' ');
             return !search || normalize(`${budget.vendedor_nombre} ${budget.vendedor_id} ${budget.vendedor_email || ''} ${budget.empresa_nombre} ${presence}`).includes(search);
-        });
-        const totalAssigned = budgets.reduce((sum, budget) => sum + Number(budget.monto_asignado || 0), 0);
-        setText('budgetSummary', budgets.length === 1 ? '1 presupuesto visible' : `${budgets.length} presupuestos visibles`);
+        };
+
+        const filteredMonthly = allMonthly.filter(matchesSearch);
+        const filteredTours = allTours.filter(matchesSearch);
+        const visibleList = state.budgetFilter === 'MENSUAL' ? filteredMonthly : (state.budgetFilter === 'GIRA' ? filteredTours : [...filteredMonthly, ...filteredTours]);
+        const totalAssigned = visibleList.reduce((sum, budget) => sum + Number(budget.monto_asignado || 0), 0);
+
+        const filterLabel = { ALL: 'presupuestos visibles', MENSUAL: 'presupuestos mensuales visibles', GIRA: 'giras visibles' }[state.budgetFilter] || 'presupuestos visibles';
+        setText('budgetSummary', visibleList.length === 1 ? `1 ${filterLabel.replace('visibles', 'visible')}` : `${visibleList.length} ${filterLabel}`);
         setText('budgetAmountSummary', `${money.format(totalAssigned)} asignado`);
-        if (!budgets.length) { tableBody.innerHTML = tableMessage('No hay presupuestos que coincidan con la búsqueda.', 10); return; }
-        tableBody.innerHTML = budgets.map((budget) => {
-            const active = Number(budget.activo) === 1;
-            const isTour = budget.tipo_presupuesto === 'GIRA';
-            const dates = isTour && budget.fecha_inicio && budget.fecha_fin ? `${formatDate(budget.fecha_inicio)} — ${formatDate(budget.fecha_fin)}` : formatMonth(budget.periodo_mes);
-            const presence = getSellerPresence(budget);
-            const presenceMarkup = presence.length
-                ? `<div class="rd-erp-presence">${presence.map((item) => `<span title="${escapeHtml(item.empresa_nombre)} · código ${escapeHtml(item.vendedor_id)}">${escapeHtml(shortCompanyName(item.empresa_nombre))} <b>#${escapeHtml(item.vendedor_id)}</b></span>`).join('')}</div>`
-                : '<span class="rd-cell-secondary">Sin homologación por correo</span>';
-            const approvalState = isTour ? String(budget.solicitud_estado || budget.estado_aprobacion || 'PENDIENTE') : '';
-            const approvalLabel = { PENDIENTE_ENVIO: 'Pendiente de envío', PENDIENTE_DECISION: 'Esperando decisión', ENVIO_FALLIDO: 'Correo fallido', VENCIDA: 'Enlace vencido', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada', PENDIENTE: 'Pendiente' }[approvalState] || approvalState;
-            const tourWorkflowActions = isTour && ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(approvalState)
-                ? `<button class="rd-btn rd-btn--warning rd-btn--small" type="button" data-resend-tour="${Number(budget.id)}">Reenviar aprobación</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-cancel-tour="${Number(budget.id)}">Cancelar solicitud</button>`
-                : '';
-            const tourPdfAction = isTour && approvalState === 'APROBADA'
-                ? `<a class="rd-btn rd-btn--success rd-btn--small" href="reportes/comprobante_aprobacion_gira.php?id=${Number(budget.id)}" target="_blank" rel="noopener noreferrer" title="Ver / imprimir comprobante PDF de la gira"><svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6V2Zm8 0v6h6M9 13h8m-8 4h5"/></svg>Certificado PDF</a>`
-                : '';
-            return `<tr class="${active ? '' : 'is-inactive'}">
-                <td><span class="rd-cell-primary">${escapeHtml(budget.vendedor_nombre || 'Sin nombre')}</span><span class="rd-cell-secondary">${escapeHtml(budget.vendedor_email || `Código ERP #${budget.vendedor_id}`)}</span></td>
-                <td><span class="rd-cell-primary">${escapeHtml(budget.empresa_nombre || 'Sin empresa')}</span></td>
-                <td>${presenceMarkup}</td>
-                <td><span class="rd-budget-type ${isTour ? 'rd-budget-type--tour' : ''}">${isTour ? 'Gira' : 'Mensual'}</span></td>
-                <td><span class="rd-cell-primary">${escapeHtml(isTour ? budget.nombre_gira || 'Gira comercial' : formatMonthShort(budget.periodo_mes))}</span><span class="rd-cell-secondary">${escapeHtml(dates)}</span></td>
-                <td><span class="rd-cell-money">${money.format(budget.monto_asignado)}</span></td>
-                <td><span class="rd-cell-money">${money.format(budget.monto_utilizado)}</span></td>
-                <td><span class="rd-cell-money">${money.format(budget.saldo_disponible)}</span></td>
-                <td><span class="rd-status ${active && (!isTour || approvalState === 'APROBADA') ? 'rd-status--success' : ''}">${active ? (isTour ? escapeHtml(approvalLabel) : 'Activo') : 'Inactivo'}</span></td>
-                <td>${active ? `<div class="rd-budget-actions">${!isTour ? `<button class="rd-btn rd-btn--tour rd-btn--small" type="button" data-add-tour="${Number(budget.id)}">+ Agregar gira</button>` : ''}${tourPdfAction}${tourWorkflowActions}<button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : (tourPdfAction ? `<div class="rd-budget-actions">${tourPdfAction}</div>` : '—')}</td>
-            </tr>`;
-        }).join('');
+
+        const monthlyHead = `<thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Período</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>`;
+        const tourHead = `<thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Gira comercial / Fechas</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>`;
+
+        if (!visibleList.length) {
+            const emptyMsg = search ? 'No hay presupuestos que coincidan con la búsqueda.' : 'No hay presupuestos registrados en esta categoría.';
+            container.innerHTML = `<table class="rd-master-table rd-budget-table">${state.budgetFilter === 'GIRA' ? tourHead : monthlyHead}<tbody><tr><td colspan="10" class="rd-table-message">${emptyMsg}</td></tr></tbody></table>`;
+            return;
+        }
+
+        if (state.budgetFilter === 'MENSUAL') {
+            container.innerHTML = `<table class="rd-master-table rd-budget-table">${monthlyHead}<tbody>${filteredMonthly.map(renderMonthlyBudgetRow).join('')}</tbody></table>`;
+            return;
+        }
+
+        if (state.budgetFilter === 'GIRA') {
+            container.innerHTML = `<table class="rd-master-table rd-budget-table">${tourHead}<tbody>${filteredTours.map(renderTourBudgetRow).join('')}</tbody></table>`;
+            return;
+        }
+
+        // Modo ALL: Separación visual explícita entre presupuestos mensuales y giras
+        let html = '';
+        if (filteredMonthly.length) {
+            const sumMonthly = filteredMonthly.reduce((sum, b) => sum + Number(b.monto_asignado || 0), 0);
+            html += `<div class="rd-budget-group">
+                <div class="rd-budget-group-header">
+                    <div class="rd-budget-group-title">
+                        <span>Presupuestos mensuales de vendedores</span>
+                        <span class="rd-budget-group-badge rd-budget-group-badge--mensual">${filteredMonthly.length} activo${filteredMonthly.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="rd-budget-group-meta">${money.format(sumMonthly)} asignado</div>
+                </div>
+                <table class="rd-master-table rd-budget-table">${monthlyHead}<tbody>${filteredMonthly.map(renderMonthlyBudgetRow).join('')}</tbody></table>
+            </div>`;
+        }
+
+        if (filteredTours.length) {
+            const sumTours = filteredTours.reduce((sum, b) => sum + Number(b.monto_asignado || 0), 0);
+            html += `<div class="rd-budget-group">
+                <div class="rd-budget-group-header">
+                    <div class="rd-budget-group-title">
+                        <span>Giras comerciales</span>
+                        <span class="rd-budget-group-badge rd-budget-group-badge--gira">${filteredTours.length} registrada${filteredTours.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="rd-budget-group-meta">${money.format(sumTours)} asignado</div>
+                </div>
+                <table class="rd-master-table rd-budget-table">${tourHead}<tbody>${filteredTours.map(renderTourBudgetRow).join('')}</tbody></table>
+            </div>`;
+        }
+
+        container.innerHTML = html;
     }
 
     function onBudgetAction(event) {

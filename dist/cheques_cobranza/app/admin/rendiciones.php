@@ -155,7 +155,33 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                 <?php if ($canManageRenditions): ?>
                 <section class="rd-submodule" id="tab-vendedores" data-submodule-panel="vendedores" aria-labelledby="vendorsTitle" hidden>
                     <header class="rd-section-header rd-section-header--vendors"><div><h1 id="vendorsTitle">Vendedores y presupuestos</h1><p>Identidad ERP verificada, cupos mensuales y giras comerciales.</p></div><div class="rd-vendor-actions"><label class="rd-search-field"><span class="rd-visually-hidden">Buscar vendedor</span><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.4-4.4"/></svg><input type="search" id="budgetSearch" placeholder="Buscar vendedor, correo o código ERP…"></label><?php if ($canConfigureApprovers): ?><button class="rd-btn rd-btn--secondary" id="openApproverConfig" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0M19 4v6m3-3h-6"/></svg>Responsables de aprobación</button><?php endif; ?><button class="rd-btn rd-btn--primary" id="openBudgetModal" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>Asignar presupuesto</button></div></header>
-                    <div class="rd-budget-directory"><div class="rd-table-summary"><span id="budgetSummary">Cargando presupuestos…</span><span id="budgetAmountSummary">$0 asignado</span></div><div class="rd-table-scroll"><table class="rd-master-table rd-budget-table"><thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Período / fechas</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="budgetTableBody"><tr><td colspan="10" class="rd-table-message">Cargando presupuestos…</td></tr></tbody></table></div></div>
+                    <div class="rd-budget-directory">
+                        <div class="rd-budget-toolbar">
+                            <div class="rd-segmented-tabs" role="tablist" id="budgetTypeTabs" aria-label="Filtrar por tipo de presupuesto">
+                                <button class="rd-segmented-tab is-active" type="button" role="tab" aria-selected="true" data-budget-filter="ALL">
+                                    Todos los presupuestos <span class="rd-tab-count" id="countBudgetTotal">0</span>
+                                </button>
+                                <button class="rd-segmented-tab" type="button" role="tab" aria-selected="false" data-budget-filter="MENSUAL">
+                                    Presupuestos mensuales <span class="rd-tab-count" id="countBudgetMonthly">0</span>
+                                </button>
+                                <button class="rd-segmented-tab" type="button" role="tab" aria-selected="false" data-budget-filter="GIRA">
+                                    Giras comerciales <span class="rd-tab-count" id="countBudgetTour">0</span>
+                                </button>
+                            </div>
+                            <div class="rd-table-summary">
+                                <span id="budgetSummary">Cargando presupuestos…</span>
+                                <span id="budgetAmountSummary">$0 asignado</span>
+                            </div>
+                        </div>
+                        <div class="rd-table-scroll" id="budgetScrollContainer">
+                            <div id="budgetTablesContainer">
+                                <table class="rd-master-table rd-budget-table">
+                                    <thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Período / fechas</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+                                    <tbody id="budgetTableBody"><tr><td colspan="10" class="rd-table-message">Cargando presupuestos…</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </section>
                 <?php endif; ?>
             </main>
