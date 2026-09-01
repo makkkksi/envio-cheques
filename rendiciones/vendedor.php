@@ -526,6 +526,6 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
     <!-- Toast container & scripts -->
     <div id="toastContainer" class="toast-container"></div>
     <script src="../seller_session.js?v=20260828-session-1" defer></script>
-    <script src="vendedor.js?v=20260828-session-1" defer></script>
+    <script src="vendedor.js?v=<?= filemtime(__DIR__ . '/vendedor.js') ?>" defer></script>
 </body>
 </html>

@@ -959,6 +959,26 @@ html, body {
     box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
 }
 
+.rg-budget-choice-card.is-disabled {
+    opacity: 0.52;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+    filter: grayscale(0.25);
+}
+
+.rg-budget-choice-card.is-disabled:hover {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    box-shadow: none;
+    transform: none;
+}
+
+.rg-budget-choice-card.is-disabled .rg-budget-choice-radio {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+}
+
 /* Custom Radio Indicator */
 .rg-budget-choice-radio {
     width: 20px;
@@ -1264,6 +1284,15 @@ html, body {
 
 .rg-btn-submit-green:focus-visible {
     outline: 3px solid #86efac;
+}
+
+.rg-btn-submit-green:disabled {
+    opacity: 0.55;
+    background: #94a3b8;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+    pointer-events: none;
 }
 
 .rg-btn-delete-ghost {

@@ -860,35 +860,47 @@
             return;
         }
 
+        const availableBudgets = state.budgets.filter((b) => Number(b.saldo_disponible || 0) > 0);
+
         if (countBadge) {
             const count = state.budgets.length;
-            countBadge.textContent = `${count} ${count === 1 ? 'fondo disponible' : 'fondos disponibles'}`;
+            const availCount = availableBudgets.length;
+            if (availCount === 0) {
+                countBadge.textContent = 'Sin fondos disponibles ($0)';
+                countBadge.style.color = 'var(--rg-red)';
+            } else {
+                countBadge.textContent = `${availCount} de ${count} fondos con saldo`;
+                countBadge.style.color = '';
+            }
         }
 
-        // Si ya había uno seleccionado en el select y sigue existiendo, mantenerlo; sino preseleccionar el primero
+        // Si ya había uno seleccionado en el select y sigue teniendo saldo disponible, mantenerlo; sino preseleccionar el primero con saldo
         let activeBudgetId = Number(select.value);
-        if (!state.budgets.some((b) => b.id === activeBudgetId)) {
-            activeBudgetId = state.budgets[0].id;
+        if (!availableBudgets.some((b) => b.id === activeBudgetId)) {
+            activeBudgetId = availableBudgets.length > 0 ? availableBudgets[0].id : null;
         }
 
         // Llenar select nativo (mantenido sincronizado por debajo)
         state.budgets.forEach((b) => {
+            const available = Number(b.saldo_disponible || 0);
+            const isExhausted = available <= 0;
             const opt = document.createElement('option');
             opt.value = b.id;
+            opt.disabled = isExhausted;
             opt.textContent = b.tipo_presupuesto === 'GIRA'
-                ? `Gira: ${b.nombre_gira} (Saldo: ${formatMoney(b.saldo_disponible)})`
-                : `Mensual: ${formatPeriodMonth(b.periodo_mes)} (Saldo: ${formatMoney(b.saldo_disponible)})`;
-            if (b.id === activeBudgetId) opt.selected = true;
+                ? `Gira: ${b.nombre_gira} (${isExhausted ? 'Saldo agotado $0' : 'Saldo: ' + formatMoney(available)})`
+                : `Mensual: ${formatPeriodMonth(b.periodo_mes)} (${isExhausted ? 'Saldo agotado $0' : 'Saldo: ' + formatMoney(available)})`;
+            if (b.id === activeBudgetId && !isExhausted) opt.selected = true;
             select.appendChild(opt);
         });
 
         // Llenar tarjetas interactivas accesibles
         if (cardsContainer) {
             cardsContainer.innerHTML = state.budgets.map((b) => {
-                const isSelected = b.id === activeBudgetId;
-                const isTour = b.tipo_presupuesto === 'GIRA';
                 const available = Number(b.saldo_disponible || 0);
                 const isExhausted = available <= 0;
+                const isSelected = b.id === activeBudgetId && !isExhausted;
+                const isTour = b.tipo_presupuesto === 'GIRA';
                 const isLow = available > 0 && available <= Number(b.monto_asignado || 0) * 0.2;
 
                 const typeLabel = isTour ? 'Gira Comercial' : 'Presupuesto Mensual';
@@ -913,11 +925,13 @@
                 }
 
                 return `
-                    <div class="rg-budget-choice-card ${isSelected ? 'is-selected' : ''}" 
+                    <div class="rg-budget-choice-card ${isSelected ? 'is-selected' : ''} ${isExhausted ? 'is-disabled' : ''}" 
                          role="radio" 
                          aria-checked="${isSelected ? 'true' : 'false'}"
-                         tabindex="0"
-                         data-budget-id="${b.id}">
+                         aria-disabled="${isExhausted ? 'true' : 'false'}"
+                         tabindex="${isExhausted ? '-1' : '0'}"
+                         data-budget-id="${b.id}"
+                         data-exhausted="${isExhausted ? 'true' : 'false'}">
                         <div class="rg-budget-choice-radio" aria-hidden="true">
                             <span class="rg-budget-choice-dot"></span>
                         </div>
@@ -943,6 +957,15 @@
             // Vincular click y teclado a cada tarjeta
             cardsContainer.querySelectorAll('.rg-budget-choice-card').forEach((card) => {
                 const bId = Number(card.dataset.budgetId);
+                const isExhausted = card.dataset.exhausted === 'true';
+
+                if (isExhausted) {
+                    card.addEventListener('click', () => {
+                        showToast('Este fondo tiene su saldo agotado ($0). No es posible imputarle nuevas rendiciones.', 'warning');
+                    });
+                    return;
+                }
+
                 const selectCard = () => {
                     cardsContainer.querySelectorAll('.rg-budget-choice-card').forEach((c) => {
                         const active = Number(c.dataset.budgetId) === bId;
@@ -1020,11 +1043,33 @@
 
         const selectedBudgetId = Number($('#reportBudgetSelect').value);
         const budget = state.budgets.find((b) => b.id === selectedBudgetId);
+        const submitBtn = $('#btnOpenConfirmSubmit');
+
         if (budget) {
             const available = Number(budget.saldo_disponible || 0);
             const remaining = available - total;
-            $('#lblReportBudgetRemaining').textContent = `${budget.tipo_presupuesto === 'GIRA' ? 'Saldo gira' : 'Saldo mensual'}: ${formatMoney(remaining)}`;
-            $('#lblReportBudgetRemaining').style.color = remaining < 0 ? 'var(--rg-red)' : 'var(--rg-text-muted)';
+            if (available <= 0) {
+                $('#lblReportBudgetRemaining').textContent = `${budget.tipo_presupuesto === 'GIRA' ? 'Gira agotada' : 'Mensual agotado'} ($0) · No permite envíos`;
+                $('#lblReportBudgetRemaining').style.color = 'var(--rg-red)';
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.title = 'No puedes enviar rendiciones a un fondo con saldo agotado ($0)';
+                }
+            } else {
+                $('#lblReportBudgetRemaining').textContent = `${budget.tipo_presupuesto === 'GIRA' ? 'Saldo gira' : 'Saldo mensual'}: ${formatMoney(remaining)}`;
+                $('#lblReportBudgetRemaining').style.color = remaining < 0 ? 'var(--rg-red)' : 'var(--rg-text-muted)';
+                if (submitBtn) {
+                    submitBtn.disabled = selectedDocs.length === 0;
+                    submitBtn.title = selectedDocs.length === 0 ? 'Selecciona al menos una boleta para enviar' : '';
+                }
+            }
+        } else {
+            $('#lblReportBudgetRemaining').textContent = 'Sin fondo con saldo disponible';
+            $('#lblReportBudgetRemaining').style.color = 'var(--rg-red)';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.title = 'No hay un fondo con saldo disponible seleccionado';
+            }
         }
     }
 
@@ -1036,6 +1081,12 @@
             return;
         }
 
+        const available = Number(budget.saldo_disponible || 0);
+        if (available <= 0) {
+            showToast('Este fondo tiene su saldo agotado ($0). No es posible enviar nuevas rendiciones a este presupuesto.', 'error');
+            return;
+        }
+
         const selectedDocs = state.documents.filter((d) => state.selectedForReport.has(d.id));
         if (selectedDocs.length === 0) {
             showToast('Selecciona al menos una boleta para enviar', 'error');
@@ -1043,7 +1094,6 @@
         }
 
         const total = selectedDocs.reduce((sum, d) => sum + Number(d.monto || 0), 0);
-        const available = Number(budget.saldo_disponible || 0);
         const isTour = budget.tipo_presupuesto === 'GIRA';
         const fundTitle = isTour ? (budget.nombre_gira || 'Gira Comercial') : formatPeriodMonth(budget.periodo_mes);
         const fundLabel = isTour ? `la gira “${fundTitle}”` : `el presupuesto mensual de ${fundTitle}`;
@@ -1087,8 +1137,9 @@
         }
 
         const budgetId = Number($('#reportBudgetSelect').value);
-        if (!budgetId) {
-            showToast(NO_BUDGET_MESSAGE, 'error');
+        const budget = state.budgets.find((b) => b.id === budgetId);
+        if (!budget || Number(budget.saldo_disponible || 0) <= 0) {
+            showToast('El fondo seleccionado tiene su saldo agotado ($0). No es posible enviar la rendición.', 'error');
             return;
         }
 
