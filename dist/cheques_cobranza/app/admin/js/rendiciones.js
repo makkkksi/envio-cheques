@@ -988,6 +988,9 @@
             const tourWorkflowActions = isTour && ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(approvalState)
                 ? `<button class="rd-btn rd-btn--warning rd-btn--small" type="button" data-resend-tour="${Number(budget.id)}">Reenviar aprobación</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-cancel-tour="${Number(budget.id)}">Cancelar solicitud</button>`
                 : '';
+            const tourPdfAction = isTour && approvalState === 'APROBADA'
+                ? `<a class="rd-btn rd-btn--success rd-btn--small" href="reportes/comprobante_aprobacion_gira.php?id=${Number(budget.id)}" target="_blank" rel="noopener noreferrer" title="Ver / imprimir comprobante PDF de la gira"><svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6V2Zm8 0v6h6M9 13h8m-8 4h5"/></svg>Certificado PDF</a>`
+                : '';
             return `<tr class="${active ? '' : 'is-inactive'}">
                 <td><span class="rd-cell-primary">${escapeHtml(budget.vendedor_nombre || 'Sin nombre')}</span><span class="rd-cell-secondary">${escapeHtml(budget.vendedor_email || `Código ERP #${budget.vendedor_id}`)}</span></td>
                 <td><span class="rd-cell-primary">${escapeHtml(budget.empresa_nombre || 'Sin empresa')}</span></td>
@@ -998,7 +1001,7 @@
                 <td><span class="rd-cell-money">${money.format(budget.monto_utilizado)}</span></td>
                 <td><span class="rd-cell-money">${money.format(budget.saldo_disponible)}</span></td>
                 <td><span class="rd-status ${active && (!isTour || approvalState === 'APROBADA') ? 'rd-status--success' : ''}">${active ? (isTour ? escapeHtml(approvalLabel) : 'Activo') : 'Inactivo'}</span></td>
-                <td>${active ? `<div class="rd-budget-actions">${!isTour ? `<button class="rd-btn rd-btn--tour rd-btn--small" type="button" data-add-tour="${Number(budget.id)}">+ Agregar gira</button>` : ''}${tourWorkflowActions}<button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : '—'}</td>
+                <td>${active ? `<div class="rd-budget-actions">${!isTour ? `<button class="rd-btn rd-btn--tour rd-btn--small" type="button" data-add-tour="${Number(budget.id)}">+ Agregar gira</button>` : ''}${tourPdfAction}${tourWorkflowActions}<button class="rd-btn rd-btn--secondary rd-btn--small" type="button" data-edit-budget="${Number(budget.id)}">Editar</button><button class="rd-btn rd-btn--danger rd-btn--small" type="button" data-deactivate-budget="${Number(budget.id)}">Desactivar</button></div>` : (tourPdfAction ? `<div class="rd-budget-actions">${tourPdfAction}</div>` : '—')}</td>
             </tr>`;
         }).join('');
     }

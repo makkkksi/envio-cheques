@@ -616,6 +616,10 @@ Al resolver correctamente, la respuesta incorpora `decision`, `aprobador_nombre`
 
 Requiere `rendiciones.view`. Genera en demanda un PDF imprimible únicamente cuando `decision_exceso = APROBADO`. Usa los snapshots históricos de nombre/cargo, la fecha de decisión, el resumen financiero y los comprobantes activos. El documento certifica la aprobación gerencial del exceso; no representa aprobación final ni pago de la rendición.
 
+### GET `/admin/reportes/comprobante_aprobacion_gira.php?id={id}`
+
+Requiere `rendiciones.view`. Genera en demanda un comprobante PDF oficial imprimible cuando una gira comercial (`tipo_presupuesto = 'GIRA'`) se encuentra en estado `APROBADA`. Incluye identificación de la gira, vigencia/fechas, vendedor, empresa del cupo, resumen financiero, justificación comercial, snapshot del aprobador, fecha de resolución y hash de verificación SHA-256.
+
 ### GET `/admin/api/rendiciones/get_rendiciones.php`
 
 Requiere `rendiciones.view`. Filtros: `estado`, `mes`, `vendedor_id`, `empresa_id`, `tipo`, `pagina`, `limite`.

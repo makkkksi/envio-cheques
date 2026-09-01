@@ -4,6 +4,12 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Módulo 3 — Acreditación PDF de Giras y Responsive Tablet (2026-09-01)
+- **Comprobante de Gira Aprobada:** Creado `services/GiraApprovalPdf.php` y `admin/reportes/comprobante_aprobacion_gira.php` para emitir en demanda el PDF oficial que certifica la gira comercial autorizada con su resumen financiero, justificación, firma electrónica y hash SHA-256 inmutable.
+- **Acceso Directo en Presupuestos:** Integrado botón "Certificado PDF" en cada fila de presupuesto de gira en estado `APROBADA` dentro de `admin/js/rendiciones.js`.
+- **Responsive Tablet:** Unificación de media queries desde `min-width: 640px` en `rendiciones/vendedor.css`, ajustando el contenedor principal a un ancho óptimo de 940px en iPads y Surface Pro.
+- **Cachebuster Dinámico:** Implementado `filemtime` en la carga de CSS de `rendiciones/vendedor.php` para evitar que navegadores sirvan hojas de estilo obsoletas tras actualizaciones de diseño.
+
 ### Módulo 3 — Dashboard de aprobaciones y certificación local (2026-09-01)
 - El Dashboard agrega una lectura ejecutiva de solicitudes de Gira y Excepción mensual: pendientes, correos fallidos, aprobadas, rechazadas, vencidas, canceladas, tasa de aprobación, respuesta promedio y antigüedad máxima.
 - Las señales de negocio alertan solicitudes sin entregar y esperas superiores a 48 horas, sin exponer correos, responsables ni nombres libres de giras.
