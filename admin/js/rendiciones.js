@@ -13,7 +13,7 @@
         budgets: [],
         budgetsLoaded: false,
         budgetsAvailable: false,
-        budgetFilter: 'ALL',
+        budgetFilter: 'MENSUAL',
         sellerDirectory: [],
         sellerDirectoryLoaded: false,
         sellerOptions: [],
@@ -95,6 +95,7 @@
             $('#openApproverConfig')?.addEventListener('click', openApproverConfig);
             $('#btnHeaderApprovers')?.addEventListener('click', openApproverConfig);
             $('#approverConfigForm')?.addEventListener('submit', saveApproverConfig);
+            $('#editDocumentForm')?.addEventListener('submit', saveEditDocument);
             $$('[data-close-modal]').forEach((button) => button.addEventListener('click', () => closeModal(button.dataset.closeModal)));
             $$('.rd-modal').forEach((modal) => modal.addEventListener('click', (event) => {
                 if (event.target === modal) closeModal(modal.id);
@@ -200,7 +201,7 @@
 
     function matchesStatusFilter(status, filter) {
         const map = {
-            REVIEW: ['EN_REVISION_TESORERIA', 'PENDIENTE_APROBACION_EXCESO', 'DOCUMENTOS_FISICOS_RECIBIDOS'],
+            REVIEW: ['EN_REVISION_TESORERIA', 'PENDIENTE_APROBACION_EXCESO', 'PENDIENTE_APROBACION_RESPONSABLE', 'DOCUMENTOS_FISICOS_RECIBIDOS'],
             APPROVED: APPROVED_STATES,
             REJECTED: ['RECHAZADA'],
             ALL: null
@@ -357,10 +358,29 @@
             <div><span>Empresa / Cargo</span><strong>${escapeHtml(`${documentData.cliente_invitado_empresa || 'Sin dato'} · ${documentData.cliente_invitado_cargo || 'Sin cargo'}`)}</strong></div>
             <div class="rd-sii-box__purpose"><span>Propósito comercial</span><strong>${escapeHtml(documentData.proposito_comercial || 'Sin dato')}</strong></div>
         </div>` : '';
+
+        const currentRenditionState = state.detail?.rendicion?.estado || '';
+        const canEditDoc = canManage && ['EN_REVISION_TESORERIA', 'DOCUMENTOS_FISICOS_RECIBIDOS'].includes(currentRenditionState);
+        const isEdited = documentData.monto_original !== null && Number(documentData.monto_original) !== Number(documentData.monto);
+
+        const editBtn = canEditDoc ? `<button class="rd-btn-edit-amount" type="button" data-edit-doc-id="${documentData.id}" data-doc-provider="${escapeHtml(provider)}" data-doc-amount="${documentData.monto}" data-doc-number="${escapeHtml(documentData.numero_documento || '')}" title="Corregir datos del comprobante">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar
+        </button>` : '';
+
+        const origBadge = isEdited ? `<span class="rd-orig-badge" title="Digitado originalmente: ${money.format(documentData.monto_original)} · Corregido por Tesorería">Digitado: ${money.format(documentData.monto_original)}</span>` : '';
+
         return `<article class="rd-document">
             <span class="rd-document__icon" aria-hidden="true">${category.icon}</span>
-            <div class="rd-document__main"><div class="rd-document__topline"><strong>${escapeHtml(provider)}</strong><span class="rd-document__category">${escapeHtml(category.label)}</span></div><p class="rd-document__meta">${escapeHtml(humanize(documentData.tipo_documento))} · RUT ${escapeHtml(documentData.rut_proveedor || 'sin dato')} · Folio ${escapeHtml(documentData.numero_documento || 's/n')} · ${formatDate(documentData.fecha_emision)}</p>${photoUrl ? `<button class="rd-document__photo" type="button" data-photo-url="${escapeHtml(photoUrl)}"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Abrir comprobante</button>` : ''}</div>
-            <strong class="rd-document__amount">${money.format(documentData.monto)}</strong>
+            <div class="rd-document__main">
+                <div class="rd-document__topline"><strong>${escapeHtml(provider)}</strong><span class="rd-document__category">${escapeHtml(category.label)}</span></div>
+                <p class="rd-document__meta">${escapeHtml(humanize(documentData.tipo_documento))} · RUT ${escapeHtml(documentData.rut_proveedor || 'sin dato')} · Folio ${escapeHtml(documentData.numero_documento || 's/n')} · ${formatDate(documentData.fecha_emision)}</p>
+                ${photoUrl ? `<button class="rd-document__photo" type="button" data-photo-url="${escapeHtml(photoUrl)}"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Abrir comprobante</button>` : ''}
+            </div>
+            <div class="rd-document__amount-col">
+                <strong class="rd-document__amount">${money.format(documentData.monto)}</strong>
+                ${origBadge}
+                ${editBtn}
+            </div>
             ${siiMarkup}
         </article>`;
     }
@@ -388,6 +408,7 @@
         const indexMap = {
             ENVIADA: 0,
             PENDIENTE_APROBACION_EXCESO: 1,
+            PENDIENTE_APROBACION_RESPONSABLE: 1,
             EN_REVISION_TESORERIA: 1,
             DOCUMENTOS_FISICOS_RECIBIDOS: 1,
             APROBADA: 2,
@@ -415,41 +436,32 @@
             buttons.push(actionButton('REENVIAR_EXCESO', sent ? 'Reenviar aprobación' : 'Enviar aprobación', 'rd-btn--warning'));
             buttons.push(actionButton('RECHAZAR_EXCESO_TESORERIA', sent ? 'Cancelar solicitud y rechazar' : 'Rechazar sin enviar', 'rd-btn--danger'));
         }
-        if (status === 'EN_REVISION_TESORERIA') {
-            const excess = Number(rendition.monto_exceso_no_reembolsable || 0);
-            const hasActiveExcess = excess > 0 && rendition.decision_exceso !== 'APROBADO';
-            const requestState = rendition.solicitud_excepcion_estado || '';
-
-            if (hasActiveExcess) {
-                // Flujo con exceso en revisión: 3 opciones exclusivas para CUALQUIER tipo de rendición (Mensual o Gira)
-                // 1. Aprobar (hasta el tope del presupuesto disponible)
-                const maxPayable = Number(rendition.monto_maximo_aprobable || 0);
-                buttons.push(actionButton('APROBAR_TOTAL', `Aprobar hasta el tope (${money.format(maxPayable)})`, 'rd-btn--success'));
-
-                // 2. Solicitar exceso (correo a responsable configurado con Magic Link)
-                const requestLabel = ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'].includes(requestState)
-                    ? `Reenviar exceso (${money.format(excess)})`
-                    : `Solicitar exceso (${money.format(excess)})`;
-                buttons.push(actionButton(requestState ? 'REENVIAR_EXCESO' : 'SOLICITAR_EXCEPCION', requestLabel, 'rd-btn--warning'));
-
-                // 3. Rechazar rendición
-                buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
-            } else {
-                // Flujo normal sin exceso en revisión (o con exceso ya aprobado por Gerencia)
-                const isApprovedExcess = rendition.decision_exceso === 'APROBADO';
-                const approveLabel = isApprovedExcess ? `Aprobar rendición (${money.format(rendition.monto_maximo_aprobable)})` : 'Aprobar rendición';
-                buttons.push(actionButton('APROBAR_TOTAL', approveLabel, 'rd-btn--success'));
-                buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial</button>');
-                buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
-            }
+        if (status === 'PENDIENTE_APROBACION_RESPONSABLE') {
+            const approverName = rendition.aprobador_nombre_snapshot || 'Responsable';
+            buttons.push(`<div class="rd-approval-waiting-note">
+                <strong>⏳ En espera de aprobación gerencial</strong><br>
+                Solicitud enviada a <strong>${escapeHtml(approverName)}</strong>. Una vez autorizada con su Magic Link, se emitirá automáticamente la Planilla Oficial en PDF y pasará a Tesorería para pago.
+            </div>`);
+            buttons.push(actionButton('REENVIAR_RESPONSABLE', 'Reenviar a Responsable', 'rd-btn--warning'));
+            buttons.push(actionButton('CANCELAR_SOLICITUD_RESPONSABLE', 'Cancelar solicitud y reabrir revisión', 'rd-btn--danger'));
         }
-        if (status === 'DOCUMENTOS_FISICOS_RECIBIDOS') {
-            buttons.push(actionButton('APROBAR_TOTAL', 'Aprobar rendición', 'rd-btn--success'));
-            buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial</button>');
-            buttons.push(actionButton('RECHAZAR', 'Rechazar', 'rd-btn--danger'));
+        if (['EN_REVISION_TESORERIA', 'DOCUMENTOS_FISICOS_RECIBIDOS'].includes(status)) {
+            buttons.push(actionButton('VERIFICAR_Y_ENVIAR', '✓ Verificar y Enviar a Responsable', 'rd-btn--success'));
+            buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial de boletas</button>');
+            buttons.push(actionButton('RECHAZAR', 'Rechazar rendición', 'rd-btn--danger'));
         }
         if (['APROBADA', 'APROBADA_PARCIAL'].includes(status)) {
-            buttons.push(actionButton('MARCAR_PAGADA', 'Marcar como pagada', 'rd-btn--success'));
+            buttons.push(`<a class="rd-btn rd-btn--primary" href="api/rendiciones/descargar_planilla.php?id=${rendition.id}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                Descargar Planilla PDF (Excel)
+            </a>`);
+            buttons.push(actionButton('MARCAR_PAGADA', '💰 Marcar como pagada', 'rd-btn--success'));
+        }
+        if (status === 'PAGADA') {
+            buttons.push(`<a class="rd-btn rd-btn--secondary" href="api/rendiciones/descargar_planilla.php?id=${rendition.id}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                Descargar Planilla PDF (Excel)
+            </a>`);
         }
         return buttons.length ? `<div class="rd-actions">${buttons.join('')}</div>` : '<div class="rd-readonly-note">Esta rendición no tiene acciones pendientes.</div>';
     }
@@ -462,6 +474,11 @@
         if (event.target.closest('[data-close-detail]')) { clearDetail(); return; }
         const photo = event.target.closest('[data-photo-url]');
         if (photo) { window.abrirImagenLightbox(photo.dataset.photoUrl); return; }
+        const editBtn = event.target.closest('[data-edit-doc-id]');
+        if (editBtn) {
+            openEditDocumentModal(editBtn.dataset.editDocId, editBtn.dataset.docProvider, editBtn.dataset.docAmount, editBtn.dataset.docNumber);
+            return;
+        }
         const actionButtonElement = event.target.closest('[data-rendition-action]');
         if (actionButtonElement) { openActionModal(actionButtonElement.dataset.renditionAction); return; }
         if (event.target.closest('[data-open-partial]')) openPartialModal();
@@ -1067,7 +1084,6 @@
         const allMonthly = state.budgets.filter((b) => b.tipo_presupuesto === 'MENSUAL');
         const allTours = state.budgets.filter((b) => b.tipo_presupuesto === 'GIRA');
 
-        setText('countBudgetTotal', String(state.budgets.length));
         setText('countBudgetMonthly', String(allMonthly.length));
         setText('countBudgetTour', String(allTours.length));
 
@@ -1077,65 +1093,28 @@
             return !search || normalize(`${budget.vendedor_nombre} ${budget.vendedor_id} ${budget.vendedor_email || ''} ${budget.empresa_nombre} ${presence}`).includes(search);
         };
 
-        const filteredMonthly = allMonthly.filter(matchesSearch);
-        const filteredTours = allTours.filter(matchesSearch);
-        const visibleList = state.budgetFilter === 'MENSUAL' ? filteredMonthly : (state.budgetFilter === 'GIRA' ? filteredTours : [...filteredMonthly, ...filteredTours]);
-        const totalAssigned = visibleList.reduce((sum, budget) => sum + Number(budget.monto_asignado || 0), 0);
+        const isTour = state.budgetFilter === 'GIRA';
+        const filteredList = (isTour ? allTours : allMonthly).filter(matchesSearch);
+        const totalAssigned = filteredList.reduce((sum, budget) => sum + Number(budget.monto_asignado || 0), 0);
 
-        const filterLabel = { ALL: 'presupuestos visibles', MENSUAL: 'presupuestos mensuales visibles', GIRA: 'giras visibles' }[state.budgetFilter] || 'presupuestos visibles';
-        setText('budgetSummary', visibleList.length === 1 ? `1 ${filterLabel.replace('visibles', 'visible')}` : `${visibleList.length} ${filterLabel}`);
+        const filterLabel = isTour ? 'giras visibles' : 'presupuestos mensuales visibles';
+        setText('budgetSummary', filteredList.length === 1 ? `1 ${filterLabel.replace('visibles', 'visible')}` : `${filteredList.length} ${filterLabel}`);
         setText('budgetAmountSummary', `${money.format(totalAssigned)} asignado`);
 
         const monthlyHead = `<thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Período</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>`;
         const tourHead = `<thead><tr><th>Vendedor</th><th>Empresa del cupo</th><th>Presencia ERP</th><th>Tipo</th><th>Gira comercial / Fechas</th><th>Asignado</th><th>Gastado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>`;
 
-        if (!visibleList.length) {
-            const emptyMsg = search ? 'No hay presupuestos que coincidan con la búsqueda.' : 'No hay presupuestos registrados en esta categoría.';
-            container.innerHTML = `<table class="rd-master-table rd-budget-table">${state.budgetFilter === 'GIRA' ? tourHead : monthlyHead}<tbody><tr><td colspan="10" class="rd-table-message">${emptyMsg}</td></tr></tbody></table>`;
+        if (!filteredList.length) {
+            const emptyMsg = search ? 'No hay presupuestos que coincidan con la búsqueda.' : (isTour ? 'No hay giras comerciales registradas.' : 'No hay presupuestos mensuales registrados.');
+            container.innerHTML = `<table class="rd-master-table rd-budget-table">${isTour ? tourHead : monthlyHead}<tbody><tr><td colspan="10" class="rd-table-message">${emptyMsg}</td></tr></tbody></table>`;
             return;
         }
 
-        if (state.budgetFilter === 'MENSUAL') {
-            container.innerHTML = `<table class="rd-master-table rd-budget-table">${monthlyHead}<tbody>${filteredMonthly.map(renderMonthlyBudgetRow).join('')}</tbody></table>`;
-            return;
+        if (isTour) {
+            container.innerHTML = `<table class="rd-master-table rd-budget-table">${tourHead}<tbody>${filteredList.map(renderTourBudgetRow).join('')}</tbody></table>`;
+        } else {
+            container.innerHTML = `<table class="rd-master-table rd-budget-table">${monthlyHead}<tbody>${filteredList.map(renderMonthlyBudgetRow).join('')}</tbody></table>`;
         }
-
-        if (state.budgetFilter === 'GIRA') {
-            container.innerHTML = `<table class="rd-master-table rd-budget-table">${tourHead}<tbody>${filteredTours.map(renderTourBudgetRow).join('')}</tbody></table>`;
-            return;
-        }
-
-        // Modo ALL: Separación visual explícita entre presupuestos mensuales y giras
-        let html = '';
-        if (filteredMonthly.length) {
-            const sumMonthly = filteredMonthly.reduce((sum, b) => sum + Number(b.monto_asignado || 0), 0);
-            html += `<div class="rd-budget-group">
-                <div class="rd-budget-group-header">
-                    <div class="rd-budget-group-title">
-                        <span>Presupuestos mensuales de vendedores</span>
-                        <span class="rd-budget-group-badge rd-budget-group-badge--mensual">${filteredMonthly.length} activo${filteredMonthly.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div class="rd-budget-group-meta">${money.format(sumMonthly)} asignado</div>
-                </div>
-                <table class="rd-master-table rd-budget-table">${monthlyHead}<tbody>${filteredMonthly.map(renderMonthlyBudgetRow).join('')}</tbody></table>
-            </div>`;
-        }
-
-        if (filteredTours.length) {
-            const sumTours = filteredTours.reduce((sum, b) => sum + Number(b.monto_asignado || 0), 0);
-            html += `<div class="rd-budget-group">
-                <div class="rd-budget-group-header">
-                    <div class="rd-budget-group-title">
-                        <span>Giras comerciales</span>
-                        <span class="rd-budget-group-badge rd-budget-group-badge--gira">${filteredTours.length} registrada${filteredTours.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div class="rd-budget-group-meta">${money.format(sumTours)} asignado</div>
-                </div>
-                <table class="rd-master-table rd-budget-table">${tourHead}<tbody>${filteredTours.map(renderTourBudgetRow).join('')}</tbody></table>
-            </div>`;
-        }
-
-        container.innerHTML = html;
     }
 
     function onBudgetAction(event) {
@@ -1299,8 +1278,8 @@
     }
 
     function openActionModal(action, context = {}) {
-        if (['REENVIAR_EXCESO', 'SOLICITAR_EXCEPCION'].includes(action)) {
-            openExcessApprovalModal({ kind: 'EXCEPCION', action });
+        if (['REENVIAR_EXCESO', 'SOLICITAR_EXCEPCION', 'VERIFICAR_Y_ENVIAR', 'REENVIAR_RESPONSABLE'].includes(action)) {
+            openExcessApprovalModal({ kind: 'RENDICION', action });
             return;
         }
         const actionDetails = {
@@ -1308,6 +1287,7 @@
             APROBAR_TOTAL: ['Aprobar rendición completa', 'Todos los comprobantes quedarán aprobados por su monto rendido.', false, 'Aprobar rendición'],
             RECHAZAR: ['Rechazar rendición', 'La rendición y sus documentos quedarán rechazados. Esta acción requiere un motivo.', true, 'Rechazar'],
             RECHAZAR_EXCESO_TESORERIA: ['Cancelar rendición con exceso', 'Tesorería rechazará la rendición y liberará todo el monto comprometido. No se enviará una nueva solicitud a Jefatura; si ya existía un enlace, quedará invalidado.', true, 'Rechazar y liberar fondos'],
+            CANCELAR_SOLICITUD_RESPONSABLE: ['Cancelar solicitud al Responsable', 'La solicitud actual quedará cancelada y la rendición volverá al estado de revisión de Tesorería para corregir lo necesario.', false, 'Cancelar y reabrir'],
             MARCAR_PAGADA: ['Marcar rendición pagada', 'Se cerrará el flujo financiero de esta rendición.', false, 'Marcar pagada'],
             DESACTIVAR_PRESUPUESTO: ['Desactivar presupuesto', 'El presupuesto dejará de estar disponible para nuevas rendiciones.', false, 'Desactivar'],
             CANCELAR_SOLICITUD_GIRA: ['Cancelar solicitud de gira', 'El enlace quedará invalidado y la gira dejará de estar disponible. La acción conservará su auditoría.', true, 'Cancelar solicitud']
@@ -1350,9 +1330,15 @@
     async function openExcessApprovalModal(context = { kind: 'EXCEPCION', action: 'SOLICITAR_EXCEPCION' }) {
         state.approvalContext = context;
         const isTour = state.approvalContext.kind === 'GIRA';
-        $('#excessApprovalTitle').textContent = isTour ? 'Reenviar aprobación de gira' : 'Solicitar excepción mensual';
-        $('#excessApprovalComment').closest('label').querySelector('span').textContent = isTour ? 'Comentario para Gerencia (opcional)' : 'Justificación para Gerencia (obligatoria)';
-        $('#excessApprovalComment').required = !isTour;
+        const isRendition = state.approvalContext.kind === 'RENDICION';
+        let modalTitle = 'Solicitar aprobación';
+        if (isTour) modalTitle = 'Reenviar aprobación de gira';
+        else if (isRendition) modalTitle = context.action === 'REENVIAR_RESPONSABLE' ? 'Reenviar solicitud a Responsable' : 'Verificar y Enviar a Responsable';
+        else modalTitle = 'Solicitar excepción mensual';
+
+        $('#excessApprovalTitle').textContent = modalTitle;
+        $('#excessApprovalComment').closest('label').querySelector('span').textContent = (isTour || isRendition) ? 'Observación para el Responsable (opcional)' : 'Justificación para Gerencia (obligatoria)';
+        $('#excessApprovalComment').required = (!isTour && !isRendition);
         $('#approverChoices').innerHTML = '<p class="rd-modal__description">Cargando responsables…</p>';
         $('#approverChoiceStatus').textContent = '';
         $('#excessApprovalComment').value = '';
@@ -1381,7 +1367,11 @@
         if (!selected) { $('#approverChoiceStatus').textContent = 'Selecciona un responsable.'; return; }
         const context = state.approvalContext || { kind: 'EXCEPCION', action: 'SOLICITAR_EXCEPCION' };
         const comment = $('#excessApprovalComment').value.trim();
-        if (context.kind !== 'GIRA' && !comment) { $('#approverChoiceStatus').textContent = 'Indica por qué se solicita aprobar este exceso.'; $('#excessApprovalComment').focus(); return; }
+        if (context.kind !== 'GIRA' && context.kind !== 'RENDICION' && !comment) {
+            $('#approverChoiceStatus').textContent = 'Indica por qué se solicita aprobar este exceso.';
+            $('#excessApprovalComment').focus();
+            return;
+        }
         const button = $('#sendExcessApproval');
         setBusy(button, true, 'Enviando…');
         try {
@@ -1617,6 +1607,7 @@
         const map = {
             ENVIADA: ['Enviada', 'rd-status--info'],
             PENDIENTE_APROBACION_EXCESO: ['Exceso pendiente', 'rd-status--warning'],
+            PENDIENTE_APROBACION_RESPONSABLE: ['En Responsable', 'rd-status--warning'],
             EN_REVISION_TESORERIA: ['En revisión', 'rd-status--info'],
             DOCUMENTOS_FISICOS_RECIBIDOS: ['Físicos recibidos', 'rd-status--warning'],
             APROBADA: ['Aprobada', 'rd-status--success'],
@@ -1628,4 +1619,57 @@
         return { label: found[0], className: found[1] };
     }
     function escapeHtml(value) { const div = document.createElement('div'); div.textContent = String(value ?? ''); return div.innerHTML; }
+
+    function openEditDocumentModal(docId, provider, amount, number) {
+        $('#editDocId').value = docId;
+        $('#editDocProvider').textContent = provider || 'Comprobante';
+        // Folio
+        const numStr = number || '';
+        $('#editDocOldNumber').value = numStr;
+        $('#editDocNewNumber').value = numStr;
+        // Monto
+        $('#editDocOldAmount').value = money.format(amount);
+        $('#editDocNewAmount').value = Math.round(Number(amount));
+        // Motivo
+        $('#editDocReason').value = 'Corrección por error de digitación verificada en foto';
+        $('#editDocStatus').textContent = '';
+        openModal('editDocumentModal');
+        // Foco en el campo de folio (primer campo editable)
+        setTimeout(() => $('#editDocNewNumber')?.focus(), 80);
+    }
+
+    async function saveEditDocument(event) {
+        event.preventDefault();
+        const docId     = Number($('#editDocId').value);
+        const newAmount = Number($('#editDocNewAmount').value);
+        const newNumber = ($('#editDocNewNumber')?.value ?? '').trim();
+        const oldNumber = ($('#editDocOldNumber')?.value ?? '').trim();
+        const reason    = $('#editDocReason').value.trim();
+        if (!docId || newAmount <= 0) {
+            $('#editDocStatus').textContent = 'El monto debe ser superior a cero.';
+            return;
+        }
+        const requestPayload = { documento_id: docId, nuevo_monto: newAmount, motivo: reason };
+        // Enviar nuevo_numero solo si fue modificado
+        if (newNumber && newNumber !== oldNumber) {
+            requestPayload.nuevo_numero = newNumber;
+        }
+        const btn = $('#saveEditDocBtn');
+        setBusy(btn, true, 'Guardando…');
+        try {
+            const res = await apiRequest(`${API_BASE}/corregir_documento.php`, {
+                method: 'POST',
+                body: JSON.stringify(requestPayload)
+            });
+            closeModal('editDocumentModal');
+            notify(res.message, 'success');
+            state.detailCache.delete(Number(state.selectedId));
+            await selectRendition(Number(state.selectedId), true);
+            await loadRenditions();
+        } catch (err) {
+            $('#editDocStatus').textContent = err.message;
+        } finally {
+            setBusy(btn, false, 'Guardar corrección');
+        }
+    }
 })();

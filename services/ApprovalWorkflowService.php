@@ -14,6 +14,7 @@ final class ApprovalWorkflowService
 {
     public const TYPE_TOUR = 'GIRA';
     public const TYPE_MONTHLY_EXCEPTION = 'EXCEPCION_MENSUAL';
+    public const TYPE_RENDITION_APPROVAL = 'APROBACION_RENDICION';
 
     public const STATE_PENDING_SEND = 'PENDIENTE_ENVIO';
     public const STATE_PENDING_DECISION = 'PENDIENTE_DECISION';
@@ -23,8 +24,9 @@ final class ApprovalWorkflowService
     public const STATE_REJECTED = 'RECHAZADA';
     public const STATE_CANCELLED = 'CANCELADA';
 
-    public const DECISION_APPROVED = 'APROBADA';
-    public const DECISION_REJECTED = 'RECHAZADA';
+    public const DECISION_APPROVED        = 'APROBADA';
+    public const DECISION_REJECTED        = 'RECHAZADA';
+    public const DECISION_APPROVED_CAPPED = 'APROBADA_TOPE'; // Aprueba solo hasta el tope presupuestario; el exceso queda como no reembolsable
 
     private const FINAL_STATES = [self::STATE_APPROVED, self::STATE_REJECTED, self::STATE_CANCELLED];
     private const RESENDABLE_STATES = [self::STATE_PENDING_SEND, self::STATE_PENDING_DECISION, self::STATE_SEND_FAILED, self::STATE_EXPIRED];
@@ -37,7 +39,7 @@ final class ApprovalWorkflowService
         self::assertTransaction($pdo);
 
         $type = strtoupper(trim((string)($input['tipo_solicitud'] ?? '')));
-        if (!in_array($type, [self::TYPE_TOUR, self::TYPE_MONTHLY_EXCEPTION], true)) {
+        if (!in_array($type, [self::TYPE_TOUR, self::TYPE_MONTHLY_EXCEPTION, self::TYPE_RENDITION_APPROVAL], true)) {
             throw new InvalidArgumentException('Tipo de solicitud de aprobación no válido.');
         }
 
@@ -54,9 +56,15 @@ final class ApprovalWorkflowService
             $budget = self::loadTourBudget($pdo, $budgetId);
             self::assertNoOpenRequest($pdo, $type, $budgetId, null);
             $requestedAmount = self::money($budget['monto_asignado']);
+        } elseif ($type === self::TYPE_RENDITION_APPROVAL) {
+            $renditionId = self::positiveId($input['rendicion_id'] ?? 0, 'La rendición no es válida.');
+            $rendition = self::loadRendition($pdo, $renditionId);
+            self::assertNoOpenRequest($pdo, $type, null, $renditionId);
+            $baseAmount = self::moneyAllowZero($rendition['monto_presupuesto_asignado'] ?? 0);
+            $requestedAmount = self::money($input['monto_solicitado'] ?? $rendition['monto_total_rendido']);
         } else {
             $renditionId = self::positiveId($input['rendicion_id'] ?? 0, 'La rendición no es válida.');
-            $rendition = self::loadMonthlyRendition($pdo, $renditionId);
+            $rendition = self::loadRendition($pdo, $renditionId);
             self::assertNoOpenRequest($pdo, $type, null, $renditionId);
             $baseAmount = self::moneyAllowZero($rendition['monto_maximo_aprobable']);
             $availableException = max(0.0, (float)$rendition['monto_total_rendido'] - (float)$baseAmount);
@@ -235,14 +243,15 @@ final class ApprovalWorkflowService
         }
 
         $decision = strtoupper(trim($decision));
-        if (!in_array($decision, [self::DECISION_APPROVED, self::DECISION_REJECTED], true)) {
+        if (!in_array($decision, [self::DECISION_APPROVED, self::DECISION_REJECTED, self::DECISION_APPROVED_CAPPED], true)) {
             throw new InvalidArgumentException('Decisión no válida.');
         }
         $comment = self::optionalText($comment, 500);
         if ($decision === self::DECISION_REJECTED && $comment === null) {
             throw new InvalidArgumentException('Indique el motivo del rechazo.');
         }
-        $newState = $decision === self::DECISION_APPROVED ? self::STATE_APPROVED : self::STATE_REJECTED;
+        // APROBADA_TOPE se persiste en la solicitud como APROBADA (resolución positiva); el matiz queda en la rendición.
+        $newState = ($decision === self::DECISION_REJECTED) ? self::STATE_REJECTED : self::STATE_APPROVED;
         $now = date('Y-m-d H:i:s');
         $stmt = $pdo->prepare(
             'UPDATE solicitudes_aprobacion
@@ -271,6 +280,8 @@ final class ApprovalWorkflowService
             if ($update->rowCount() !== 1) {
                 throw new DomainException('La solicitud ya no es la versión vigente de la gira.');
             }
+        } elseif ($request['tipo_solicitud'] === self::TYPE_RENDITION_APPROVAL) {
+            self::applyRenditionApproval($pdo, $request, $decision, $comment);
         } elseif ($decision === self::DECISION_APPROVED) {
             self::applyMonthlyException($pdo, $request);
         }
@@ -317,6 +328,14 @@ final class ApprovalWorkflowService
                 ':estado' => 'RECHAZADA', ':presupuesto_id' => (int)$request['presupuesto_id'],
                 ':solicitud_id' => $requestId,
             ]);
+        } elseif ($request['tipo_solicitud'] === self::TYPE_RENDITION_APPROVAL) {
+            $update = $pdo->prepare(
+                'UPDATE rendiciones_gastos
+                 SET estado = "EN_REVISION_TESORERIA",
+                     notificacion_exceso_estado = "NO_APLICA"
+                 WHERE id = :id AND estado = "PENDIENTE_APROBACION_RESPONSABLE"'
+            );
+            $update->execute([':id' => (int)$request['rendicion_id']]);
         }
         self::log($pdo, $requestId, [
             'actor_tipo' => 'TESORERIA', 'actor_id' => $actorId,
@@ -377,6 +396,183 @@ final class ApprovalWorkflowService
         ]);
     }
 
+    private static function applyRenditionApproval(PDO $pdo, array $request, string $decision, ?string $comment): void
+    {
+        $renditionId = (int)$request['rendicion_id'];
+        $stmt = $pdo->prepare('SELECT * FROM rendiciones_gastos WHERE id = :id LIMIT 1 FOR UPDATE');
+        $stmt->execute([':id' => $renditionId]);
+        $rendition = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$rendition) {
+            throw new DomainException('La rendición vinculada a la solicitud no existe.');
+        }
+
+        $now = date('Y-m-d H:i:s');
+        if ($decision === self::DECISION_APPROVED) {
+            $approvedAmount = (float)$rendition['monto_total_rendido'];
+            $stmtDocSum = $pdo->prepare(
+                'SELECT COALESCE(SUM(CASE WHEN estado_item = "RECHAZADO" THEN 0 ELSE COALESCE(monto_validado, monto) END), 0)
+                 FROM rendicion_documentos
+                 WHERE rendicion_id = :id AND activo = 1'
+            );
+            $stmtDocSum->execute([':id' => $renditionId]);
+            $sumValid = (float)$stmtDocSum->fetchColumn();
+            if ($sumValid > 0) {
+                $approvedAmount = $sumValid;
+            }
+
+            $stmtApproveDocs = $pdo->prepare(
+                'UPDATE rendicion_documentos
+                 SET estado_item = "APROBADO",
+                     monto_validado = COALESCE(monto_validado, monto)
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "PENDIENTE"'
+            );
+            $stmtApproveDocs->execute([':id' => $renditionId]);
+
+            $stmtUpdate = $pdo->prepare(
+                'UPDATE rendiciones_gastos
+                 SET estado = "APROBADA",
+                     monto_total_aprobado = :monto_aprobado,
+                     decision_exceso = CASE WHEN monto_exceso > 0 THEN "APROBADO" ELSE decision_exceso END,
+                     aprobado_exceso_at = :aprobado_at,
+                     aprobado_exceso_por = :aprobador_nombre,
+                     token_exceso_usado_at = :token_usado_at,
+                     notificacion_exceso_estado = "ENVIADA"
+                 WHERE id = :id'
+            );
+            $stmtUpdate->execute([
+                ':monto_aprobado' => number_format($approvedAmount, 2, '.', ''),
+                ':aprobado_at' => $now,
+                ':aprobador_nombre' => $request['aprobador_nombre_snapshot'],
+                ':token_usado_at' => $now,
+                ':id' => $renditionId,
+            ]);
+
+            try {
+                require_once __DIR__ . '/RendicionPlanillaPdf.php';
+                RendicionPlanillaPdf::buildAndSave($pdo, $renditionId);
+            } catch (Throwable $pdfEx) {
+                error_log('[ApprovalWorkflowService.pdf] ' . $pdfEx->getMessage());
+            }
+
+            RendicionesService::logHistory($pdo, [
+                'rendicion_id' => $renditionId,
+                'actor_tipo' => 'JEFATURA',
+                'actor_nombre' => $request['aprobador_nombre_snapshot'],
+                'actor_email' => $request['aprobador_email_snapshot'],
+                'accion' => 'APROBAR_RENDICION_RESPONSABLE',
+                'estado_anterior' => $rendition['estado'],
+                'estado_nuevo' => 'APROBADA',
+                'comentario' => $comment,
+                'metadata' => ['monto_aprobado' => $approvedAmount, 'solicitud_id' => (int)$request['id']],
+            ]);
+        } elseif ($decision === self::DECISION_APPROVED_CAPPED) {
+            // Aprueba solo hasta el tope presupuestario; el exceso queda no reembolsable.
+            $cappedAmount = (float)$rendition['monto_maximo_aprobable'];
+            if ($cappedAmount <= 0) {
+                // Si por algún motivo el tope es 0, usar el total rendido (misma lógica que APROBADO)
+                $cappedAmount = (float)$rendition['monto_total_rendido'];
+            }
+            $excessNonReimb = max(0.0, (float)$rendition['monto_total_rendido'] - $cappedAmount);
+
+            $stmtApproveDocs = $pdo->prepare(
+                'UPDATE rendicion_documentos
+                 SET estado_item = "APROBADO",
+                     monto_validado = COALESCE(monto_validado, monto)
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "PENDIENTE"'
+            );
+            $stmtApproveDocs->execute([':id' => $renditionId]);
+
+            $stmtUpdate = $pdo->prepare(
+                'UPDATE rendiciones_gastos
+                 SET estado = "APROBADA",
+                     monto_total_aprobado = :monto_aprobado,
+                     monto_exceso_no_reembolsable = :exceso_no_reemb,
+                     aplico_tope_presupuestario = 1,
+                     decision_exceso = CASE WHEN monto_exceso > 0 THEN "RECHAZADO" ELSE decision_exceso END,
+                     aprobado_exceso_at = :aprobado_at,
+                     aprobado_exceso_por = :aprobador_nombre,
+                     token_exceso_usado_at = :token_usado_at,
+                     notificacion_exceso_estado = "ENVIADA"
+                 WHERE id = :id'
+            );
+            $stmtUpdate->execute([
+                ':monto_aprobado'   => number_format($cappedAmount, 2, '.', ''),
+                ':exceso_no_reemb'  => number_format($excessNonReimb, 2, '.', ''),
+                ':aprobado_at'      => $now,
+                ':aprobador_nombre' => $request['aprobador_nombre_snapshot'],
+                ':token_usado_at'   => $now,
+                ':id'               => $renditionId,
+            ]);
+
+            try {
+                require_once __DIR__ . '/RendicionPlanillaPdf.php';
+                RendicionPlanillaPdf::buildAndSave($pdo, $renditionId);
+            } catch (Throwable $pdfEx) {
+                error_log('[ApprovalWorkflowService.pdf.capped] ' . $pdfEx->getMessage());
+            }
+
+            RendicionesService::logHistory($pdo, [
+                'rendicion_id'   => $renditionId,
+                'actor_tipo'     => 'JEFATURA',
+                'actor_nombre'   => $request['aprobador_nombre_snapshot'],
+                'actor_email'    => $request['aprobador_email_snapshot'],
+                'accion'         => 'APROBAR_RENDICION_HASTA_TOPE',
+                'estado_anterior'=> $rendition['estado'],
+                'estado_nuevo'   => 'APROBADA',
+                'comentario'     => $comment,
+                'metadata'       => [
+                    'monto_aprobado'   => $cappedAmount,
+                    'exceso_no_reemb'  => $excessNonReimb,
+                    'solicitud_id'     => (int)$request['id'],
+                ],
+            ]);
+        } else {
+            $stmtUpdate = $pdo->prepare(
+                'UPDATE rendiciones_gastos
+                 SET estado = "RECHAZADA",
+                     motivo_rechazo = :motivo,
+                     decision_exceso = CASE WHEN monto_exceso > 0 THEN "RECHAZADO" ELSE decision_exceso END,
+                     token_exceso_usado_at = :token_usado_at
+                 WHERE id = :id'
+            );
+            $stmtUpdate->execute([
+                ':motivo' => $comment,
+                ':token_usado_at' => $now,
+                ':id' => $renditionId,
+            ]);
+
+            $reservedAmount = (float)$rendition['monto_total_rendido'];
+            if ($reservedAmount > 0) {
+                $stmtBudget = $pdo->prepare(
+                    'UPDATE presupuestos_vendedores
+                     SET monto_utilizado = GREATEST(0, monto_utilizado - :monto)
+                     WHERE id = :id'
+                );
+                $stmtBudget->execute([':monto' => number_format($reservedAmount, 2, '.', ''), ':id' => (int)$rendition['presupuesto_id']]);
+            }
+
+            $stmtRejectDocs = $pdo->prepare(
+                'UPDATE rendicion_documentos
+                 SET estado_item = "RECHAZADO",
+                     motivo_rechazo = :motivo
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "PENDIENTE"'
+            );
+            $stmtRejectDocs->execute([':motivo' => $comment, ':id' => $renditionId]);
+
+            RendicionesService::logHistory($pdo, [
+                'rendicion_id' => $renditionId,
+                'actor_tipo' => 'JEFATURA',
+                'actor_nombre' => $request['aprobador_nombre_snapshot'],
+                'actor_email' => $request['aprobador_email_snapshot'],
+                'accion' => 'RECHAZAR_RENDICION_RESPONSABLE',
+                'estado_anterior' => $rendition['estado'],
+                'estado_nuevo' => 'RECHAZADA',
+                'comentario' => $comment,
+                'metadata' => ['solicitud_id' => (int)$request['id']],
+            ]);
+        }
+    }
+
     private static function loadApprover(PDO $pdo, int $approverId): array
     {
         if ($approverId <= 0) {
@@ -412,10 +608,11 @@ final class ApprovalWorkflowService
         return $budget;
     }
 
-    private static function loadMonthlyRendition(PDO $pdo, int $renditionId): array
+    private static function loadRendition(PDO $pdo, int $renditionId): array
     {
         $stmt = $pdo->prepare(
-            'SELECT id, monto_total_rendido, monto_maximo_aprobable
+            'SELECT id, monto_total_rendido, monto_maximo_aprobable, monto_presupuesto_asignado,
+                    monto_exceso, estado, empresa_id, vendedor_id, codigo_rendicion, presupuesto_id
              FROM rendiciones_gastos
              WHERE id = :id AND activo = :activo
              LIMIT 1 FOR UPDATE'
@@ -426,6 +623,11 @@ final class ApprovalWorkflowService
             throw new DomainException('La rendición no existe o no está activa.');
         }
         return $rendition;
+    }
+
+    private static function loadMonthlyRendition(PDO $pdo, int $renditionId): array
+    {
+        return self::loadRendition($pdo, $renditionId);
     }
 
     private static function assertNoOpenRequest(PDO $pdo, string $type, ?int $budgetId, ?int $renditionId): void

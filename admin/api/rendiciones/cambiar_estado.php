@@ -22,7 +22,7 @@ try {
     $renditionId = filter_var($input['rendicion_id'] ?? null, FILTER_VALIDATE_INT);
     $action = strtoupper(trim((string)($input['accion'] ?? '')));
     $comment = trim((string)($input['comentario'] ?? ''));
-    $allowedActions = ['RECIBIR_FISICOS', 'APROBAR_TOTAL', 'APROBAR_PARCIAL', 'RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'MARCAR_PAGADA', 'REENVIAR_EXCESO', 'SOLICITAR_EXCEPCION'];
+    $allowedActions = ['RECIBIR_FISICOS', 'APROBAR_TOTAL', 'APROBAR_PARCIAL', 'RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'MARCAR_PAGADA', 'REENVIAR_EXCESO', 'SOLICITAR_EXCEPCION', 'VERIFICAR_Y_ENVIAR', 'CANCELAR_SOLICITUD_RESPONSABLE', 'REENVIAR_RESPONSABLE'];
     if (!$renditionId || !in_array($action, $allowedActions, true)) {
         throw new InvalidArgumentException('Rendición o acción no válida.');
     }
@@ -38,6 +38,294 @@ try {
     $rendition = $stmtRendition->fetch(PDO::FETCH_ASSOC);
     if (!$rendition) {
         throw new DomainException('Rendición no encontrada.');
+    }
+
+    if ($action === 'VERIFICAR_Y_ENVIAR') {
+        $allowedReviewStates = ['EN_REVISION_TESORERIA', 'DOCUMENTOS_FISICOS_RECIBIDOS'];
+        if (!in_array($rendition['estado'], $allowedReviewStates, true)) {
+            throw new DomainException('Sólo se pueden verificar y enviar a aprobación rendiciones en revisión de Tesorería.');
+        }
+        $approverId = filter_var($input['aprobador_id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$approverId) {
+            throw new InvalidArgumentException('Seleccione el responsable que autorizará la rendición.');
+        }
+
+        $decisions = $input['decisiones'] ?? null;
+        if (is_array($decisions) && !empty($decisions)) {
+            $stmtUpdateDoc = $pdo->prepare(
+                'UPDATE rendicion_documentos
+                 SET estado_item = :estado_item,
+                     monto_validado = :monto_validado,
+                     motivo_rechazo = :motivo
+                 WHERE id = :id AND rendicion_id = :rendicion_id'
+            );
+            foreach ($decisions as $dec) {
+                $docId = filter_var($dec['documento_id'] ?? null, FILTER_VALIDATE_INT);
+                $decision = strtoupper(trim((string)($dec['decision'] ?? 'APROBAR')));
+                $itemReason = trim((string)($dec['motivo'] ?? ''));
+                if (!$docId) continue;
+                if ($decision === 'RECHAZAR' && $itemReason === '') {
+                    throw new InvalidArgumentException('Cada documento rechazado requiere un motivo.');
+                }
+                $valAmount = isset($dec['monto_validado']) ? (float)RendicionesService::normalizeMoney($dec['monto_validado']) : null;
+                $itemState = $decision === 'RECHAZAR' ? 'RECHAZADO' : 'APROBADO';
+                $stmtUpdateDoc->execute([
+                    ':estado_item' => $itemState,
+                    ':monto_validado' => $itemState === 'APROBADO' && $valAmount !== null ? number_format($valAmount, 2, '.', '') : null,
+                    ':motivo' => $itemReason !== '' ? RendicionesService::truncateText($itemReason, 255) : null,
+                    ':id' => $docId,
+                    ':rendicion_id' => $renditionId,
+                ]);
+            }
+        }
+
+        $stmtDocSum = $pdo->prepare(
+            'SELECT COALESCE(SUM(CASE WHEN estado_item = "RECHAZADO" THEN 0 ELSE COALESCE(monto_validado, monto) END), 0)
+             FROM rendicion_documentos
+             WHERE rendicion_id = :id AND activo = 1'
+        );
+        $stmtDocSum->execute([':id' => $renditionId]);
+        $validatedSum = (float)$stmtDocSum->fetchColumn();
+        if ($validatedSum <= 0) {
+            $validatedSum = (float)$rendition['monto_total_rendido'];
+        }
+
+        $workflow = null;
+        $requestId = (int)($rendition['solicitud_excepcion_id'] ?? 0);
+        if ($requestId > 0) {
+            $stmtRequest = $pdo->prepare('SELECT id, estado, activo FROM solicitudes_aprobacion WHERE id = :id AND tipo_solicitud = :tipo LIMIT 1 FOR UPDATE');
+            $stmtRequest->execute([':id' => $requestId, ':tipo' => ApprovalWorkflowService::TYPE_RENDITION_APPROVAL]);
+            $currentRequest = $stmtRequest->fetch(PDO::FETCH_ASSOC);
+            if ($currentRequest && (bool)$currentRequest['activo'] && in_array($currentRequest['estado'], ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'], true)) {
+                $workflow = ApprovalWorkflowService::rotateToken($pdo, $requestId, (int)$approverId, [
+                    'id' => (int)$admin['id'], 'nombre' => $admin['nombre'], 'email' => $admin['email'],
+                ]);
+            }
+        }
+        if ($workflow === null) {
+            $workflow = ApprovalWorkflowService::createRequest($pdo, [
+                'tipo_solicitud' => ApprovalWorkflowService::TYPE_RENDITION_APPROVAL,
+                'rendicion_id' => $renditionId,
+                'aprobador_id' => $approverId,
+                'solicitado_por' => (int)$admin['id'],
+                'monto_solicitado' => $validatedSum,
+                'justificacion' => $comment !== '' ? RendicionesService::truncateText($comment, 500) : 'Verificación documental completada por Tesorería',
+                'actor_nombre' => $admin['nombre'],
+                'actor_email' => $admin['email'],
+            ]);
+        }
+
+        $request = $workflow['solicitud'];
+
+        $stmtMailDocs = $pdo->prepare(
+            'SELECT * FROM rendicion_documentos
+             WHERE rendicion_id = :rendicion_id AND activo = 1 AND estado_item != "RECHAZADO"
+             ORDER BY fecha_emision ASC, id ASC'
+        );
+        $stmtMailDocs->execute([':rendicion_id' => $renditionId]);
+        $mailDocuments = $stmtMailDocs->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtContext = $pdo->prepare(
+            'SELECT e.nombre AS empresa_nombre, p.nombre_gira
+             FROM empresas e
+             INNER JOIN presupuestos_vendedores p ON p.id = :presupuesto_id
+             WHERE e.id = :empresa_id LIMIT 1'
+        );
+        $stmtContext->execute([':presupuesto_id' => (int)$rendition['presupuesto_id'], ':empresa_id' => (int)$rendition['empresa_id']]);
+        $context = $stmtContext->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $stmtUpdateRend = $pdo->prepare(
+            'UPDATE rendiciones_gastos
+             SET estado = "PENDIENTE_APROBACION_RESPONSABLE",
+                 verificado_tesoreria_at = NOW(),
+                 verificado_tesoreria_por = :admin_id,
+                 solicitud_excepcion_id = :solicitud_id,
+                 monto_total_aprobado = :monto_val,
+                 notificacion_exceso_estado = "PENDIENTE"
+             WHERE id = :id'
+        );
+        $stmtUpdateRend->execute([
+            ':admin_id' => (int)$admin['id'],
+            ':solicitud_id' => (int)$request['id'],
+            ':monto_val' => number_format($validatedSum, 2, '.', ''),
+            ':id' => $renditionId,
+        ]);
+
+        RendicionesService::logHistory($pdo, [
+            'rendicion_id' => $renditionId,
+            'usuario_id' => (int)$admin['id'],
+            'actor_tipo' => 'TESORERIA',
+            'actor_nombre' => $admin['nombre'],
+            'actor_email' => $admin['email'],
+            'accion' => 'VERIFICAR_Y_ENVIAR_RESPONSABLE',
+            'estado_anterior' => $rendition['estado'],
+            'estado_nuevo' => 'PENDIENTE_APROBACION_RESPONSABLE',
+            'comentario' => $comment !== '' ? $comment : 'Comprobantes y fotos verificados por Tesorería. Solicitud enviada a aprobación gerencial.',
+            'metadata' => [
+                'solicitud_id' => (int)$request['id'],
+                'aprobador_id' => (int)$request['aprobador_id'],
+                'aprobador_nombre' => $request['aprobador_nombre_snapshot'],
+                'monto_a_aprobar' => $validatedSum,
+            ],
+        ]);
+        AuditService::log($pdo, (int)$admin['id'], $admin['email'], 'RENDICION_VERIFICAR_Y_ENVIAR', json_encode([
+            'rendicion_id' => $renditionId,
+            'aprobador_id' => (int)$request['aprobador_id'],
+            'monto' => $validatedSum,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        $pdo->commit();
+
+        $approver = [
+            'id' => (int)$request['aprobador_id'],
+            'nombre' => $request['aprobador_nombre_snapshot'],
+            'cargo' => $request['aprobador_cargo_snapshot'],
+            'email' => $request['aprobador_email_snapshot'],
+        ];
+
+        $mailSent = false;
+        try {
+            $mailSent = MailService::enviarSolicitudAprobacionRendicion(
+                array_merge($rendition, $context, ['monto_total_aprobado' => $validatedSum]),
+                $mailDocuments,
+                $workflow['raw_token'],
+                $approver,
+                $comment
+            );
+        } catch (Throwable $mailEx) {
+            error_log('[admin.rendiciones.verificar.mail] ' . $mailEx->getMessage());
+        }
+
+        $pdo->beginTransaction();
+        ApprovalWorkflowService::markEmailResult($pdo, (int)$request['id'], $mailSent, $mailSent ? null : 'El servidor SMTP no confirmó la entrega del correo.');
+        $pdo->commit();
+
+        RendicionesService::jsonResponse(true, [
+            'message' => $mailSent ? 'Rendición verificada y enviada a aprobación del Responsable.' : 'Rendición verificada, pero el correo falló. Puede reintentar el reenvío.',
+            'data' => [
+                'rendicion_id' => $renditionId,
+                'solicitud_id' => (int)$request['id'],
+                'correo_enviado' => $mailSent,
+                'aprobador_nombre' => $request['aprobador_nombre_snapshot'],
+                'estado' => 'PENDIENTE_APROBACION_RESPONSABLE',
+            ],
+        ]);
+    }
+
+    if ($action === 'CANCELAR_SOLICITUD_RESPONSABLE') {
+        if ($rendition['estado'] !== 'PENDIENTE_APROBACION_RESPONSABLE') {
+            throw new DomainException('Solo se pueden cancelar solicitudes en espera de aprobación del responsable.');
+        }
+        $requestId = (int)($rendition['solicitud_excepcion_id'] ?? 0);
+        if ($requestId > 0) {
+            ApprovalWorkflowService::cancelRequest($pdo, $requestId, [
+                'id' => (int)$admin['id'], 'nombre' => $admin['nombre'], 'email' => $admin['email'],
+            ], $comment !== '' ? $comment : 'Solicitud cancelada por Tesorería para nueva revisión');
+        }
+        $stmtReset = $pdo->prepare(
+            'UPDATE rendiciones_gastos
+             SET estado = "EN_REVISION_TESORERIA",
+                 notificacion_exceso_estado = "NO_APLICA"
+             WHERE id = :id'
+        );
+        $stmtReset->execute([':id' => $renditionId]);
+
+        RendicionesService::logHistory($pdo, [
+            'rendicion_id' => $renditionId,
+            'usuario_id' => (int)$admin['id'],
+            'actor_tipo' => 'TESORERIA',
+            'actor_nombre' => $admin['nombre'],
+            'actor_email' => $admin['email'],
+            'accion' => 'CANCELAR_SOLICITUD_RESPONSABLE',
+            'estado_anterior' => 'PENDIENTE_APROBACION_RESPONSABLE',
+            'estado_nuevo' => 'EN_REVISION_TESORERIA',
+            'comentario' => $comment,
+        ]);
+        $pdo->commit();
+
+        RendicionesService::jsonResponse(true, [
+            'message' => 'Solicitud al responsable cancelada. La rendición volvió a revisión de Tesorería.',
+            'data' => ['rendicion_id' => $renditionId, 'estado' => 'EN_REVISION_TESORERIA'],
+        ]);
+    }
+
+    if (in_array($action, ['REENVIAR_RESPONSABLE', 'REENVIAR_EXCESO'], true) && $rendition['estado'] === 'PENDIENTE_APROBACION_RESPONSABLE') {
+        $approverId = filter_var($input['aprobador_id'] ?? null, FILTER_VALIDATE_INT) ?: (int)$rendition['aprobador_solicitado_id'];
+        if (!$approverId) {
+            throw new InvalidArgumentException('Seleccione el responsable para el reenvío.');
+        }
+        $requestId = (int)($rendition['solicitud_excepcion_id'] ?? 0);
+        if ($requestId <= 0) {
+            throw new DomainException('No se encontró la solicitud de aprobación vinculada.');
+        }
+
+        $workflow = ApprovalWorkflowService::rotateToken($pdo, $requestId, $approverId, [
+            'id' => (int)$admin['id'], 'nombre' => $admin['nombre'], 'email' => $admin['email'],
+        ]);
+        $request = $workflow['solicitud'];
+
+        $stmtMailDocs = $pdo->prepare(
+            'SELECT * FROM rendicion_documentos
+             WHERE rendicion_id = :rendicion_id AND activo = 1 AND estado_item != "RECHAZADO"
+             ORDER BY fecha_emision ASC, id ASC'
+        );
+        $stmtMailDocs->execute([':rendicion_id' => $renditionId]);
+        $mailDocuments = $stmtMailDocs->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtContext = $pdo->prepare(
+            'SELECT e.nombre AS empresa_nombre, p.nombre_gira
+             FROM empresas e
+             INNER JOIN presupuestos_vendedores p ON p.id = :presupuesto_id
+             WHERE e.id = :empresa_id LIMIT 1'
+        );
+        $stmtContext->execute([':presupuesto_id' => (int)$rendition['presupuesto_id'], ':empresa_id' => (int)$rendition['empresa_id']]);
+        $context = $stmtContext->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        RendicionesService::logHistory($pdo, [
+            'rendicion_id' => $renditionId,
+            'usuario_id' => (int)$admin['id'],
+            'actor_tipo' => 'TESORERIA',
+            'actor_nombre' => $admin['nombre'],
+            'actor_email' => $admin['email'],
+            'accion' => 'REENVIAR_SOLICITUD_RESPONSABLE',
+            'estado_anterior' => 'PENDIENTE_APROBACION_RESPONSABLE',
+            'estado_nuevo' => 'PENDIENTE_APROBACION_RESPONSABLE',
+            'comentario' => $comment !== '' ? $comment : 'Token rotado y correo reenviado al responsable.',
+        ]);
+        $pdo->commit();
+
+        $approver = [
+            'id' => (int)$request['aprobador_id'],
+            'nombre' => $request['aprobador_nombre_snapshot'],
+            'cargo' => $request['aprobador_cargo_snapshot'],
+            'email' => $request['aprobador_email_snapshot'],
+        ];
+
+        $mailSent = false;
+        try {
+            $mailSent = MailService::enviarSolicitudAprobacionRendicion(
+                array_merge($rendition, $context),
+                $mailDocuments,
+                $workflow['raw_token'],
+                $approver,
+                $comment
+            );
+        } catch (Throwable $mailEx) {
+            error_log('[admin.rendiciones.reenviar_resp.mail] ' . $mailEx->getMessage());
+        }
+
+        $pdo->beginTransaction();
+        ApprovalWorkflowService::markEmailResult($pdo, (int)$request['id'], $mailSent, $mailSent ? null : 'El servidor SMTP no confirmó la entrega del correo.');
+        $pdo->commit();
+
+        RendicionesService::jsonResponse(true, [
+            'message' => $mailSent ? 'Solicitud reenviada al responsable correctamente.' : 'Token actualizado, pero el correo falló.',
+            'data' => [
+                'rendicion_id' => $renditionId,
+                'correo_enviado' => $mailSent,
+                'aprobador_nombre' => $request['aprobador_nombre_snapshot'],
+            ],
+        ]);
     }
 
     if (in_array($action, ['SOLICITAR_EXCEPCION', 'REENVIAR_EXCESO'], true) && $rendition['estado'] === 'EN_REVISION_TESORERIA') {

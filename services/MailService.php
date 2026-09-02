@@ -482,6 +482,108 @@ class MailService
     }
 
     /**
+     * Envía al responsable la solicitud de aprobación de una rendición completa verificada por Tesorería.
+     * Unifica el desglose de comprobantes y la autorización de exceso (si aplica) en 1 solo clic.
+     */
+    public static function enviarSolicitudAprobacionRendicion(
+        array $rendicion,
+        array $documentos,
+        string $rawToken,
+        array $aprobador,
+        string $comentarioTesoreria = ''
+    ): bool {
+        $recipient = strtolower(trim((string)($aprobador['email'] ?? '')));
+        $approverNameRaw = trim((string)($aprobador['nombre'] ?? ''));
+        $approverTitleRaw = trim((string)($aprobador['cargo'] ?? ''));
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL) || $approverNameRaw === '' || $approverTitleRaw === '') {
+            error_log('[MailService] Responsable de aprobación incompleto o inválido.');
+            return false;
+        }
+
+        $code = htmlspecialchars((string)($rendicion['codigo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $company = htmlspecialchars((string)($rendicion['empresa_nombre'] ?? 'Grupo Automarco'), ENT_QUOTES, 'UTF-8');
+        $seller = htmlspecialchars((string)($rendicion['vendedor_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $sellerId = (int)($rendicion['vendedor_id'] ?? 0);
+        $period = htmlspecialchars((string)($rendicion['periodo_mes'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $type = htmlspecialchars((string)($rendicion['tipo_rendicion'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $tourName = htmlspecialchars(trim((string)($rendicion['nombre_gira'] ?? '')), ENT_QUOTES, 'UTF-8');
+        $fundLabel = ($rendicion['tipo_rendicion'] ?? '') === 'GIRA'
+            ? 'Gira comercial' . ($tourName !== '' ? ': ' . $tourName : '')
+            : 'Presupuesto mensual';
+
+        $approverName = htmlspecialchars($approverNameRaw, ENT_QUOTES, 'UTF-8');
+        $approverTitle = htmlspecialchars($approverTitleRaw, ENT_QUOTES, 'UTF-8');
+        $sellerNote = nl2br(htmlspecialchars(trim((string)($rendicion['nota_vendedor'] ?? '')), ENT_QUOTES, 'UTF-8'));
+        $treasuryNote = nl2br(htmlspecialchars(trim($comentarioTesoreria), ENT_QUOTES, 'UTF-8'));
+
+        $totalRendido = (float)($rendicion['monto_total_rendido'] ?? 0);
+        $budget = (float)($rendicion['monto_presupuesto_asignado'] ?? 0);
+        $excess = (float)($rendicion['monto_exceso'] ?? 0);
+        $totalAprobar = (float)($rendicion['monto_total_aprobado'] ?? $totalRendido);
+        if ($totalAprobar <= 0) $totalAprobar = $totalRendido;
+
+        $reviewUrl = PORTAL_BASE_URL . '/rendiciones/aprobar_rendicion.php?token=' . rawurlencode($rawToken);
+        $ttlHours = defined('RENDICIONES_TOKEN_TTL_HOURS') ? RENDICIONES_TOKEN_TTL_HOURS : 48;
+
+        $rows = '';
+        foreach ($documentos as $documento) {
+            $category = htmlspecialchars((string)($documento['categoria_gasto'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $documentType = htmlspecialchars((string)($documento['tipo_documento'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $date = htmlspecialchars((string)($documento['fecha_emision'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $provider = htmlspecialchars((string)($documento['razon_social_proveedor'] ?? 'Sin proveedor'), ENT_QUOTES, 'UTF-8');
+            $rut = htmlspecialchars((string)($documento['rut_proveedor'] ?? 'Sin RUT'), ENT_QUOTES, 'UTF-8');
+            $folio = htmlspecialchars((string)($documento['numero_documento'] ?? 'Sin folio'), ENT_QUOTES, 'UTF-8');
+            $amount = number_format((float)($documento['monto'] ?? 0), 0, ',', '.');
+            $rows .= '<tr style="border-bottom:1px solid #e2e8f0">'
+                . '<td style="padding:10px"><strong>' . $provider . '</strong><br><span style="font-size:12px;color:#64748b">' . $rut . ' · Folio ' . $folio . '</span></td>'
+                . '<td style="padding:10px">' . $category . '<br><span style="font-size:12px;color:#64748b">' . $documentType . '</span></td>'
+                . '<td style="padding:9px">' . $date . '</td>'
+                . '<td style="padding:9px;text-align:right">$' . $amount . '</td>'
+                . '</tr>';
+            if (($documento['categoria_gasto'] ?? '') === 'CENA_CLIENTE') {
+                $guest = htmlspecialchars((string)($documento['cliente_invitado_nombre'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $guestRut = htmlspecialchars((string)($documento['cliente_invitado_rut'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $guestCompany = htmlspecialchars((string)($documento['cliente_invitado_empresa'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $guestTitle = htmlspecialchars((string)($documento['cliente_invitado_cargo'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $purpose = htmlspecialchars((string)($documento['proposito_comercial'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $rows .= '<tr style="background:#fffbeb"><td colspan="4" style="padding:10px;font-size:12px"><strong>Antecedentes SII:</strong> ' . $guest . ' · ' . $guestRut . ' · ' . $guestCompany . ' / ' . $guestTitle . '<br><strong>Propósito:</strong> ' . $purpose . '</td></tr>';
+            }
+        }
+
+        $excessAlert = '';
+        if ($excess > 0) {
+            $excessAlert = '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;margin:16px 0;color:#991b1b">'
+                . '<strong>⚠ Exceso Presupuestario Detectado:</strong> Esta rendición sobrepasa el presupuesto disponible en <strong>$' . number_format($excess, 0, ',', '.') . '</strong>. Al confirmar la aprobación desde el enlace seguro, autorizarás la rendición completa y la cobertura de este exceso.'
+                . '</div>';
+        }
+
+        $subject = '[APROBACIÓN REQUERIDA] Rendición ' . $code . ' - ' . strip_tags($seller);
+        $html = '<div style="font-family:Arial,sans-serif;max-width:720px;margin:auto;color:#1e293b;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden">'
+            . '<div style="background:#0f172a;color:#fff;padding:24px"><h2 style="margin:0">Aprobación de Rendición de Gastos</h2><p style="margin:6px 0 0;color:#94a3b8">Folio: ' . $code . '</p></div>'
+            . '<div style="padding:24px"><p>Hola <strong>' . $approverName . '</strong> (' . $approverTitle . '),</p>'
+            . '<p>Tesorería ha verificado las fotos y comprobantes de la siguiente rendición y solicita tu aprobación gerencial:</p>'
+            . '<p style="font-size:1.05rem"><strong>' . $seller . '</strong> · Código ERP #' . $sellerId . '<br><span style="color:#64748b">' . $company . ' · ' . $fundLabel . ' · Período ' . $period . '</span></p>'
+            . $excessAlert
+            . '<table style="width:100%;border-collapse:collapse;background:#f8fafc;margin:18px 0;border-radius:8px;overflow:hidden">'
+            . '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:10px">Presupuesto Asignado</td><td style="padding:10px;text-align:right">$' . number_format($budget, 0, ',', '.') . '</td></tr>'
+            . '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:10px">Total Rendido Declarado</td><td style="padding:10px;text-align:right;font-weight:bold">$' . number_format($totalRendido, 0, ',', '.') . '</td></tr>'
+            . ($excess > 0 ? '<tr style="border-bottom:1px solid #e2e8f0;color:#b91c1c"><td style="padding:10px">Exceso sobre Presupuesto</td><td style="padding:10px;text-align:right;font-weight:bold">+$' . number_format($excess, 0, ',', '.') . '</td></tr>' : '')
+            . '<tr style="background:#e2e8f0;font-weight:bold"><td style="padding:12px">Total a Aprobar para Reembolso</td><td style="padding:12px;text-align:right;font-size:1.1rem;color:#0f172a">$' . number_format($totalAprobar, 0, ',', '.') . '</td></tr>'
+            . '</table>'
+            . ($sellerNote !== '' ? '<div style="background:#f1f5f9;padding:12px;border-radius:6px;margin-bottom:16px"><strong>Nota del Vendedor:</strong><br>' . $sellerNote . '</div>' : '')
+            . ($treasuryNote !== '' ? '<div style="background:#eff6ff;padding:12px;border-radius:6px;margin-bottom:16px;border-left:4px solid #3b82f6"><strong>Observación de Tesorería:</strong><br>' . $treasuryNote . '</div>' : '')
+            . '<h4 style="margin:20px 0 8px">Comprobantes Verificados (' . count($documentos) . ')</h4>'
+            . '<table style="width:100%;border-collapse:collapse;font-size:13px">' . $rows . '</table>'
+            . '<div style="text-align:center;margin:32px 0">'
+            . '<a href="' . $reviewUrl . '" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:8px;font-size:16px">Revisar y Resolver Rendición</a>'
+            . '</div>'
+            . '<p style="font-size:12px;color:#94a3b8;text-align:center">Este enlace es confidencial, seguro y tiene una vigencia de ' . $ttlHours . ' horas. Una vez aprobada, se emitirá automáticamente la Planilla Oficial en PDF.</p>'
+            . '</div></div>';
+
+        return self::sendSmtp($recipient, $subject, $html);
+    }
+
+    /**
      * Envía al responsable de jefatura la solicitud de aprobación de una gira.
      * El token crudo solo existe durante este envío; en BD se almacena su SHA-256.
      */

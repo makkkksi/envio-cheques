@@ -158,10 +158,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                     <div class="rd-budget-directory">
                         <div class="rd-budget-toolbar">
                             <div class="rd-segmented-tabs" role="tablist" id="budgetTypeTabs" aria-label="Filtrar por tipo de presupuesto">
-                                <button class="rd-segmented-tab is-active" type="button" role="tab" aria-selected="true" data-budget-filter="ALL">
-                                    Todos los presupuestos <span class="rd-tab-count" id="countBudgetTotal">0</span>
-                                </button>
-                                <button class="rd-segmented-tab" type="button" role="tab" aria-selected="false" data-budget-filter="MENSUAL">
+                                <button class="rd-segmented-tab is-active" type="button" role="tab" aria-selected="true" data-budget-filter="MENSUAL">
                                     Presupuestos mensuales <span class="rd-tab-count" id="countBudgetMonthly">0</span>
                                 </button>
                                 <button class="rd-segmented-tab" type="button" role="tab" aria-selected="false" data-budget-filter="GIRA">
@@ -228,6 +225,70 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
     <div class="rd-modal" id="approverConfigModal" hidden role="dialog" aria-modal="true" aria-labelledby="approverConfigTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="approverConfigTitle">Responsables de aprobación</h2><p>Configura las dos personas que pueden resolver excesos. Los cambios futuros no alteran la auditoría histórica.</p></div><button class="rd-modal__close" type="button" data-close-modal="approverConfigModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="approverConfigForm" novalidate><div class="rd-approver-config"><fieldset><legend>Responsable 1</legend><label><span>Nombre completo</span><input id="approver1Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver1Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver1Email" type="email" maxlength="190" required></label></fieldset><fieldset><legend>Responsable 2</legend><label><span>Nombre completo</span><input id="approver2Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver2Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver2Email" type="email" maxlength="190" required></label></fieldset></div><p id="approverConfigStatus" class="rd-form-status" role="status"></p><div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="approverConfigModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="saveApproverConfig" type="submit">Guardar responsables</button></div></form></div></div>
     <?php endif; ?>
     <div class="rd-modal" id="partialModal" hidden role="dialog" aria-modal="true" aria-labelledby="partialModalTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="partialModalTitle">Aprobación parcial</h2></div><button class="rd-modal__close" type="button" data-close-modal="partialModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><p class="rd-modal__description">Resuelve todos los comprobantes. Cada rechazo debe incluir un motivo.</p><div class="rd-partial-list" id="partialDecisionList"></div><div class="rd-modal__actions"><strong id="partialApprovedTotal">Aprobado: $0</strong><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="partialModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="savePartialButton" type="button">Guardar revisión parcial</button></div></div></div>
+    <div class="rd-modal" id="editDocumentModal" hidden role="dialog" aria-modal="true" aria-labelledby="editDocTitle">
+        <div class="rd-modal__card rd-modal__card--edit-doc">
+            <header class="rd-modal__header">
+                <div>
+                    <h2 id="editDocTitle">Corregir comprobante</h2>
+                    <p class="rd-modal__description">Corrige los datos si el vendedor digitó algo diferente a la foto.</p>
+                </div>
+                <button class="rd-modal__close" type="button" data-close-modal="editDocumentModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            </header>
+            <form id="editDocumentForm" novalidate>
+                <input type="hidden" id="editDocId">
+                <!-- Contexto del comprobante -->
+                <div class="ed-context-card">
+                    <svg class="ed-context-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+                    <div>
+                        <span class="ed-context-card__label">Comprobante</span>
+                        <strong class="ed-context-card__value" id="editDocProvider">—</strong>
+                    </div>
+                </div>
+                <!-- Campos de corrección -->
+                <div class="ed-fields">
+                    <div class="ed-field-group">
+                        <label class="ed-label" for="editDocNewNumber">
+                            <span class="ed-label__icon">🔢</span>
+                            N° de Boleta / Folio
+                        </label>
+                        <div class="ed-field-row">
+                            <input class="ed-input ed-input--readonly" type="text" id="editDocOldNumber" readonly aria-label="Folio actual" placeholder="—">
+                            <span class="ed-arrow" aria-hidden="true">→</span>
+                            <input class="ed-input ed-input--editable" type="text" id="editDocNewNumber" maxlength="50" placeholder="Folio correcto" autocomplete="off">
+                        </div>
+                        <p class="ed-field-hint">Deja igual al actual si el folio está bien.</p>
+                    </div>
+                    <div class="ed-field-group">
+                        <label class="ed-label" for="editDocNewAmount">
+                            <span class="ed-label__icon">💰</span>
+                            Monto ($)
+                        </label>
+                        <div class="ed-field-row">
+                            <input class="ed-input ed-input--readonly" type="text" id="editDocOldAmount" readonly aria-label="Monto actual">
+                            <span class="ed-arrow" aria-hidden="true">→</span>
+                            <input class="ed-input ed-input--editable" type="number" id="editDocNewAmount" min="1" step="1" required placeholder="Monto real">
+                        </div>
+                    </div>
+                    <div class="ed-field-group ed-field-group--full">
+                        <label class="ed-label" for="editDocReason">
+                            <span class="ed-label__icon">📝</span>
+                            Motivo de la corrección
+                        </label>
+                        <input class="ed-input ed-input--editable" type="text" id="editDocReason" maxlength="255" value="Corrección por error de digitación verificada en foto">
+                    </div>
+                </div>
+                <p id="editDocStatus" class="rd-form-status" role="status"></p>
+                <div class="rd-modal__actions">
+                    <button class="rd-btn rd-btn--secondary" type="button" data-close-modal="editDocumentModal">Cancelar</button>
+                    <button class="rd-btn rd-btn--primary" id="saveEditDocBtn" type="submit">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+                        Guardar corrección
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <?php endif; ?>
 
     <script src="js/shared_ui.js?v=20260828-session-1"></script>
