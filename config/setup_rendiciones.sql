@@ -97,12 +97,16 @@ CREATE TABLE IF NOT EXISTS rendiciones_gastos (
     'ENVIADA',
     'PENDIENTE_APROBACION_EXCESO',
     'EN_REVISION_TESORERIA',
+    'PENDIENTE_APROBACION_RESPONSABLE',
     'DOCUMENTOS_FISICOS_RECIBIDOS',
     'APROBADA',
     'APROBADA_PARCIAL',
     'RECHAZADA',
     'PAGADA'
   ) NOT NULL DEFAULT 'ENVIADA',
+  verificado_tesoreria_at DATETIME NULL,
+  verificado_tesoreria_por INT NULL,
+  pdf_planilla_url VARCHAR(255) NULL,
   documentos_fisicos_recibidos TINYINT(1) NOT NULL DEFAULT 0,
   fecha_recepcion_fisica DATETIME NULL,
   recibido_fisico_por INT NULL,
@@ -120,11 +124,13 @@ CREATE TABLE IF NOT EXISTS rendiciones_gastos (
   KEY idx_rendicion_aprobador (aprobador_solicitado_id),
   KEY idx_rendicion_solicitud_usuario (solicitud_exceso_enviada_por),
   KEY idx_rendicion_solicitud_excepcion (solicitud_excepcion_id),
+  KEY idx_rendicion_verificado_por (verificado_tesoreria_por),
   CONSTRAINT fk_rendicion_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT,
   CONSTRAINT fk_rendicion_presupuesto FOREIGN KEY (presupuesto_id) REFERENCES presupuestos_vendedores(id) ON DELETE RESTRICT,
   CONSTRAINT fk_rendicion_recepcion_usuario FOREIGN KEY (recibido_fisico_por) REFERENCES usuarios(id) ON DELETE RESTRICT,
   CONSTRAINT fk_rendicion_aprobador FOREIGN KEY (aprobador_solicitado_id) REFERENCES aprobadores_rendiciones(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_rendicion_solicitud_usuario FOREIGN KEY (solicitud_exceso_enviada_por) REFERENCES usuarios(id) ON DELETE RESTRICT
+  CONSTRAINT fk_rendicion_solicitud_usuario FOREIGN KEY (solicitud_exceso_enviada_por) REFERENCES usuarios(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_rendicion_verificado_usuario FOREIGN KEY (verificado_tesoreria_por) REFERENCES usuarios(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Migración incremental para instalaciones que ya tenían las cuatro tablas.
@@ -146,12 +152,21 @@ CREATE TABLE IF NOT EXISTS rendicion_documentos (
   rut_proveedor VARCHAR(20) NULL,
   razon_social_proveedor VARCHAR(150) NULL,
   numero_documento VARCHAR(50) NULL,
+  numero_documento_original VARCHAR(50) NULL COMMENT 'Número digitado originalmente por el vendedor antes de corrección',
   fecha_emision DATE NOT NULL,
   monto DECIMAL(12,2) NOT NULL,
+  monto_original DECIMAL(12,2) NULL,
   monto_validado DECIMAL(12,2) NULL,
   descripcion VARCHAR(500) NULL,
   foto_documento_url VARCHAR(255) NOT NULL,
   document_hash CHAR(64) NOT NULL,
+  document_hash_bloqueante CHAR(64) GENERATED ALWAYS AS (
+    CASE
+      WHEN activo = 1 AND estado_item IN ('BORRADOR', 'PENDIENTE', 'APROBADO')
+      THEN document_hash
+      ELSE NULL
+    END
+  ) STORED,
   cliente_invitado_nombre VARCHAR(150) NULL,
   cliente_invitado_rut VARCHAR(20) NULL,
   cliente_invitado_empresa VARCHAR(150) NULL,
@@ -159,16 +174,21 @@ CREATE TABLE IF NOT EXISTS rendicion_documentos (
   proposito_comercial TEXT NULL,
   estado_item ENUM('BORRADOR', 'PENDIENTE', 'APROBADO', 'RECHAZADO', 'DESCARTADO') NOT NULL DEFAULT 'BORRADOR',
   motivo_rechazo VARCHAR(500) NULL,
+  editado_por INT NULL,
+  editado_at DATETIME NULL,
+  motivo_edicion VARCHAR(255) NULL,
   activo TINYINT(1) NOT NULL DEFAULT 1,
   descartado_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_rendicion_document_hash (document_hash),
+  UNIQUE KEY uq_rendicion_document_hash_bloqueante (document_hash_bloqueante),
   KEY idx_documento_bolsa (empresa_id, vendedor_id, estado_item, activo),
   KEY idx_documento_rendicion (rendicion_id, estado_item),
   KEY idx_documento_fecha (fecha_emision),
+  KEY idx_documento_editado_por (editado_por),
   CONSTRAINT fk_documento_empresa FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_documento_rendicion FOREIGN KEY (rendicion_id) REFERENCES rendiciones_gastos(id) ON DELETE RESTRICT
+  CONSTRAINT fk_documento_rendicion FOREIGN KEY (rendicion_id) REFERENCES rendiciones_gastos(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_documento_editado_usuario FOREIGN KEY (editado_por) REFERENCES usuarios(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS rendicion_historial_estados (
@@ -222,7 +242,7 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS solicitudes_aprobacion (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  tipo_solicitud ENUM('GIRA', 'EXCEPCION_MENSUAL') NOT NULL,
+  tipo_solicitud ENUM('GIRA', 'EXCEPCION_MENSUAL', 'APROBACION_RENDICION') NOT NULL,
   presupuesto_id INT NULL,
   rendicion_id INT NULL,
   solicitud_version INT UNSIGNED NOT NULL DEFAULT 1,
@@ -238,7 +258,7 @@ CREATE TABLE IF NOT EXISTS solicitudes_aprobacion (
   token_expira_at DATETIME NOT NULL,
   token_usado_at DATETIME NULL,
   estado ENUM('PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA', 'APROBADA', 'RECHAZADA', 'CANCELADA') NOT NULL DEFAULT 'PENDIENTE_ENVIO',
-  decision ENUM('APROBADA', 'RECHAZADA') NULL,
+  decision ENUM('APROBADA', 'RECHAZADA', 'APROBADA_TOPE') NULL,
   comentario_decision VARCHAR(500) NULL,
   correo_enviado_at DATETIME NULL,
   motivo_envio_fallido VARCHAR(500) NULL,
@@ -257,7 +277,7 @@ CREATE TABLE IF NOT EXISTS solicitudes_aprobacion (
   KEY idx_solicitud_aprobador (aprobador_id, estado),
   KEY idx_solicitud_solicitante (solicitado_por),
   KEY idx_solicitud_cancelador (cancelado_por),
-  CONSTRAINT chk_solicitud_objetivo CHECK ((tipo_solicitud = 'GIRA' AND presupuesto_id IS NOT NULL AND rendicion_id IS NULL) OR (tipo_solicitud = 'EXCEPCION_MENSUAL' AND presupuesto_id IS NULL AND rendicion_id IS NOT NULL)),
+  CONSTRAINT chk_solicitud_objetivo CHECK ((tipo_solicitud = 'GIRA' AND presupuesto_id IS NOT NULL AND rendicion_id IS NULL) OR (tipo_solicitud IN ('EXCEPCION_MENSUAL', 'APROBACION_RENDICION') AND presupuesto_id IS NULL AND rendicion_id IS NOT NULL)),
   CONSTRAINT chk_solicitud_monto CHECK (monto_solicitado > 0 AND monto_base_aprobable >= 0),
   CONSTRAINT fk_solicitud_presupuesto FOREIGN KEY (presupuesto_id) REFERENCES presupuestos_vendedores(id) ON DELETE RESTRICT,
   CONSTRAINT fk_solicitud_rendicion FOREIGN KEY (rendicion_id) REFERENCES rendiciones_gastos(id) ON DELETE RESTRICT,

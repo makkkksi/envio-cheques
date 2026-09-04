@@ -115,9 +115,8 @@ try {
 } catch (Exception $e) {
     error_log('[get_factura.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    $msg = (defined('APP_ENV') && APP_ENV === 'local') ? $e->getMessage() : 'Error interno del servidor';
     echo json_encode([
         'success' => false,
-        'message' => $msg
+        'message' => 'No fue posible completar la operación.'
     ]);
 }

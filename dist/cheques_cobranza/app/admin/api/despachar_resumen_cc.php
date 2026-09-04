@@ -121,7 +121,7 @@ try {
     // Agrupar por empresa (basado en cheques)
     $agrupado = [];
     foreach ($cobranzasHoy as $c) {
-        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :cobranza_id");
+        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)");
         $stmtCheques->execute([':cobranza_id' => $c['id']]);
         $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
 

@@ -578,7 +578,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div style="padding: 16px; text-align: center; color: var(--color-text-muted); font-size: 0.9rem;">
                     No se encontraron clientes para "<strong>${cleanText}</strong>"
                     <div style="margin-top: 8px; font-size: 0.8rem; color: #1e40af; background: #eff6ff; padding: 10px 12px; border-radius: 8px; border: 1px solid #bfdbfe; text-align: left;">
-                        💡 <strong>Sugerencia de Búsqueda:</strong><br>
+                        <strong>Sugerencia de Búsqueda:</strong><br>
                         Este buscador filtra los <strong>Clientes</strong> (empresas o compradoras). Ingrese su Nombre o RUT (ej: <em>Herrera, Baleo, 77891200</em>).
                     </div>
                 </div>
@@ -1979,7 +1979,7 @@ window.configurarPreviewConBorrado = function (idInput, idImg, idContainer) {
                     container.style.alignItems = 'center';
                     container.style.gap = '8px';
 
-                    // Mostrar indicador verde ✓ Foto Cargada Correctamente
+                    // Mostrar indicador verde: Foto Cargada Correctamente
                     let statusBadge = container.querySelector('.photo-success-badge');
                     if (!statusBadge) {
                         statusBadge = document.createElement('div');

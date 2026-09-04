@@ -49,7 +49,7 @@ try {
     }
 
     // 2. Extraer RUTs asignados al vendedor en su empresa
-    $stmtRuts = $pdo->prepare("SELECT cli_rut FROM {$db_origen}.tbl_clientes WHERE cli_vendedor = :vid AND cli_rut != ''");
+    $stmtRuts = $pdo->prepare("SELECT cli_rut FROM `{$db_origen}`.tbl_clientes WHERE cli_vendedor = :vid AND cli_rut != ''");
     $stmtRuts->execute([':vid' => $vendedor_id]);
     $rutRows = $stmtRuts->fetchAll(PDO::FETCH_ASSOC);
 
@@ -85,7 +85,7 @@ try {
             c.clidv,
             COUNT(*) AS total_facturas,
             SUM(CAST(c.saldo_cuota AS DECIMAL(15,2))) AS total_deuda
-        FROM bd_automarco.tbl_cobranza c
+        FROM `bd_automarco`.`tbl_cobranza` c
         WHERE {$whereVendedor}
           AND c.empresa != 'EMP07'
           AND c.saldo_cuota > 0
@@ -115,13 +115,13 @@ try {
 
     $sqlNames = "
         SELECT cli_rut, cli_razon_social, cli_mail FROM (
-            SELECT cli_rut, cli_razon_social, cli_mail FROM automarc_automarco.tbl_clientes WHERE cli_rut IN ($inClause)
+            SELECT cli_rut, cli_razon_social, cli_mail FROM `automarc_automarco`.`tbl_clientes` WHERE cli_rut IN ($inClause)
             UNION
-            SELECT cli_rut, cli_razon_social, cli_mail FROM autotec_ecom.tbl_clientes WHERE cli_rut IN ($inClause)
+            SELECT cli_rut, cli_razon_social, cli_mail FROM `autotec_ecom`.`tbl_clientes` WHERE cli_rut IN ($inClause)
             UNION
-            SELECT cli_rut, cli_razon_social, cli_mail FROM autohd_automarcohd.tbl_clientes WHERE cli_rut IN ($inClause)
+            SELECT cli_rut, cli_razon_social, cli_mail FROM `autohd_automarcohd`.`tbl_clientes` WHERE cli_rut IN ($inClause)
             UNION
-            SELECT cli_rut, cli_razon_social, cli_mail FROM gabteccl_sitbdd1978.tbl_clientes WHERE cli_rut IN ($inClause)
+            SELECT cli_rut, cli_razon_social, cli_mail FROM `gabteccl_sitbdd1978`.`tbl_clientes` WHERE cli_rut IN ($inClause)
         ) AS t
     ";
     
@@ -167,6 +167,5 @@ try {
 } catch (Exception $e) {
     error_log('[get_clientes.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    $msg = (defined('APP_ENV') && APP_ENV === 'local') ? $e->getMessage() : 'Error al consultar los clientes.';
-    echo json_encode(['success' => false, 'message' => $msg]);
+    echo json_encode(['success' => false, 'message' => 'Error al consultar los clientes.']);
 }

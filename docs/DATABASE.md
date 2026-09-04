@@ -172,8 +172,17 @@ CREATE TABLE cheques (
   comentario               TEXT NULL,                   -- observación opcional del vendedor
   numero_papeleta_deposito VARCHAR(50) NULL,            -- registrado por Tesorería
   fecha_deposito_real      TIMESTAMP NULL,              -- registrado por Tesorería
+  activo                   TINYINT(1) NOT NULL DEFAULT 1, -- Zero Delete: 1 = Activo, 0 = Baja lógica
+  descartado_at            TIMESTAMP NULL,              -- Fecha y hora del descarte
+  descartado_por           INT NULL,                    -- ID del usuario que descartó
+  motivo_descarte          VARCHAR(255) NULL,           -- Motivo o contexto del descarte
   created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (cobranza_id) REFERENCES cobranzas(id) ON DELETE CASCADE
+  KEY idx_cheques_cobranza (cobranza_id),
+  KEY idx_cheques_vencimiento_purga (fecha_vencimiento, foto_purgada_at),
+  KEY idx_cheques_activo (activo),
+  KEY idx_cheques_descartado_por (descartado_por),
+  FOREIGN KEY (cobranza_id) REFERENCES cobranzas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cheques_descartado_usuario FOREIGN KEY (descartado_por) REFERENCES usuarios(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 ```
 
@@ -184,6 +193,7 @@ CREATE TABLE cheques (
 | `banco`, `numero_cheque`, `cuenta_corriente`, `emitido_a` | Tesorería | Al validar (RECIBIDO_TESORERIA) |
 | `numero_papeleta_deposito` | Tesorería | Al marcar como `DEPOSITADO` |
 | `fecha_deposito_real` | Tesorería | Al marcar como `DEPOSITADO` |
+| `activo`, `descartado_at`, `descartado_por`, `motivo_descarte` | Tesorería | Al descartar cheque durante edición (Zero Delete) |
 
 ---
 
@@ -252,7 +262,10 @@ Cabecera consolidada vinculada obligatoriamente a un presupuesto. Mantiene snaps
 | `monto_maximo_aprobable` | Máximo pagable de esa rendición según saldo ordinario reservado y excepciones aprobadas. |
 | `monto_exceso_no_reembolsable` | Diferencia presentada que queda fuera de pago mientras no exista una excepción aprobada. |
 | `aplico_tope_presupuestario` | Indica que la liquidación fue limitada por el tope del fondo. |
-| `solicitud_excepcion_id` | Solicitud excepcional vigente; su rechazo no rechaza la rendición base. |
+| `solicitud_excepcion_id` | Solicitud excepcional o de aprobación general vinculada; su resolución controla el flujo financiero. |
+| `verificado_tesoreria_at` | Timestamp en que Tesorería verificó documentalmente todos los comprobantes y envió a aprobación responsable. |
+| `verificado_tesoreria_por` | ID de usuario de Tesorería que verificó la rendición (FK a `usuarios(id)`). |
+| `pdf_planilla_url` | Ruta relativa del PDF oficial de la planilla de rendición generado tras la aprobación final. |
 
 Estados válidos:
 
@@ -261,6 +274,7 @@ BORRADOR
 ENVIADA
 PENDIENTE_APROBACION_EXCESO
 EN_REVISION_TESORERIA
+PENDIENTE_APROBACION_RESPONSABLE
 DOCUMENTOS_FISICOS_RECIBIDOS
 APROBADA
 APROBADA_PARCIAL
@@ -274,18 +288,19 @@ Los campos de token anteriores permanecen sólo por compatibilidad. Las solicitu
 
 #### Tabla: `solicitudes_aprobacion`
 
-Entidad transaccional común para `GIRA` y `EXCEPCION_MENSUAL`. Una fila apunta exactamente a `presupuesto_id` o `rendicion_id`, nunca a ambos. Cada nueva autorización incrementa `solicitud_version`; cada reenvío invalida el enlace anterior incrementando `token_version` y rotando el hash SHA-256.
+Entidad transaccional común para `GIRA`, `EXCEPCION_MENSUAL` y `APROBACION_RENDICION`. Una fila apunta exactamente a `presupuesto_id` (`GIRA`) o `rendicion_id` (`EXCEPCION_MENSUAL`, `APROBACION_RENDICION`), con restricción `chk_solicitud_objetivo`. Cada nueva autorización incrementa `solicitud_version`; cada reenvío invalida el enlace anterior incrementando `token_version` y rotando el hash SHA-256.
 
 | Grupo | Campos y regla |
 |-------|----------------|
-| Objetivo | `tipo_solicitud`, `presupuesto_id`, `rendicion_id`, con `CHECK` de exclusividad. |
-| Responsable | `aprobador_id` y snapshots inmutables de nombre, cargo y correo. Sólo uno de los dos responsables resuelve cada versión. |
-| Montos | `monto_base_aprobable` y `monto_solicitado`; una excepción decide exclusivamente sobre el exceso. |
+| Objetivo | `tipo_solicitud` (`GIRA`, `EXCEPCION_MENSUAL`, `APROBACION_RENDICION`), `presupuesto_id`, `rendicion_id`, con `CHECK` de exclusividad. |
+| Responsable | `aprobador_id` y snapshots inmutables de nombre, cargo y correo. Sólo un responsable resuelve cada versión. |
+| Montos | `monto_base_aprobable` y `monto_solicitado`; una excepción decide exclusivamente sobre el exceso; una aprobación general decide sobre el total validado. |
 | Token | 32 bytes aleatorios entregados una vez; BD guarda sólo `token_hash`, vigencia, uso y versión. |
 | Estados | `PENDIENTE_ENVIO`, `PENDIENTE_DECISION`, `ENVIO_FALLIDO`, `VENCIDA`, `APROBADA`, `RECHAZADA`, `CANCELADA`. |
+| Decisión | `decision`: `APROBADA`, `RECHAZADA`, `APROBADA_TOPE`. |
 | Auditoría | Solicitante, decisión, comentarios, correo, cancelación y timestamps; `activo = 0` sólo para cancelación lógica. |
 
-Una decisión de gira habilita o rechaza el fondo, pero no aprueba comprobantes. Aprobar una excepción mensual amplía `monto_maximo_aprobable` sólo por el importe solicitado; rechazarla conserva el tope y la rendición continúa en revisión.
+Una decisión de gira habilita o rechaza el fondo, pero no aprueba comprobantes. Aprobar una excepción mensual amplía `monto_maximo_aprobable` sólo por el importe solicitado; rechazarla conserva el tope y la rendición continúa en revisión. Una aprobación general de rendición (`APROBACION_RENDICION`) aprueba formalmente la liquidación por el responsable.
 
 #### Tabla: `solicitud_aprobacion_historial`
 
@@ -295,7 +310,26 @@ Bitácora append-only del ciclo de la solicitud: creación, resultado de correo,
 
 Un documento con `rendicion_id = NULL` y `estado_item = 'BORRADOR'` pertenece a la bolsa del vendedor. Quitar un documento cambia su estado a `DESCARTADO`, fija `activo = 0` y conserva el registro y la fotografía.
 
-`document_hash CHAR(64) UNIQUE` aplica las reglas:
+Campos de auditoría y corrección administrativa:
+- `numero_documento_original VARCHAR(50) NULL`: Almacena el número de folio digitado originalmente por el vendedor. Se asigna con `COALESCE(numero_documento_original, numero_documento)` en la primera corrección de folio por Tesorería y permanece inalterado en correcciones sucesivas o de monto.
+- `monto_original DECIMAL(12,2) NULL`: Almacena el monto digitado originalmente si Tesorería ajusta el valor en revisión.
+- `editado_por INT NULL`: ID del usuario administrativo que realizó la última corrección (FK a `usuarios(id)`).
+- `editado_at DATETIME NULL`: Timestamp de la última edición administrativa.
+- `motivo_edicion VARCHAR(255) NULL`: Razón justificada de la corrección documental.
+
+La columna generada STORED nullable `document_hash_bloqueante` aplica la regla definitiva contra duplicados:
+```sql
+document_hash_bloqueante CHAR(64) GENERATED ALWAYS AS (
+    CASE
+        WHEN activo = 1 AND estado_item IN ('BORRADOR', 'PENDIENTE', 'APROBADO')
+        THEN document_hash
+        ELSE NULL
+    END
+) STORED
+```
+El índice único `uq_rendicion_document_hash_bloqueante (document_hash_bloqueante)` bloquea el comprobante si está en `BORRADOR` (bolsa activa), `PENDIENTE` (rendición enviada en revisión) o `APROBADO` (rendición aprobada/pagada). Si el ítem está en `RECHAZADO` o `DESCARTADO`, el valor generado es `NULL` y no bloquea, permitiendo que el vendedor vuelva a presentar la boleta en una nueva rendición con un registro independiente. La protección opera cross-vendedor y cross-empresa en todo el holding.
+
+`document_hash` calcula:
 
 ```text
 Documento normal: SHA256(RUT_PROVEEDOR|TIPO_DOCUMENTO|NUMERO_DOCUMENTO)
@@ -307,6 +341,7 @@ Para `CENA_CLIENTE` son obligatorios nombre, RUT, empresa, cargo y propósito co
 #### Tabla: `rendicion_historial_estados`
 
 Bitácora append-only de cabeceras e ítems. Registra actor, acción, estados, comentario, IP, user-agent y metadatos. Todas sus claves foráneas usan `ON DELETE RESTRICT`.
+- Al ejecutar `VALIDAR_DOCUMENTOS`, se registra tanto un evento general de resumen como un evento granular `VALIDAR_DOCUMENTO` por cada comprobante procesado, vinculando `documento_id`, estados anterior y nuevo, montos anterior y nuevo, decisión, motivo y folio (actual y original).
 
 #### Índices críticos
 
@@ -314,10 +349,12 @@ Bitácora append-only de cabeceras e ítems. Registra actor, acción, estados, c
 UNIQUE KEY uq_presupuesto_periodo_clave (periodo_clave);
 UNIQUE KEY uq_rendicion_codigo (codigo_rendicion);
 UNIQUE KEY uq_rendicion_token_hash (token_aprobacion_exceso_hash);
-UNIQUE KEY uq_rendicion_document_hash (document_hash);
+UNIQUE KEY uq_rendicion_document_hash_bloqueante (document_hash_bloqueante);
 UNIQUE KEY uq_solicitud_token_hash (token_hash);
 UNIQUE KEY uq_solicitud_presupuesto_version (tipo_solicitud, presupuesto_id, solicitud_version);
 UNIQUE KEY uq_solicitud_rendicion_version (tipo_solicitud, rendicion_id, solicitud_version);
+KEY idx_rendicion_verificado_por (verificado_tesoreria_por);
+KEY idx_documento_editado_por (editado_por);
 ```
 
 > **Entorno actual:** la migración aditiva `config/migrations/2026_08_28_topes_y_flujo_aprobaciones.sql` está aplicada en Laragon. No modifica datos ERP ni elimina registros; en servidores debe importarse manualmente desde phpMyAdmin antes de desplegar el código de las Fases A–H.
@@ -328,9 +365,46 @@ UNIQUE KEY uq_solicitud_rendicion_version (tipo_solicitud, rendicion_id, solicit
 
 ## 2. Bases de Datos ERP (Solo Lectura)
 
-Cuatro bases de datos independientes con estructuras idénticas correspondientes a las empresas del holding.
+Cuatro bases de datos independientes con estructuras correspondientes a las empresas del holding. Las 4 bases son estrictamente **SOLO LECTURA** (prohibido INSERT, UPDATE, DELETE, ALTER, CREATE, DROP).
 
-### 2.1 Tabla: `tbl_clientes` (Catálogo de Clientes por Empresa)
+### 2.1 Fuentes de Identidad de Vendedores por Empresa
+
+A partir de la migración de identidad, la fuente oficial de vendedores se desacopla mediante adaptadores en `ErpSellerDirectoryService`:
+
+| Empresa | Base de Datos ERP | Tabla Fuente | Campo ID Vendedor | Estado / Adaptador |
+|---------|-------------------|--------------|-------------------|--------------------|
+| Automarco LTDA | `automarc_automarco` | `web_usuarios` | `vend_cod` | `WebUsuariosSellerRepository` (Oficial) |
+| Autotec S.A | `autotec_ecom` | `web_usuarios` | `vend_cod` | `WebUsuariosSellerRepository` (Oficial) |
+| Gabtec S.A | `gabteccl_sitbdd1978` | `web_usuarios` | `vend_cod` | `WebUsuariosSellerRepository` (Oficial) |
+| HD Automarco S.A | `autohd_automarcohd` | `tbl_vendedores` | `cli_vendedor` | `LegacySellerRepository` (Fallback legacy temporal) |
+
+#### Estructura de `web_usuarios`:
+```sql
+CREATE TABLE web_usuarios (
+  id           INT NOT NULL,
+  usuario      VARCHAR(100) NOT NULL,
+  password     VARCHAR(255) NOT NULL, -- NUNCA LEÍDO NI EXPUESTO
+  nombre       VARCHAR(200) DEFAULT NULL,
+  email        VARCHAR(200) DEFAULT NULL,
+  rol          ENUM('admin','vendedor','cliente') DEFAULT 'cliente',
+  activo       TINYINT(1) DEFAULT 1,
+  cli_rut      VARCHAR(20) DEFAULT NULL,
+  cli_sec      VARCHAR(10) DEFAULT NULL,
+  creado_en    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  ultimo_login DATETIME DEFAULT NULL,
+  vend_cod     VARCHAR(20) DEFAULT NULL COMMENT 'Código de vendedor (numérico)'
+);
+```
+
+#### Reglas de Selección para `web_usuarios`:
+1. **Filtro Estricto:** `rol = 'vendedor'` AND `activo = 1` AND `vend_cod IS NOT NULL`.
+2. **Validación Numérica:** `vend_cod` debe ser numérico entero estrictamente positivo (`> 0`).
+3. **Privacidad:** `password` y credenciales nunca se consultan ni retornan.
+4. **Tolerancia de Email NULL:** Vendedores sin correo (ej. 100% de Autotec) se procesan con `vendedor_email = null` sin ser descartados.
+5. **Ambigüedad:** Si existen múltiples usuarios activos con el mismo `vend_cod` en una empresa, la resolución se rechaza arrojando `DomainException`.
+6. **Identidad Operativa:** La clave primaria funcional es `(empresa_id, vend_cod)`.
+
+### 2.2 Tabla: `tbl_clientes` (Catálogo de Clientes por Empresa)
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
@@ -341,19 +415,19 @@ Cuatro bases de datos independientes con estructuras idénticas correspondientes
 | `cli_direccion` | `varchar(200)` | Dirección comercial |
 | `cli_vendedor` | `smallint` | Código del vendedor asociado a este cliente |
 
-### 2.2 Tabla: `tbl_vendedores` (Catálogo de Vendedores por Empresa)
+### 2.3 Tabla Legacy: `tbl_vendedores` (Catálogo de Vendedores por Empresa)
+
+Utilizada exclusivamente por Automarco HD (`autohd_automarcohd`) como integración legacy temporal.
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `cli_vendedor` | `bigint` | PK / Código único local de la empresa |
 | `nombre_vendedor` | `varchar(255)` | Nombre real del vendedor |
-| `ven_mail` | `varchar(255)` | Correo electrónico único del vendedor (Clave de Homologación) |
+| `ven_mail` | `varchar(255)` | Correo electrónico del vendedor (puede ser NULL o vacío) |
 
 > ⚠️ **Manejo de Colisión de IDs de Vendedor Multi-Empresa:**  
-> Como cada ERP tiene sus propios autoincrementales en `tbl_vendedores`, un mismo vendedor puede tener IDs numéricos distintos según la empresa (ej: *Angel Fereira* es ID `25` en Automarco LTDA y es ID `1` en Gabtec S.A).  
-> **Estrategia de Homologación:** El backend utiliza el correo electrónico del vendedor (`ven_mail`) como identificador universal. Al consultar los clientes asignados en `api/get_clientes.php`, el sistema busca el correo de la persona y unifica dinámicamente todos los folios asociados a sus distintos IDs de vendedor en las 4 empresas.
-
-La administración de presupuestos aplica la misma regla mediante `ErpSellerDirectoryService`: la UI nunca permite escribir libremente código, nombre o correo. Al guardar, el backend vuelve a consultar el ERP de la empresa seleccionada y persiste el nombre/correo canónicos junto al `cli_vendedor` local. El directorio holding es sólo una vista homologada por `ven_mail`; `presupuestos_vendedores.vendedor_id` continúa almacenando el código local de la empresa y el esquema no cambia.
+> Como cada ERP tiene sus propios códigos en `web_usuarios` o `tbl_vendedores`, un mismo vendedor puede tener IDs numéricos distintos según la empresa.  
+> **Estrategia de Homologación:** El correo electrónico (`email` / `ven_mail`) ayuda a sugerir asociaciones holding cuando está disponible, pero la identidad operativa primaria es siempre el par `(empresa_id, vend_cod)`. Los vendedores sin correo (ej. Autotec) se manejan con identidad local independiente.
 
 ### 2.3 Tabla: `tbl_ventas_devoluciones` (Historial de Transacciones por Empresa)
 
@@ -494,4 +568,27 @@ php scratch/verify_schema_integrity.php
 3. Valida que la estructura completa de tablas esté formalmente documentada y presente en `config/setup.sql`.
 
 > ⚠️ **Regla de Producción:** Antes de cualquier despliegue o reinicio de esquema, ejecutar `php scratch/verify_schema_integrity.php` para asegurar 100% de coherencia entre el código backend y las tablas creadas.
-```
+
+### 5.3 Inmutabilidad de Cheques Dados de Baja (Zero Delete)
+
+Los cheques marcados con `activo = 0` representan bajas lógicas irrevocables para el flujo ordinario:
+1. **Regla de Consulta y Actualización:** Toda selección o actualización operativa de cheques debe exigir `AND activo = 1` o `AND (activo = 1 OR activo IS NULL)`.
+2. **Prohibiciones para Cheques Inactivos:**
+   - No pueden cambiar de monto, fecha de vencimiento ni fotografía.
+   - No reciben número de papeleta ni fecha de depósito al depositar una cobranza.
+   - No se envían a planillas ni integraciones externas.
+   - No se suman en conteos ni totales activos de cobranzas.
+   - Su fotografía permanece almacenada y referenciada para fines de auditoría legal y financiera hasta su purga cronológica autorizada (>3 meses post-vencimiento).
+3. **Resolución de Identidad de Actor (`descartado_por`):**
+   - El campo `descartado_por` mantiene una clave foránea hacia `usuarios(id)` (`ON DELETE RESTRICT`).
+   - Si la baja es solicitada por un vendedor cuyo código ERP no existe en la tabla central `usuarios`, el sistema asigna el usuario `1` (Sistema) como titular de la FK y añade la identidad ERP original al campo `motivo_descarte` y al historial, preservando la integridad referencial sin crear usuarios ficticios ni debilitar la restricción.
+
+### 5.4 Estado de Migraciones y Protocolo de Producción
+
+- **Las migraciones pendientes todavía no deben ejecutarse en el servidor.**
+- El orden definitivo y la ventana de ejecución en producción se revisarán en una fase posterior una vez validado y aprobado el release.
+- Todas las migraciones en `config/migrations/` han sido certificadas como **100% idempotentes** y cuentan con:
+  - Selección explícita de base de datos (`USE \`bd_modulo_cobranzas\`;`).
+  - Guardas condicionales basadas en `information_schema` que impiden duplicación de columnas, índices, llaves foráneas o restricciones CHECK.
+  - Certificación de doble ejecución consecutiva sin errores en bases de datos temporales controladas.
+

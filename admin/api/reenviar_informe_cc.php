@@ -86,7 +86,7 @@ try {
         
         $cheques = $cobranza['cheques_filtrados'] ?? [];
         if (empty($cheques)) {
-            $stmtChq = $pdo->prepare("SELECT numero_cheque, banco, monto AS monto_cheque, fecha_vencimiento FROM cheques WHERE cobranza_id = :cobranza_id");
+            $stmtChq = $pdo->prepare("SELECT numero_cheque, banco, monto AS monto_cheque, fecha_vencimiento FROM cheques WHERE cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)");
             $stmtChq->execute([':cobranza_id' => $cobranza['id']]);
             $cheques = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
         }

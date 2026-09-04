@@ -154,8 +154,8 @@ try {
     // Agrupar cobranzas y cheques según la empresa de emisión real del cheque (emitido_a)
     $agrupado = [];
     foreach ($cobranzasHoy as $c) {
-        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = ?");
-        $stmtCheques->execute([$c['id']]);
+        $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)");
+        $stmtCheques->execute([':cobranza_id' => $c['id']]);
         $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($cheques)) {
@@ -213,12 +213,12 @@ try {
         $stmtCheck = $pdo->prepare("
             SELECT COUNT(*) 
             FROM log_envios_informes 
-            WHERE empresa_id = ? 
+            WHERE empresa_id = :empresa_id 
             AND tipo_informe = 'RESUMEN_DIARIO_16HRS' 
             AND estado_envio = 'ENVIADO' 
             AND DATE(fecha_envio) = CURDATE()
         ");
-        $stmtCheck->execute([$empId]);
+        $stmtCheck->execute([':empresa_id' => $empId]);
         if ($stmtCheck->fetchColumn() > 0) {
             logDespacho("Resumen de hoy ya fue enviado con éxito para {$data['nombre']}. Omitiendo duplicados.");
             continue;
@@ -236,20 +236,29 @@ try {
         $stmtLog = $pdo->prepare("
             INSERT INTO log_envios_informes 
             (empresa_id, tipo_informe, destinatario, copia_cc, asunto, estado_envio, error_mensaje, cantidad_cobranzas)
-            VALUES (?, 'RESUMEN_DIARIO_16HRS', ?, ?, ?, ?, ?, ?)
+            VALUES (:empresa_id, 'RESUMEN_DIARIO_16HRS', :destinatario, :copia_cc, :asunto, :estado_envio, :error_mensaje, :cantidad_cobranzas)
         ");
         $stmtLog->execute([
-            $empId, $destinatario, $ccEmail, $asunto, $estado, $errorMensaje, $totalCobranzas
+            ':empresa_id' => $empId,
+            ':destinatario' => $destinatario,
+            ':copia_cc' => $ccEmail,
+            ':asunto' => $asunto,
+            ':estado_envio' => $estado,
+            ':error_mensaje' => $errorMensaje,
+            ':cantidad_cobranzas' => $totalCobranzas
         ]);
 
         // Si el envío fue exitoso, actualizar estado final a DEPOSITADO e insertar historial de auditoría
         if ($enviado) {
-            $stmtUpd = $pdo->prepare("UPDATE cobranzas SET estado = 'DEPOSITADO', updated_at = NOW() WHERE id = ?");
-            $stmtHist = $pdo->prepare("INSERT INTO historial_estados (cobranza_id, usuario_id, estado_anterior, estado_nuevo, comentario) VALUES (?, 1, 'RECIBIDO_TESORERIA', 'DEPOSITADO', ?)");
+            $stmtUpd = $pdo->prepare("UPDATE cobranzas SET estado = 'DEPOSITADO', updated_at = NOW() WHERE id = :id");
+            $stmtHist = $pdo->prepare("INSERT INTO historial_estados (cobranza_id, usuario_id, estado_anterior, estado_nuevo, comentario) VALUES (:cobranza_id, 1, 'RECIBIDO_TESORERIA', 'DEPOSITADO', :comentario)");
 
             foreach ($data['cobranzas'] as $cobranzaItem) {
-                $stmtUpd->execute([$cobranzaItem['id']]);
-                $stmtHist->execute([$cobranzaItem['id'], 'Liberado por Cron Cuentas Corrientes y despachado a digitadora para ingreso en Optimus ERP']);
+                $stmtUpd->execute([':id' => $cobranzaItem['id']]);
+                $stmtHist->execute([
+                    ':cobranza_id' => $cobranzaItem['id'],
+                    ':comentario' => 'Liberado por Cron Cuentas Corrientes y despachado a digitadora para ingreso en Optimus ERP'
+                ]);
             }
         }
 

@@ -41,7 +41,7 @@ try {
     // 1. Bloquear documento
     $stmtDoc = $pdo->prepare(
         'SELECT id, rendicion_id, vendedor_id, empresa_id, tipo_documento, categoria_gasto,
-                rut_proveedor, numero_documento, fecha_emision, monto, monto_original, estado_item
+                rut_proveedor, numero_documento, numero_documento_original, fecha_emision, monto, monto_original, estado_item
          FROM rendicion_documentos
          WHERE id = :id AND activo = 1
          LIMIT 1 FOR UPDATE'
@@ -58,7 +58,8 @@ try {
     // 2. Bloquear rendición
     $stmtRendition = $pdo->prepare(
         'SELECT id, estado, presupuesto_id, saldo_disponible_al_enviar,
-                monto_presupuesto_asignado, aplico_tope_presupuestario
+                monto_presupuesto_asignado, aplico_tope_presupuestario,
+                monto_total_rendido, monto_maximo_aprobable, monto_exceso, monto_exceso_no_reembolsable
          FROM rendiciones_gastos
          WHERE id = :id AND activo = 1
          LIMIT 1 FOR UPDATE'
@@ -74,10 +75,24 @@ try {
         throw new DomainException('Sólo se pueden corregir montos mientras la rendición esté en revisión de Tesorería.');
     }
 
+    // 3. Bloquear presupuesto
+    $budgetId = (int)$rendition['presupuesto_id'];
+    $stmtBudgetLock = $pdo->prepare(
+        'SELECT id, monto_asignado, monto_utilizado
+         FROM presupuestos_vendedores
+         WHERE id = :id AND activo = 1
+         LIMIT 1 FOR UPDATE'
+    );
+    $stmtBudgetLock->execute([':id' => $budgetId]);
+    $budget = $stmtBudgetLock->fetch(PDO::FETCH_ASSOC);
+    if (!$budget) {
+        throw new DomainException('Presupuesto vinculado no encontrado.');
+    }
+
     $diff = $newAmount - $oldAmount;
     $originalSaved = $doc['monto_original'] !== null ? (float)$doc['monto_original'] : $oldAmount;
 
-    // 3. Determinar número de documento definitivo y recalcular hash
+    // 4. Determinar número de documento definitivo y recalcular hash
     $isToll = $doc['tipo_documento'] === 'PEAJE' || $doc['categoria_gasto'] === 'PEAJES';
     $effectiveNumber = $isToll ? null : ($newNumber ?? (string)$doc['numero_documento']);
 
@@ -93,91 +108,127 @@ try {
         $newDocHash = hash('sha256', "{$rut}|{$type}|{$num}");
     }
 
-    // Verificar que el nuevo hash no colisione con OTRO comprobante (de otro vendedor u otra rendición)
+    // Verificar que el nuevo hash no colisione con un comprobante en estado bloqueante (BORRADOR, PENDIENTE, APROBADO)
     $stmtHashCheck = $pdo->prepare(
-        'SELECT id FROM rendicion_documentos WHERE document_hash = :hash AND id != :self AND activo = 1 LIMIT 1'
+        'SELECT id FROM rendicion_documentos
+         WHERE document_hash = :hash
+           AND id != :self
+           AND activo = 1
+           AND estado_item IN ("BORRADOR", "PENDIENTE", "APROBADO")
+         LIMIT 1'
     );
     $stmtHashCheck->execute([':hash' => $newDocHash, ':self' => $documentId]);
     if ($stmtHashCheck->fetchColumn()) {
-        throw new DomainException('El número de documento corregido ya existe en otro comprobante registrado. No se puede duplicar.');
+        throw new DomainException('El número de documento corregido ya está registrado en una rendición activa, aprobada o pendiente.');
     }
 
-    $updateNumberSql = $newNumber !== null ? ', numero_documento = :nuevo_numero' : '';
+    // Determinar el valor definitivo de numero_documento_original
+    if ($doc['numero_documento_original'] !== null) {
+        $originalFolio = (string)$doc['numero_documento_original'];
+    } elseif ($newNumber !== null && $newNumber !== (string)$doc['numero_documento']) {
+        $originalFolio = (string)$doc['numero_documento'];
+    } else {
+        $originalFolio = null;
+    }
 
-    $paramsDoc = [
-        ':nuevo_monto'  => number_format($newAmount, 2, '.', ''),
-        ':monto_orig'   => number_format($originalSaved, 2, '.', ''),
-        ':admin_id'     => (int)$admin['id'],
-        ':motivo'       => RendicionesService::truncateText($reason, 255),
-        ':new_hash'     => $newDocHash,
-        ':id'           => $documentId,
-    ];
+    // Sentencias preparadas estáticas sin interpolación de cadenas SQL
     if ($newNumber !== null) {
-        $paramsDoc[':nuevo_numero'] = $effectiveNumber;
+        $stmtUpdateDocWithNumber = $pdo->prepare(
+            'UPDATE rendicion_documentos
+             SET monto                     = :nuevo_monto,
+                 monto_original            = :monto_orig,
+                 numero_documento_original = COALESCE(numero_documento_original, numero_documento),
+                 editado_por               = :admin_id,
+                 editado_at                = NOW(),
+                 motivo_edicion            = :motivo,
+                 document_hash             = :new_hash,
+                 numero_documento          = :nuevo_numero
+             WHERE id = :id'
+        );
+        $stmtUpdateDocWithNumber->execute([
+            ':nuevo_monto'  => number_format($newAmount, 2, '.', ''),
+            ':monto_orig'   => number_format($originalSaved, 2, '.', ''),
+            ':admin_id'     => (int)$admin['id'],
+            ':motivo'       => RendicionesService::truncateText($reason, 255),
+            ':new_hash'     => $newDocHash,
+            ':nuevo_numero' => $effectiveNumber,
+            ':id'           => $documentId,
+        ]);
+    } else {
+        $stmtUpdateDocWithoutNumber = $pdo->prepare(
+            'UPDATE rendicion_documentos
+             SET monto           = :nuevo_monto,
+                 monto_original  = :monto_orig,
+                 editado_por     = :admin_id,
+                 editado_at      = NOW(),
+                 motivo_edicion  = :motivo,
+                 document_hash   = :new_hash
+             WHERE id = :id'
+        );
+        $stmtUpdateDocWithoutNumber->execute([
+            ':nuevo_monto'  => number_format($newAmount, 2, '.', ''),
+            ':monto_orig'   => number_format($originalSaved, 2, '.', ''),
+            ':admin_id'     => (int)$admin['id'],
+            ':motivo'       => RendicionesService::truncateText($reason, 255),
+            ':new_hash'     => $newDocHash,
+            ':id'           => $documentId,
+        ]);
     }
 
-    $stmtUpdateDoc = $pdo->prepare(
-        "UPDATE rendicion_documentos
-         SET monto           = :nuevo_monto,
-             monto_original  = :monto_orig,
-             editado_por     = :admin_id,
-             editado_at      = NOW(),
-             motivo_edicion  = :motivo,
-             document_hash   = :new_hash
-             {$updateNumberSql}
-         WHERE id = :id"
-    );
-    $stmtUpdateDoc->execute($paramsDoc);
-
-    // 4. Recalcular totales de la rendición
+    // 5. Recalcular total rendido a partir de la suma real de todos los comprobantes activos
     $stmtSum = $pdo->prepare(
-        'SELECT COALESCE(SUM(monto), 0) FROM rendicion_documentos WHERE rendicion_id = :id AND activo = 1'
+        'SELECT COALESCE(SUM(monto), 0)
+         FROM rendicion_documentos
+         WHERE rendicion_id = :id AND activo = 1'
     );
     $stmtSum->execute([':id' => $renditionId]);
     $newTotalRendido = (float)$stmtSum->fetchColumn();
 
-    $saldoAlEnviar = (float)($rendition['saldo_disponible_al_enviar'] ?? 0);
-    $aplicoTope = (bool)($rendition['aplico_tope_presupuestario'] ?? false);
+    $saldoAlEnviar   = (float)$rendition['saldo_disponible_al_enviar'];
+    $saldoBase       = max(0.0, $saldoAlEnviar);
 
-    if ($aplicoTope) {
-        $newMaxAprobable = min($newTotalRendido, max(0.0, $saldoAlEnviar));
-        $newExcesoNoReemb = max(0.0, $newTotalRendido - $newMaxAprobable);
-    } else {
-        $newMaxAprobable = $newTotalRendido;
-        $newExcesoNoReemb = 0.0;
-    }
-    $newExceso = max(0.0, $newTotalRendido - $saldoAlEnviar);
+    $reservaAnterior = (float)$rendition['monto_maximo_aprobable'];
+    $reservaNueva    = min($newTotalRendido, $saldoBase);
+    $ajusteReserva   = $reservaNueva - $reservaAnterior;
 
-    $stmtUpdateRendition = $pdo->prepare(
+    $newExceso       = max(0.0, $newTotalRendido - $saldoAlEnviar);
+    $newExcesoNoReemb= $newExceso;
+    $newAplicoTope   = ($newExceso > 0.00) ? 1 : 0;
+    $newMaxAprobable = $reservaNueva;
+
+    // 6. Actualizar cabecera de la rendición
+    $stmtUpdateRend = $pdo->prepare(
         'UPDATE rendiciones_gastos
-         SET monto_total_rendido = :total,
-             monto_maximo_aprobable = :max_apr,
-             monto_exceso = :exceso,
-             monto_exceso_no_reembolsable = :exceso_no_reemb
+         SET monto_total_rendido          = :monto_rendido,
+             monto_maximo_aprobable       = :max_apr,
+             monto_exceso                 = :exceso,
+             monto_exceso_no_reembolsable = :exceso_no_reemb,
+             aplico_tope_presupuestario   = :aplico_tope
          WHERE id = :id'
     );
-    $stmtUpdateRendition->execute([
-        ':total' => number_format($newTotalRendido, 2, '.', ''),
-        ':max_apr' => number_format($newMaxAprobable, 2, '.', ''),
-        ':exceso' => number_format($newExceso, 2, '.', ''),
-        ':exceso_no_reemb' => number_format($newExcesoNoReemb, 2, '.', ''),
-        ':id' => $renditionId,
+    $stmtUpdateRend->execute([
+        ':monto_rendido'  => number_format($newTotalRendido, 2, '.', ''),
+        ':max_apr'        => number_format($newMaxAprobable, 2, '.', ''),
+        ':exceso'         => number_format($newExceso, 2, '.', ''),
+        ':exceso_no_reemb'=> number_format($newExcesoNoReemb, 2, '.', ''),
+        ':aplico_tope'    => $newAplicoTope,
+        ':id'             => $renditionId,
     ]);
 
-    // 5. Ajustar reserva en presupuestos_vendedores si hubo diferencia
-    if (abs($diff) > 0.001) {
-        $stmtBudget = $pdo->prepare(
+    // Actualizar presupuesto si varió la reserva presupuestaria (monto_maximo_aprobable)
+    if (abs($ajusteReserva) > 0.001) {
+        $stmtBudgetUpdate = $pdo->prepare(
             'UPDATE presupuestos_vendedores
-             SET monto_utilizado = GREATEST(0, monto_utilizado + :diff)
+             SET monto_utilizado = GREATEST(0, monto_utilizado + :ajuste)
              WHERE id = :id'
         );
-        $stmtBudget->execute([
-            ':diff' => number_format($diff, 2, '.', ''),
-            ':id' => (int)$rendition['presupuesto_id'],
+        $stmtBudgetUpdate->execute([
+            ':ajuste' => number_format($ajusteReserva, 2, '.', ''),
+            ':id'     => $budgetId,
         ]);
     }
 
-    // 6. Auditoría y trazabilidad
+    // 7. Auditoría y trazabilidad
     $oldNumber   = (string)$doc['numero_documento'];
     $commentParts = [];
     if (abs($diff) > 0.001) {
@@ -200,23 +251,34 @@ try {
         'estado_nuevo'   => $rendition['estado'],
         'comentario'     => implode('. ', $commentParts),
         'metadata' => [
-            'documento_id'          => $documentId,
-            'monto_anterior'        => $oldAmount,
-            'monto_nuevo'           => $newAmount,
-            'monto_original_digitado' => $originalSaved,
-            'numero_anterior'       => $oldNumber,
-            'numero_nuevo'          => $effectiveNumber,
-            'nuevo_total_rendicion' => $newTotalRendido,
+            'documento_id'              => $documentId,
+            'monto_anterior'            => $oldAmount,
+            'monto_nuevo'               => $newAmount,
+            'monto_original_digitado'   => $originalSaved,
+            'numero_anterior'           => $oldNumber,
+            'numero_nuevo'              => $effectiveNumber,
+            'numero_documento_original' => $originalFolio,
+            'total_rendido_anterior'    => (float)$rendition['monto_total_rendido'],
+            'nuevo_total_rendicion'     => $newTotalRendido,
+            'reserva_anterior'          => $reservaAnterior,
+            'reserva_nueva'             => $reservaNueva,
+            'ajuste_reserva'            => $ajusteReserva,
+            'aplico_tope_anterior'      => (int)$rendition['aplico_tope_presupuestario'],
+            'nuevo_aplico_tope'         => $newAplicoTope,
         ],
     ]);
 
     AuditService::log($pdo, (int)$admin['id'], $admin['email'], 'RENDICION_CORREGIR_DOCUMENTO', json_encode([
-        'rendicion_id'    => $renditionId,
-        'documento_id'    => $documentId,
-        'monto_anterior'  => $oldAmount,
-        'monto_nuevo'     => $newAmount,
-        'numero_anterior' => $oldNumber,
-        'numero_nuevo'    => $effectiveNumber,
+        'rendicion_id'              => $renditionId,
+        'documento_id'              => $documentId,
+        'monto_anterior'            => $oldAmount,
+        'monto_nuevo'               => $newAmount,
+        'numero_anterior'           => $oldNumber,
+        'numero_nuevo'              => $effectiveNumber,
+        'numero_documento_original' => $originalFolio,
+        'reserva_anterior'          => $reservaAnterior,
+        'reserva_nueva'             => $reservaNueva,
+        'ajuste_reserva'            => $ajusteReserva,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
     $pdo->commit();
@@ -224,13 +286,15 @@ try {
     RendicionesService::jsonResponse(true, [
         'message' => 'Comprobante corregido exitosamente.',
         'data' => [
-            'documento_id'          => $documentId,
-            'monto_nuevo'           => $newAmount,
-            'monto_original'        => $originalSaved,
-            'numero_documento'      => $effectiveNumber,
-            'nuevo_total_rendido'   => $newTotalRendido,
-            'nuevo_maximo_aprobable'=> $newMaxAprobable,
-            'nuevo_exceso'          => $newExceso,
+            'documento_id'              => $documentId,
+            'monto_nuevo'               => $newAmount,
+            'monto_original'            => $originalSaved,
+            'numero_documento'          => $effectiveNumber,
+            'numero_documento_original' => $originalFolio,
+            'nuevo_total_rendido'       => $newTotalRendido,
+            'nuevo_maximo_aprobable'    => $newMaxAprobable,
+            'nuevo_exceso'              => $newExceso,
+            'aplico_tope'               => (bool)$newAplicoTope,
         ],
     ]);
 } catch (InvalidArgumentException $exception) {
@@ -241,6 +305,9 @@ try {
     RendicionesService::jsonResponse(false, ['message' => $exception->getMessage()], 409);
 } catch (Throwable $exception) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
+    if (RendicionesService::isDuplicateKey($exception)) {
+        RendicionesService::jsonResponse(false, ['message' => 'El número de documento corregido ya está registrado en una rendición activa, aprobada o pendiente.'], 409);
+    }
     error_log('[admin.rendiciones.corregir_documento] ' . $exception->getMessage());
     RendicionesService::jsonResponse(false, ['message' => 'No fue posible corregir el monto del comprobante.'], 500);
 }

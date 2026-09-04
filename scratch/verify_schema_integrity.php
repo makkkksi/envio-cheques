@@ -82,11 +82,11 @@ try {
             echo "   [OK] Tabla '{$table}' (Usada en: {$uniqueFiles}) — OK en BD y setup.sql\n";
         } else {
             if (!$inDb) {
-                echo "   [❌ ERROR] Tabla '{$table}' NO existe en la BD activa. (Usada en: {$uniqueFiles})\n";
+                echo "   [ERROR] Tabla '{$table}' NO existe en la BD activa. (Usada en: {$uniqueFiles})\n";
                 $missingInDb[] = $table;
             }
             if (!$inSetup) {
-                echo "   [⚠️ ALERTA] Tabla '{$table}' NO está definida en setup.sql. (Usada en: {$uniqueFiles})\n";
+                echo "   [ALERTA] Tabla '{$table}' NO está definida en setup.sql. (Usada en: {$uniqueFiles})\n";
                 $missingInSetup[] = $table;
             }
         }
@@ -94,11 +94,14 @@ try {
 
     echo "\n=== RESUMEN DE INTEGRIDAD ===\n";
     if (empty($missingInDb) && empty($missingInSetup)) {
-        echo "✅ INTEGRIDAD 100% GARANTIZADA: Todas las tablas usadas en código existen en la BD y en setup.sql.\n";
+        echo "[OK] Cobertura de tablas verificada: Todas las tablas referenciadas en código existen en la BD y en setup.sql.\n\n";
     } else {
-        echo "❌ ATENCIÓN: Se detectaron inconsistencias que deben corregirse antes de pasar a Producción.\n";
+        echo "[ERROR] ATENCIÓN: Se detectaron inconsistencias que deben corregirse antes de pasar a Producción.\n\n";
     }
 
+    // 4. Ejecución de prueba de instalación limpia y detección de drift
+    require_once __DIR__ . '/test_clean_setup.php';
+
 } catch (Exception $e) {
-    echo "❌ Error al verificar esquema: " . $e->getMessage() . "\n";
+    echo "[ERROR] Error al verificar esquema: " . $e->getMessage() . "\n";
 }

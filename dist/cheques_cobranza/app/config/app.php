@@ -73,6 +73,12 @@ define('MAIL_USER', getenv('MAIL_USER') ?: 'envio@holdingautomarco.com');
 define('MAIL_PASS', getenv('MAIL_PASS') ?: 'seba_.161214');
 define('MAIL_FROM', getenv('MAIL_FROM') ?: 'envio@holdingautomarco.com');
 
+// Política de Notificaciones por Correo a Vendedores (P0)
+// Por decisión de negocio, el sistema no debe enviar correos a vendedores bajo ninguna circunstancia,
+// ni en local ni en producción. Los correos a aprobadores, Tesorería y áreas administrativas
+// continúan habilitados en producción.
+define('MAIL_SELLER_NOTIFICATIONS_ENABLED', filter_var(getenv('MAIL_SELLER_NOTIFICATIONS_ENABLED') ?: false, FILTER_VALIDATE_BOOLEAN));
+
 // La configuración de Despacho Automático ahora se controla desde el Panel (BD)
 define('CRON_SECRET_KEY', getenv('CRON_SECRET_KEY') ?: 'cobranzas_cron_secret_2026');
 

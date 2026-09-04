@@ -306,37 +306,54 @@ function showToast(msg,type='') {
   setTimeout(()=>t.classList.remove('show'),3000);
 }
 
-function irARecaudacionCheques() {
-  const filtroEmp = document.getElementById('filtEmpresa').value;
-  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
-
-  if (!currentVendCod) {
-    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
+function enviarHandoffSeguro(destino) {
+  const token = authToken || localStorage.getItem('at_token') || '';
+  if (!token) {
+    showToast('No se detectó un token de sesión comercial válido', 'error');
     return;
   }
+  const filtroEmp = document.getElementById('filtEmpresa') ? document.getElementById('filtEmpresa').value : '';
+  const empresaFinal = filtroEmp || currentEmpresaCod || (typeof detectarEmpresaPorHost === 'function' ? detectarEmpresaPorHost() : 'EMP03');
+
   const host = window.location.hostname;
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
-  const baseUrl = isLocal
-    ? `${window.location.origin}/form/index.html`
-    : `https://www.autotec.cl/cobranza_cheques/app/index.html`;
-  const urlDestino = `${baseUrl}?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
-  window.location.href = urlDestino;
+  const handoffUrl = isLocal
+    ? `${window.location.origin}/form/api/seller_handoff.php`
+    : `https://www.autotec.cl/cobranza_cheques/app/api/seller_handoff.php`;
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = handoffUrl;
+  form.style.display = 'none';
+
+  const inputToken = document.createElement('input');
+  inputToken.type = 'hidden';
+  inputToken.name = 'session_token';
+  inputToken.value = token;
+  form.appendChild(inputToken);
+
+  const inputEmpresa = document.createElement('input');
+  inputEmpresa.type = 'hidden';
+  inputEmpresa.name = 'empresa';
+  inputEmpresa.value = empresaFinal;
+  form.appendChild(inputEmpresa);
+
+  const inputDestino = document.createElement('input');
+  inputDestino.type = 'hidden';
+  inputDestino.name = 'destino';
+  inputDestino.value = destino;
+  form.appendChild(inputDestino);
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function irARecaudacionCheques() {
+  enviarHandoffSeguro('cheques');
 }
 
 function irARendicionGastos() {
-  const filtroEmp = document.getElementById('filtEmpresa').value;
-  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
-  if (!currentVendCod) {
-    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
-    return;
-  }
-  const host = window.location.hostname;
-  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
-  const baseUrl = isLocal
-    ? `${window.location.origin}/form/rendiciones/vendedor.php`
-    : `https://www.autotec.cl/cobranza_cheques/app/rendiciones/vendedor.php`;
-  const urlDestino = `${baseUrl}?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
-  window.location.href = urlDestino;
+  enviarHandoffSeguro('rendiciones');
 }
 </script>
 </body>

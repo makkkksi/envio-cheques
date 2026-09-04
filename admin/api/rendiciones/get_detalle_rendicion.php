@@ -36,7 +36,7 @@ try {
 
     $stmtDocuments = $pdo->prepare(
         'SELECT id, tipo_documento, categoria_gasto, rut_proveedor,
-                razon_social_proveedor, numero_documento, fecha_emision,
+                razon_social_proveedor, numero_documento, numero_documento_original, fecha_emision,
                 monto, monto_original, monto_validado, editado_por, editado_at,
                 motivo_edicion, descripcion, foto_documento_url,
                 cliente_invitado_nombre, cliente_invitado_rut,

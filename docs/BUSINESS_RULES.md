@@ -247,20 +247,28 @@ Para priorizar la operatividad del vendedor, la vista de seguimiento está divid
 
 - La identidad del vendedor es `(empresa_id, vendedor_id ERP)` y siempre proviene de sesión.
 - Un documento sólo puede consolidarse si pertenece a esa identidad, está activo, en `BORRADOR` y sin `rendicion_id`.
-- Quitar un borrador cambia su estado a `DESCARTADO`; no elimina el registro ni libera su `document_hash` para reutilización.
+- Quitar un borrador cambia su estado a `DESCARTADO`, fija `activo = 0` y no elimina físicamente el registro (Zero Delete). Al quedar en `DESCARTADO`, no bloquea y permite que el vendedor vuelva a cargarlo si corresponde.
 
-### 9.2 Antifraude
+### 9.2 Antifraude y Reutilización Controlada
 
-- Documento normal: `SHA256(RUT_NORMALIZADO|TIPO_DOCUMENTO|FOLIO_NORMALIZADO)`.
+- Documento normal: `SHA256(RUT_NORMALIZADO|TIPO_DOCUMENTO|FOLIO_NORMALIZADO)`. No incluye `vendedor_id` ni `empresa_id` para impedir que la misma boleta se presente por otra persona o empresa del holding mientras esté bloqueada.
 - Peaje: `SHA256(PEAJE|FECHA|MONTO|VENDEDOR_ID|EMPRESA_ID)`.
-- El índice único bloquea duplicados incluso si el registro histórico fue descartado o rechazado.
+- **Regla definitiva de duplicados:**
+  - `BORRADOR`: Bloquea el mismo comprobante para que no aparezca dos veces en la bolsa activa.
+  - `PENDIENTE`: Bloquea el mismo comprobante porque ya pertenece a una rendición enviada en revisión.
+  - `APROBADO`: Bloquea permanentemente el comprobante (incluso si la rendición transiciona a `PAGADA`).
+  - `RECHAZADO`: No bloquea. El vendedor puede volver a presentar esa boleta en una nueva rendición con un nuevo registro independiente.
+  - `DESCARTADO`: No bloquea. El vendedor puede volver a cargarla.
+  - Los registros históricos rechazados o descartados permanecen intactos asociados a su rendición original sin modificación ni reactivación (Zero Delete).
+  - La unicidad contra condiciones de carrera se garantiza mediante la columna generada STORED `document_hash_bloqueante` y el índice único `uq_rendicion_document_hash_bloqueante`.
 
 ### 9.3 Presupuestos
 
 - `monto_utilizado` representa fondos comprometidos, no solamente pagados.
 - En la vista del vendedor, el compromiso se desglosa en monto aprobado y monto pendiente de Tesorería. Ambos reducen el saldo disponible para impedir que un fondo pendiente se impute dos veces.
-- La consolidación usa `SELECT ... FOR UPDATE`; dos solicitudes concurrentes no pueden consumir el mismo saldo sin detectar el exceso.
-- Un rechazo total libera el monto comprometido. Una aprobación parcial libera la diferencia entre el total rendido y el aprobado.
+- La consolidación y edición usan `SELECT ... FOR UPDATE`; dos solicitudes o correcciones concurrentes no pueden desajustar el presupuesto.
+- **Ajuste por edición de comprobantes:** Al corregir montos de documentos en revisión (`corregir_documento.php`), el ajuste al presupuesto se calcula estrictamente como la diferencia entre la reserva nueva y la reserva anterior (`reserva_nueva - reserva_anterior`), donde `reserva = min(total_rendido, saldo_disponible_al_enviar)`. Nunca se aplica la diferencia bruta del comprobante.
+- **Liberación en rechazo:** Al rechazar una rendición (gerencial o por Tesorería), se libera siempre exactamente `monto_maximo_aprobable` (la reserva comprometida real de la rendición), descontando con `GREATEST(0, monto_utilizado - :monto)`.
 - No se puede desactivar un presupuesto con fondos comprometidos ni reducirlo por debajo de ese monto.
 - Los fondos de una gira nunca se descuentan del presupuesto mensual.
 - En una gira, `periodo_mes` se deriva de `fecha_inicio`; la fecha de término no puede ser anterior al inicio.
@@ -268,17 +276,24 @@ Para priorizar la operatividad del vendedor, la vista de seguimiento está divid
 - El exceso de una gira se calcula contra el saldo de esa gira y se identifica como tal en vendedor, Tesorería, correo y resolución gerencial.
 - La analítica de giras se consolida únicamente por tipo `GIRA`; los nombres operativos ingresados por usuarios no se usan como dimensión del Dashboard.
 
-### 9.4 Estados permitidos
+### 9.4 Estados permitidos y Aprobación Obligatoria
 
 ```text
 ENVIADA → PENDIENTE_APROBACION_EXCESO | EN_REVISION_TESORERIA
 PENDIENTE_APROBACION_EXCESO → EN_REVISION_TESORERIA | RECHAZADA
-EN_REVISION_TESORERIA → DOCUMENTOS_FISICOS_RECIBIDOS | RECHAZADA
-DOCUMENTOS_FISICOS_RECIBIDOS → APROBADA | APROBADA_PARCIAL | RECHAZADA
-APROBADA | APROBADA_PARCIAL → PAGADA
+EN_REVISION_TESORERIA → PENDIENTE_APROBACION_RESPONSABLE | RECHAZADA
+PENDIENTE_APROBACION_RESPONSABLE → APROBADA | RECHAZADA | EN_REVISION_TESORERIA (cancelación/reapertura)
+APROBADA → PAGADA
+
+Compatibilidad histórica exclusivamente (no alcanzables por nuevas rendiciones):
+DOCUMENTOS_FISICOS_RECIBIDOS → PENDIENTE_APROBACION_RESPONSABLE | RECHAZADA
+APROBADA_PARCIAL → PAGADA
 ```
 
-No se admiten regresiones desde estados finales ni estados arbitrarios enviados por el frontend.
+- **Aprobación Gerencial Obligatoria:** Tesorería no puede aprobar rendiciones directamente ni generar transiciones a `APROBADA` o `APROBADA_PARCIAL` desde su panel (acciones bloqueadas con HTTP 409). La transición a `APROBADA` sólo puede ocurrir mediante la decisión gerencial en `ApprovalWorkflowService::resolveByToken()` con token Magic Link.
+- **Validación documental sin aprobación de cabecera:** La acción de Tesorería para revisión de comprobantes es `VALIDAR_DOCUMENTOS`, la cual actualiza montos validados de ítems, recalcula en la misma transacción el total validado, máximo aprobable, exceso y ajuste presupuestario, manteniendo siempre la cabecera en `EN_REVISION_TESORERIA`.
+- **Ruta Canónica de `VERIFICAR_Y_ENVIAR`:** No modifica comprobantes ni presupuesto. Si recibe el campo `decisiones`, rechaza la solicitud con HTTP 422. Exige estrictamente que cada comprobante activo se encuentre en estado `APROBADO` o `RECHAZADO` (bloquea con `DomainException` si existe algún ítem en `PENDIENTE`, `BORRADOR`, `DESCARTADO` o desconocido), que exista al menos un comprobante aprobado y que el total validado sea mayor a cero. No contiene fallbacks que sustituyan totales validados de cero por el monto rendido.
+- No se admiten regresiones desde estados finales ni estados arbitrarios enviados por el frontend.
 
 ### 9.5 Magic Token
 
@@ -289,16 +304,18 @@ No se admiten regresiones desde estados finales ni estados arbitrarios enviados 
 - La mutación ocurre mediante `POST` después de una confirmación humana; un `GET` del correo nunca consume el token.
 - El primer uso se registra atómicamente. Los usos posteriores son rechazados.
 - Cada reenvío rota el token anterior. Rechazar exige un motivo y aprobar permite un comentario opcional.
-- Antes de escalar a Jefatura, Tesorería puede rechazar una rendición con exceso por error operativo del vendedor. El rechazo exige motivo, libera todo el monto comprometido, no envía correo y deja inutilizable cualquier enlace que hubiese sido emitido previamente.
+- **Aprobación hasta el tope (`APROBADA_TOPE`):** Se aprueba la rendición liquidando hasta `monto_maximo_aprobable`. Antes de consumir el token, se valida estrictamente que `monto_maximo_aprobable > 0`, `totalDocsAprobados > 0` y `cappedAmount > 0`; si cualquiera falla, lanza `DomainException` y **NO se consume el token** (`token_usado_at` permanece nulo, solicitud en `PENDIENTE_DECISION`). El monto aprobado se calcula como el menor valor entre el máximo aprobable, el total vigente de documentos aprobados y el total rendido: `$cappedAmount = min($maxAprobable, $totalDocsAprobados, $totalRendido)`. El exceso queda marcado como no reembolsable en `monto_exceso_no_reembolsable` y la auditoría se registra como `APROBAR_SOLICITUD_HASTA_TOPE`. El presupuesto no se desajusta.
+- Antes de escalar a Jefatura, Tesorería puede rechazar una rendición con exceso por error operativo del vendedor. El rechazo exige motivo, libera todo el monto comprometido, no envía correo y cancela la solicitud vinculada.
 - Tras resolver, la página pública elimina comentario y acciones y presenta una confirmación final inequívoca.
 - Una aprobación habilita un comprobante PDF de exceso con fecha, documentos, código de verificación y firma electrónica textual basada en el snapshot de nombre y cargo. El comprobante no acredita pago ni sustituye la revisión final de Tesorería.
 
-### 9.6 Revisión parcial
+### 9.6 Validación y rechazo documental por Tesorería
 
-- Tesorería debe resolver todos los documentos del lote.
-- Cada rechazo requiere motivo.
-- `monto_validado` puede reducir el monto declarado, pero no aumentarlo sin una nueva aprobación formal de exceso.
-- Cada decisión genera una entrada individual y una transición de cabecera en `rendicion_historial_estados`.
+- **Validación de comprobantes (`VALIDAR_DOCUMENTOS`):** Tesorería revisa comprobantes mediante la acción canónica `VALIDAR_DOCUMENTOS`. Acepta exclusivamente las decisiones `APROBAR` o `RECHAZAR` (cualquier otro valor responde HTTP 422). Rechaza explícitamente sin `continue` silencioso: `documento_id` ausente o inválido, inexistente, de otra rendición, duplicado en el payload, montos validados menores o iguales a cero, montos superiores al importe rendido original y rechazos sin motivo obligatorio. La operación recalcula de forma atómica la reserva comprometida y mantiene la rendición en `EN_REVISION_TESORERIA`.
+- **Auditoría individual append-only por comprobante:** En la misma transacción PDO de `VALIDAR_DOCUMENTOS`, cada comprobante validado genera un registro individual append-only en `rendicion_historial_estados` con acción `VALIDAR_DOCUMENTO`, enlazando `documento_id`, `actor_tipo = 'TESORERIA'`, `estado_anterior`, `estado_nuevo`, y metadatos JSON completos (`monto_rendido`, `monto_validado_anterior`, `monto_validado_nuevo`, `decision`, `motivo`, `numero_documento`, `numero_documento_original`). Una revalidación posterior añade un nuevo registro cronológico sin sobreescribir ni eliminar los eventos previos. Cualquier falla en la auditoría provoca un `ROLLBACK` íntegro.
+- **Preservación inmutable del folio original (`numero_documento_original`):** Al corregir administrativamente el número de documento de un comprobante (`corregir_documento.php`), el valor original digitado por el vendedor se preserva con la regla `numero_documento_original = COALESCE(numero_documento_original, numero_documento)`. Correcciones sucesivas del folio mantienen el valor original primigenio. Correcciones exclusivas de monto no destruyen ni alteran el folio original.
+- **Rechazo directo por Tesorería:** Requiere motivo obligatorio. Libera exactamente `monto_maximo_aprobable` de la reserva y cancela quirúrgicamente **únicamente la solicitud vigente vinculada** mediante `ApprovalWorkflowService::cancelRequest()`, registrando el evento en `solicitud_aprobacion_historial` y dejando intactas solicitudes históricas ya resueltas.
+- Cada decisión genera una entrada individual y una transición de cabecera en `rendicion_historial_estados` y `audit_logs`.
 - El Dashboard administrativo considera ejecución real únicamente en estados `APROBADA`, `APROBADA_PARCIAL` y `PAGADA`. Rendiciones pendientes o rechazadas no aportan monto, categorías, consumo por empresa ni tasa de exceso aprobada.
 
 ### 9.7 Política directiva de topes y aprobación de giras — pendiente de implementación
@@ -315,3 +332,22 @@ Las decisiones aprobadas para la próxima iteración se especifican íntegrament
 - Aumentar el monto de una gira aprobada exigirá nueva autorización. Disminuciones y correcciones no monetarias serán flexibles, auditadas y compatibles con compromisos existentes.
 - Los enlaces vencerán a las 48 horas, pero la solicitud seguirá pendiente y podrá reenviarse con rotación de token.
 - Una rendición liquidada por debajo de lo presentado podrá terminar como `PAGADA` con la etiqueta operativa “Pagada con tope presupuestario”.
+
+---
+
+## 10. Política de Notificaciones por Correo a Vendedores
+
+- **Deshabilitación General:** Por decisión estricta de negocio, actualmente el sistema no debe enviar correos a vendedores bajo ninguna circunstancia, ni en entorno local ni en producción (`MAIL_SELLER_NOTIFICATIONS_ENABLED = false`).
+- **Correos Administrativos e Internos Habilitados:** Los correos dirigidos a aprobadores, responsables de Gerencia/Jefatura, Tesorería, Cuentas Corrientes, Digitadoras y destinatarios administrativos configurados continúan habilitados y plenamente operativos en producción.
+- **Omisión Controlada:** Cuando un método específico de notificación a vendedor es ejecutado (`notificarDecisionExcesoRendicion`, `notificarDecisionGira`, `notificarRechazoTesoreria`, `notificarValidacionTesorería`, `enviarAlertaDemora`), se omite el despacho SMTP, se registra un aviso neutro en log sin datos sensibles (sin email, nombre, token, link ni HTML) y se retorna un resultado controlado (`true`) para no interrumpir el flujo operacional ni financiero.
+
+---
+
+## 11. Inmutabilidad de Cheques Dados de Baja
+
+- **Inmutabilidad Absoluta en Operaciones Ordinarias:** Un cheque con `activo = 0` (dado de baja lógicamente) es inmutable para el flujo operativo.
+- **Prohibición de Edición:** Ninguna acción en `api/editar_cheques.php` o `admin/api/editar_cobranza_tesoreria.php` puede modificar monto, fecha, comentario ni fotografía de un registro inactivo.
+- **Aislamiento en Depósitos:** Al registrar la papeleta de depósito en `admin/api/cambiar_estado.php`, la actualización masiva e individual exige estrictamente `AND (activo = 1 OR activo IS NULL)`, garantizando que ningún cheque dado de baja reciba datos de depósito ni cambie su estado contable.
+- **Exclusión de Totales:** Los cheques inactivos no se suman en los totales de cobranza ni en conteos de documentos activos presentados a Tesorería o clientes.
+- **Preservación para Auditoría:** La fotografía y datos del cheque descartado permanecen disponibles para auditoría financiera y legal hasta el vencimiento del período de retención (>3 meses post-vencimiento) gestionado por el cron de purga.
+

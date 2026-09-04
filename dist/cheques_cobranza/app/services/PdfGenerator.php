@@ -107,8 +107,8 @@ class PdfGenerator extends FPDF
             $pdf->Ln(2);
 
             // --- FACTURAS ---
-            $stmtFac = $pdo->prepare("SELECT numero_factura, cuota_label, monto_cubierto FROM cobranza_facturas WHERE cobranza_id = ? ORDER BY CAST(numero_factura AS UNSIGNED) ASC, cuota_label ASC");
-            $stmtFac->execute([$cobranza['id']]);
+            $stmtFac = $pdo->prepare("SELECT numero_factura, cuota_label, monto_cubierto FROM cobranza_facturas WHERE cobranza_id = :cobranza_id ORDER BY CAST(numero_factura AS UNSIGNED) ASC, cuota_label ASC");
+            $stmtFac->execute([':cobranza_id' => $cobranza['id']]);
             $facturas = $stmtFac->fetchAll(PDO::FETCH_ASSOC);
 
             // Agrupar facturas por número
@@ -154,8 +154,8 @@ class PdfGenerator extends FPDF
                     return $chq;
                 }, $cobranza['cheques_filtrados']);
             } else {
-                $stmtChq = $pdo->prepare("SELECT numero_cheque, banco, monto AS monto_cheque, fecha_vencimiento, comentario FROM cheques WHERE cobranza_id = ?");
-                $stmtChq->execute([$cobranza['id']]);
+                $stmtChq = $pdo->prepare("SELECT numero_cheque, banco, monto AS monto_cheque, fecha_vencimiento, comentario FROM cheques WHERE cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)");
+                $stmtChq->execute([':cobranza_id' => $cobranza['id']]);
                 $cheques = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
             }
 

@@ -160,6 +160,7 @@ try {
                                     fecha_deposito_real
                                 FROM cheques 
                                 WHERE cobranza_id IN ($placeholders)
+                                  AND (activo = 1 OR activo IS NULL)
                                 ORDER BY id ASC");
     $stmtCheques->execute($idParams);
     $todosCheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);

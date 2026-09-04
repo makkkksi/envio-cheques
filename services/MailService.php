@@ -36,6 +36,23 @@ class MailService
             return $default;
         }
     }
+
+    /**
+     * Política centralizada: determina si las notificaciones por correo a vendedores están habilitadas.
+     * Por decisión de negocio, actualmente está deshabilitado en todos los entornos (local y producción).
+     */
+    public static function isSellerNotificationEnabled(): bool
+    {
+        if (defined('MAIL_SELLER_NOTIFICATIONS_ENABLED')) {
+            return (bool)MAIL_SELLER_NOTIFICATIONS_ENABLED;
+        }
+        $env = getenv('MAIL_SELLER_NOTIFICATIONS_ENABLED');
+        if ($env !== false && $env !== '') {
+            return filter_var($env, FILTER_VALIDATE_BOOLEAN);
+        }
+        return false;
+    }
+
     /**
      * Envía notificaciones de cobranza por correo electrónico.
      * 
@@ -229,8 +246,8 @@ class MailService
             if (isset($cobranza['cheques_filtrados'])) {
                 $cheques = $cobranza['cheques_filtrados'];
             } else {
-                $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = ?");
-                $stmtCheques->execute([$cobranzaId]);
+                $stmtCheques = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)");
+                $stmtCheques->execute([':cobranza_id' => $cobranzaId]);
                 $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);
             }
 
@@ -313,8 +330,16 @@ class MailService
 
             self::sendSmtp($emailCuentasCorrientes, $asuntoCC, $htmlCC);
 
-            // --- B) ENVIAR NOTIFICACIÓN AL VENDEDOR (DESHABILITADO POR POLÍTICA) ---
-            error_log("[MailService] Envío de correo a vendedor omitido de manera segura (deshabilitado por política).");
+            // --- B) NOTIFICACIÓN AL VENDEDOR (CONTROLADA POR POLÍTICA CENTRALIZADA) ---
+            if (!self::isSellerNotificationEnabled()) {
+                error_log('[MailService] Notificación a vendedor omitida por política (notificaciones a vendedores deshabilitadas).');
+            } else {
+                if (!empty($vendedorEmail) && filter_var($vendedorEmail, FILTER_VALIDATE_EMAIL)) {
+                    $asuntoVendedor = "[CONFIRMACIÓN] Cobranza N° {$cobranzaId} Validada por Tesorería";
+                    $htmlVendedor = "<p>Su cobranza N° {$cobranzaId} ha sido validada por Tesorería.</p>";
+                    self::sendSmtp($vendedorEmail, $asuntoVendedor, $htmlVendedor);
+                }
+            }
 
             return true;
 
@@ -329,7 +354,29 @@ class MailService
      */
     public static function notificarRechazoTesoreria(PDO $pdo, int $cobranzaId, string $motivoRechazo): bool
     {
-        error_log("[MailService] Envío de correo de rechazo a vendedor omitido de manera segura (deshabilitado por política).");
+        if (!self::isSellerNotificationEnabled()) {
+            error_log('[MailService] Notificación a vendedor omitida por política (notificaciones a vendedores deshabilitadas).');
+            return true;
+        }
+
+        try {
+            $stmt = $pdo->prepare("
+                SELECT c.*, u.email AS vendedor_email
+                FROM cobranzas c
+                LEFT JOIN usuarios u ON c.vendedor_id = u.id
+                WHERE c.id = :id
+            ");
+            $stmt->execute([':id' => $cobranzaId]);
+            $cobranza = $stmt->fetch(PDO::FETCH_ASSOC);
+            $vendedorEmail = $cobranza['vendedor_email'] ?? '';
+            if (!empty($vendedorEmail) && filter_var($vendedorEmail, FILTER_VALIDATE_EMAIL)) {
+                $asunto = "[RECHAZO] Cobranza N° {$cobranzaId} Rechazada por Tesorería";
+                $html = "<p>Su cobranza N° {$cobranzaId} fue rechazada.</p>";
+                return self::sendSmtp($vendedorEmail, $asunto, $html);
+            }
+        } catch (Throwable $e) {
+            error_log('[MailService] Error en notificarRechazoTesoreria: ' . $e->getMessage());
+        }
         return true;
     }
 
@@ -464,6 +511,11 @@ class MailService
 
     public static function notificarDecisionExcesoRendicion(array $rendicion, string $decision): bool
     {
+        if (!self::isSellerNotificationEnabled()) {
+            error_log('[MailService] Notificación a vendedor omitida por política (notificaciones a vendedores deshabilitadas).');
+            return true;
+        }
+
         $recipient = trim((string)($rendicion['vendedor_email'] ?? ''));
         if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             error_log('[MailService] Rendición sin correo válido de vendedor para notificar resolución.');
@@ -642,6 +694,11 @@ class MailService
      */
     public static function notificarDecisionGira(array $gira, string $decision): bool
     {
+        if (!self::isSellerNotificationEnabled()) {
+            error_log('[MailService] Notificación a vendedor omitida por política (notificaciones a vendedores deshabilitadas).');
+            return true;
+        }
+
         $recipient = trim((string)($gira['vendedor_email'] ?? ''));
         if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             error_log('[MailService] Gira sin correo válido de vendedor para notificar resolución.');
@@ -692,6 +749,18 @@ class MailService
      */
     public static function sendSmtp(string $to, string $subject, string $htmlBody, array $attachments = [], string $cc = ''): bool
     {
+        // Blindaje de Seguridad en Entorno Local (P0-2)
+        // En APP_ENV = local ningún correo sale a destinatarios reales.
+        // Se simula éxito para permitir pruebas locales sin efectos colaterales ni timeouts.
+        $appEnv = defined('APP_ENV') ? strtolower((string)APP_ENV) : (getenv('APP_ENV') ? strtolower((string)getenv('APP_ENV')) : 'local');
+        if ($appEnv === 'local') {
+            // Sanitizar y registrar exclusivamente destinatario y asunto de forma segura (sin tokens, links ni credenciales)
+            $safeTo = htmlspecialchars($to, ENT_QUOTES, 'UTF-8');
+            $safeSubject = htmlspecialchars($subject, ENT_QUOTES, 'UTF-8');
+            error_log("[MailService] [GUARD LOCAL] Correo simulado exitosamente en local. Destinatario: {$safeTo} | Asunto: {$safeSubject}");
+            return true;
+        }
+
         if (!defined('MAIL_HOST') || empty(MAIL_HOST)) {
             error_log('[MailService] MAIL_HOST no configurado.');
             return false;
@@ -795,6 +864,14 @@ class MailService
                 </p>
             </div>
         </div>";
+
+        if (!self::isSellerNotificationEnabled()) {
+            error_log('[MailService] Notificación a vendedor omitida por política (notificaciones a vendedores deshabilitadas).');
+            if (!empty($ccEmail) && filter_var($ccEmail, FILTER_VALIDATE_EMAIL)) {
+                return self::sendSmtp($ccEmail, $asunto, $html, [], '');
+            }
+            return true;
+        }
 
         $destinatarioPrincipal = !empty($vendedorEmail) ? $vendedorEmail : $ccEmail;
         $copiaOpcional = (!empty($vendedorEmail) && $vendedorEmail !== $ccEmail) ? $ccEmail : '';

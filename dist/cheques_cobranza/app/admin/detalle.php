@@ -107,7 +107,7 @@ $csrfToken = getCsrfToken();
 
             <!-- SECCIÓN 4: VISTA PRINCIPAL DE CHEQUES Y FOTOS -->
             <section class="detail-card">
-                <h3 class="detail-section-title">📷 Fotos y Detalle de Cheques (Foco Principal)</h3>
+                <h3 class="detail-section-title">Fotos y Detalle de Cheques (Foco Principal)</h3>
                 <div id="gridChequesVisuales" class="cheque-gallery-grid">
                     <span style="color: var(--color-text-muted);">Cargando fotos de cheques...</span>
                 </div>

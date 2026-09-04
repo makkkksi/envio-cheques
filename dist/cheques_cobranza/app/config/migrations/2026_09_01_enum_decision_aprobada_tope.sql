@@ -2,5 +2,8 @@
 -- Fecha: 2026-09-01
 -- Segura: solo extiende el ENUM, no elimina valores existentes.
 
+USE `bd_modulo_cobranzas`;
+
 ALTER TABLE solicitudes_aprobacion
 MODIFY COLUMN decision ENUM('APROBADA', 'RECHAZADA', 'APROBADA_TOPE') NULL;
+

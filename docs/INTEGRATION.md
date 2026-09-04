@@ -99,26 +99,66 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 ```
 
-#### D. Función Controladora de Redirección Inteligente (`irARecaudacionCheques`)
-* **Ubicación:** Bloque `<script>` final (líneas 270-288).
-* **Lógica y Detección Automática:**
-  1. **Precedencia de Filtro Manual:** Si el vendedor seleccionó una empresa en el filtro desplegable (`filtEmpresa`), el sistema respeta su elección.
-  2. **Auto-Detección Transparente:** Si no seleccionó ninguna ("Todas"), el sistema toma automáticamente la empresa de su sesión (`currentEmpresaCod`) o del dominio actual sin bloquear al usuario ni pedirle confirmaciones extrañas.
-  3. **Validación de Vendedor:** Verifica que `currentVendCod` exista en sesión.
-  4. **Navegación:** Ejecuta `window.location.href = urlDestino;` en la **misma pestaña** para una experiencia continua.
+#### D. Función Controladora de Handoff Seguro por POST (`enviarHandoffSeguro`)
+* **Ubicación:** Bloque `<script>` final en `vendedores/pages/cobranza.html` y `vendedores_DEV/pages/cobranza.html`.
+* **Mecanismo de Seguridad:**
+  1. **Cero Datos en URL:** No se exponen `vendedor_id`, `empresa`, ni `vendedor_nombre` en la barra de direcciones.
+  2. **Formulario Oculto Dinámico:** Se crea un formulario temporal invisible con método `POST` y destino hacia `api/seller_handoff.php`.
+  3. **Campos Enviados Exclusivamente:**
+     - `session_token`: Token de sesión comercial activo (`authToken` de `localStorage.getItem('at_token')`).
+     - `empresa`: Código de empresa resuelto (`EMP01`, `EMP03`, `EMP06`, `EMP10`).
+     - `destino`: Lista cerrada (`cheques` o `rendiciones`).
+  4. **Respuesta del Servidor:** Redirección limpia HTTP 303 (See Other) a la URL interna sin parámetros.
 * **Código Implementado:**
 ```javascript
-function irARecaudacionCheques() {
-  const filtroEmp = document.getElementById('filtEmpresa').value;
-  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
-
-  if (!currentVendCod) {
-    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
+function enviarHandoffSeguro(destino) {
+  const token = authToken || localStorage.getItem('at_token') || '';
+  if (!token) {
+    showToast('No se detectó un token de sesión comercial válido', 'error');
     return;
   }
-  
-  const urlDestino = `https://www.autotec.cl/cobranza_cheques/app/index.html?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
-  window.location.href = urlDestino;
+  const filtroEmp = document.getElementById('filtEmpresa') ? document.getElementById('filtEmpresa').value : '';
+  const empresaFinal = filtroEmp || currentEmpresaCod || (typeof detectarEmpresaPorHost === 'function' ? detectarEmpresaPorHost() : 'EMP03');
+
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
+  const handoffUrl = isLocal
+    ? `${window.location.origin}/form/api/seller_handoff.php`
+    : `https://www.autotec.cl/cobranza_cheques/app/api/seller_handoff.php`;
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = handoffUrl;
+  form.style.display = 'none';
+
+  const inputToken = document.createElement('input');
+  inputToken.type = 'hidden';
+  inputToken.name = 'session_token';
+  inputToken.value = token;
+  form.appendChild(inputToken);
+
+  const inputEmpresa = document.createElement('input');
+  inputEmpresa.type = 'hidden';
+  inputEmpresa.name = 'empresa';
+  inputEmpresa.value = empresaFinal;
+  form.appendChild(inputEmpresa);
+
+  const inputDestino = document.createElement('input');
+  inputDestino.type = 'hidden';
+  inputDestino.name = 'destino';
+  inputDestino.value = destino;
+  form.appendChild(inputDestino);
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function irARecaudacionCheques() {
+  enviarHandoffSeguro('cheques');
+}
+
+function irARendicionGastos() {
+  enviarHandoffSeguro('rendiciones');
 }
 ```
 
@@ -258,3 +298,28 @@ sequenceDiagram
 
 4. **Contexto compartido con Rendiciones:**
    `auth_seller.php` resuelve además el `empresa_id` de `bd_modulo_cobranzas.empresas` y lo almacena junto al `vend_cod`. Las APIs de `/api/rendiciones/` consumen exclusivamente esos valores de sesión mediante `requireSellerContext()` y no aceptan identificadores de autoría enviados por el navegador.
+
+---
+
+## 6. Handoff Seguro por POST y Validación Canónica de vend_cod
+
+A partir de la migración hacia `web_usuarios`, se implementa el handoff seguro por `POST` para eliminar la transmisión de identidad mediante parámetros de URL.
+
+### 6.1 Flujo del Handoff
+1. El portal comercial (`vendedores/` o `vendedores_DEV/`) efectúa una petición `POST` al endpoint:
+   `http://dominio/form/api/seller_handoff.php`
+   con los campos:
+   - `session_token`: Token de la sesión activa en `web_sesiones`.
+   - `empresa`: Código canónico de empresa (`EMP01`, `EMP03`, `EMP06`, `EMP10`, etc.).
+   - `destino`: `'cheques'` o `'rendiciones'` (lista cerrada).
+2. El endpoint valida en la BD ERP (modo solo lectura) que exista una sesión activa asociada a un usuario con `rol = 'vendedor'` y `activo = 1`.
+3. Valida estrictamente `vend_cod`:
+   - En SQL: `TRIM(vend_cod) REGEXP '^[1-9][0-9]*$'`
+   - En PHP: `/^[1-9][0-9]*$/D` y rango 1..2147483647
+   - Se rechaza explícitamente `0012` para mantener canonicidad única.
+4. Regenera el ID de sesión PHP (`session_regenerate_id(true)`), emite la cookie `AUTOMARCO_SELLER_SID` (HttpOnly, SameSite=Lax) y responde con **HTTP 303 (See Other)** hacia la URL limpia y fija:
+   - Cheques: `.../index.html`
+   - Rendiciones: `.../rendiciones/vendedor.php`
+5. La cabecera `Location` nunca contiene tokens, identificadores ni parámetros en query string.
+6. La sesión comercial activa permanece disponible para navegaciones sucesivas (reutilización sin bloqueo artificial).
+

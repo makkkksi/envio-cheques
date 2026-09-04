@@ -224,7 +224,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
     <?php if ($canConfigureApprovers): ?>
     <div class="rd-modal" id="approverConfigModal" hidden role="dialog" aria-modal="true" aria-labelledby="approverConfigTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="approverConfigTitle">Responsables de aprobación</h2><p>Configura las dos personas que pueden resolver excesos. Los cambios futuros no alteran la auditoría histórica.</p></div><button class="rd-modal__close" type="button" data-close-modal="approverConfigModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="approverConfigForm" novalidate><div class="rd-approver-config"><fieldset><legend>Responsable 1</legend><label><span>Nombre completo</span><input id="approver1Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver1Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver1Email" type="email" maxlength="190" required></label></fieldset><fieldset><legend>Responsable 2</legend><label><span>Nombre completo</span><input id="approver2Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver2Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver2Email" type="email" maxlength="190" required></label></fieldset></div><p id="approverConfigStatus" class="rd-form-status" role="status"></p><div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="approverConfigModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="saveApproverConfig" type="submit">Guardar responsables</button></div></form></div></div>
     <?php endif; ?>
-    <div class="rd-modal" id="partialModal" hidden role="dialog" aria-modal="true" aria-labelledby="partialModalTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="partialModalTitle">Aprobación parcial</h2></div><button class="rd-modal__close" type="button" data-close-modal="partialModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><p class="rd-modal__description">Resuelve todos los comprobantes. Cada rechazo debe incluir un motivo.</p><div class="rd-partial-list" id="partialDecisionList"></div><div class="rd-modal__actions"><strong id="partialApprovedTotal">Aprobado: $0</strong><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="partialModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="savePartialButton" type="button">Guardar revisión parcial</button></div></div></div>
+    <div class="rd-modal" id="partialModal" hidden role="dialog" aria-modal="true" aria-labelledby="partialModalTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="partialModalTitle">Validación de comprobantes</h2></div><button class="rd-modal__close" type="button" data-close-modal="partialModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><p class="rd-modal__description">Valida cada comprobante individualmente. Cada rechazo debe incluir un motivo.</p><div class="rd-partial-list" id="partialDecisionList"></div><div class="rd-modal__actions"><strong id="partialApprovedTotal">Validado: $0</strong><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="partialModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="savePartialButton" type="button">Guardar validación</button></div></div></div>
     <div class="rd-modal" id="editDocumentModal" hidden role="dialog" aria-modal="true" aria-labelledby="editDocTitle">
         <div class="rd-modal__card rd-modal__card--edit-doc">
             <header class="rd-modal__header">
@@ -248,7 +248,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                 <div class="ed-fields">
                     <div class="ed-field-group">
                         <label class="ed-label" for="editDocNewNumber">
-                            <span class="ed-label__icon">🔢</span>
+                            <svg class="ed-label__icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 21"/></svg>
                             N° de Boleta / Folio
                         </label>
                         <div class="ed-field-row">
@@ -260,7 +260,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                     </div>
                     <div class="ed-field-group">
                         <label class="ed-label" for="editDocNewAmount">
-                            <span class="ed-label__icon">💰</span>
+                            <svg class="ed-label__icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                             Monto ($)
                         </label>
                         <div class="ed-field-row">
@@ -271,7 +271,7 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
                     </div>
                     <div class="ed-field-group ed-field-group--full">
                         <label class="ed-label" for="editDocReason">
-                            <span class="ed-label__icon">📝</span>
+                            <svg class="ed-label__icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             Motivo de la corrección
                         </label>
                         <input class="ed-input ed-input--editable" type="text" id="editDocReason" maxlength="255" value="Corrección por error de digitación verificada en foto">

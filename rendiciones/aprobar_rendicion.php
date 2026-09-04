@@ -231,9 +231,9 @@ $downloadPdfUrl = PORTAL_BASE_URL . '/admin/api/rendiciones/descargar_planilla.p
     <?php if ($excess > 0): ?>
     <div class="approval-card__excess-box">
         <?php if ($canResolve): ?>
-            <strong>⚠ Exceso Presupuestario:</strong> Esta rendición presenta un gasto de <strong><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado. Al pulsar "Aprobar Rendición", autorizas el monto total y la cobertura de este exceso. Puedes también optar por <strong>Aprobar hasta el Tope</strong> sin cubrir el exceso.
+            <strong>Exceso Presupuestario:</strong> Esta rendición presenta un gasto de <strong><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado. Al pulsar "Aprobar Rendición", autorizas el monto total y la cobertura de este exceso. Puedes también optar por <strong>Aprobar hasta el Tope</strong> sin cubrir el exceso.
         <?php else: ?>
-            <strong>⚠ Exceso Presupuestario:</strong> Esta rendición presentó un gasto de <strong><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado.
+            <strong>Exceso Presupuestario:</strong> Esta rendición presentó un gasto de <strong><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado.
         <?php endif; ?>
     </div>
     <?php endif; ?>

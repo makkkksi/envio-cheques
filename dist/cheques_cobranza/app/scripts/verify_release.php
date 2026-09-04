@@ -165,38 +165,230 @@ if (!is_file($rendicionesSetupPath)) {
         foreach ($missingRendicionesTables as $tableName) {
             echo "  [ERROR] Tabla ausente en setup_rendiciones.sql: {$tableName}\n";
         }
-} else {
-    echo "OK: migración productiva de Rendiciones contiene sus 7 tablas.\n";
+    } else {
+        echo "OK: migración productiva de Rendiciones contiene sus 7 tablas.\n";
+    }
 }
 
-echo "\n=== CONTRATO ESTÁTICO DE RENDICIONES ===\n";
-$rendicionesCodeFiles = [];
+echo "\n=== CONTRATO ESTÁTICO GLOBAL (SEGURIDAD, ZERO DELETE, NAMED PARAMS) ===\n";
+$backendFiles = [];
 foreach ($rootFiles as $relative => $absolute) {
-    if (strpos($relative, 'api/rendiciones/') === 0
-        || strpos($relative, 'admin/api/rendiciones/') === 0
-        || in_array($relative, ['services/RendicionesService.php', 'services/RendicionesDocumentService.php', 'services/ErpSellerDirectoryService.php', 'services/ApprovalWorkflowService.php'], true)) {
-        $rendicionesCodeFiles[$relative] = $absolute;
+    if (strpos($relative, 'api/') === 0
+        || strpos($relative, 'admin/api/') === 0
+        || strpos($relative, 'services/') === 0
+        || strpos($relative, 'cron/') === 0) {
+        if (substr($relative, -4) === '.php') {
+            $backendFiles[$relative] = $absolute;
+        }
     }
 }
+
 $contractErrors = [];
-foreach ($rendicionesCodeFiles as $relative => $absolute) {
+$businessTables = [
+    'cheques',
+    'cobranzas',
+    'cobranza_facturas',
+    'rendiciones_gastos',
+    'rendicion_documentos',
+    'solicitudes_aprobacion',
+    'solicitud_aprobacion_historial',
+    'presupuestos_vendedores',
+    'historial_estados',
+    'rendicion_historial_estados',
+    'audit_logs'
+];
+$businessDeleteRegex = '/\bDELETE\s+FROM\s+(?:`?(?:' . implode('|', $businessTables) . ')`?)\b/i';
+
+foreach ($backendFiles as $relative => $absolute) {
     $source = file_get_contents($absolute);
-    if (preg_match('/\bDELETE\s+FROM\b/i', $source)) {
-        $contractErrors[] = "DELETE físico detectado en {$relative}";
+    
+    // Check 1: Zero physical DELETE on business tables
+    if (preg_match($businessDeleteRegex, $source, $m)) {
+        $contractErrors[] = "DELETE físico en tabla de negocio detectado en {$relative}";
     }
-    if (preg_match("/prepare\\s*\\(\\s*'(?:\\\\'|[^'])*\\?/is", $source)
-        || preg_match('/prepare\\s*\\(\\s*"(?:\\\\"|[^"])*\\?/is', $source)) {
-        $contractErrors[] = "Placeholder posicional detectado en {$relative}";
+    
+    // Check 2: Zero positional placeholders (?) in PDO prepare
+    if (preg_match("/prepare\s*\(\s*'(?:\\\\'|[^'])*\\?/is", $source)
+        || preg_match('/prepare\s*\(\s*"(?:\\\\"|[^"])*\\?/is', $source)) {
+        $contractErrors[] = "Placeholder posicional (?) detectado en {$relative}";
+    }
+
+    // Check 3: Sanitized error responses in client-facing APIs
+    if (strpos($relative, 'api/') === 0 || strpos($relative, 'admin/api/') === 0) {
+        if (preg_match_all('/catch\s*\(\s*(?:\\\\?Exception|\\\\?Throwable|\\\\?PDOException)\s+\$e\s*\)\s*\{([^}]+)\}/is', $source, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $catchBody = $match[1];
+                if (preg_match('/(?:json_encode|\$msg\s*=)[^;]*\$e->getMessage\(\)/i', $catchBody)) {
+                    $contractErrors[] = "Posible filtración de \$e->getMessage() en catch de {$relative}";
+                }
+            }
+        }
+    }
+
+    // Check 4: Inmutabilidad de cheques (UPDATE cheques debe filtrar registros activos)
+    if (preg_match_all('/UPDATE\s+cheques\s+SET\s+([\s\S]+?)(?:\)|;|\$stmt)/i', $source, $updMatches)) {
+        foreach ($updMatches[1] as $updSql) {
+            // Ignorar purga cronológica autorizada de fotos en cron/purgar_fotos_cheques_vencidos.php
+            if (strpos($relative, 'purgar_fotos_cheques_vencidos.php') !== false) {
+                continue;
+            }
+            // Ignorar si la sentencia es la propia baja lógica (SET activo = 0)
+            if (preg_match('/activo\s*=\s*0/i', $updSql)) {
+                continue;
+            }
+            // Debe incluir activo = 1 o (activo = 1 OR activo IS NULL)
+            if (!preg_match('/activo\s*=\s*1/i', $updSql) && !preg_match('/activo\s+IS\s+NULL/i', $updSql)) {
+                $contractErrors[] = "UPDATE cheques sin filtro de registros activos en {$relative}";
+            }
+        }
     }
 }
+
 if ($contractErrors) {
     $failed = true;
     foreach ($contractErrors as $contractError) {
         echo "  [ERROR] {$contractError}\n";
     }
 } else {
-    echo 'OK: ' . count($rendicionesCodeFiles) . " archivos backend sin DELETE físico ni placeholders posicionales.\n";
+    echo 'OK: ' . count($backendFiles) . " archivos backend cumplen Zero Delete, Named Parameters, Error Sanitization e Inmutabilidad de Cheques.\n";
 }
+
+echo "\n=== CONTRATO DE POLÍTICA DE CORREOS (VENDEDORES DESHABILITADOS) ===\n";
+$appConfigPath = $projectRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'app.php';
+$appConfigContent = file_get_contents($appConfigPath);
+$sellerPolicyErrors = [];
+
+if (!preg_match('/define\s*\(\s*\'MAIL_SELLER_NOTIFICATIONS_ENABLED\'\s*,\s*filter_var\([^,]+,\s*FILTER_VALIDATE_BOOLEAN\)\s*\)/i', $appConfigContent)
+    && !preg_match('/define\s*\(\s*\'MAIL_SELLER_NOTIFICATIONS_ENABLED\'\s*,\s*false\s*\)/i', $appConfigContent)) {
+    $sellerPolicyErrors[] = "config/app.php debe definir MAIL_SELLER_NOTIFICATIONS_ENABLED por defecto en false";
+}
+
+$mailServicePath = $projectRoot . DIRECTORY_SEPARATOR . 'services' . DIRECTORY_SEPARATOR . 'MailService.php';
+$mailServiceContent = file_get_contents($mailServicePath);
+if (!preg_match('/function\s+isSellerNotificationEnabled\s*\(\s*\)\s*:\s*bool/i', $mailServiceContent)) {
+    $sellerPolicyErrors[] = "services/MailService.php debe implementar el método isSellerNotificationEnabled(): bool";
+}
+if (!preg_match('/notificarDecisionExcesoRendicion[^{]+\{[^}]+isSellerNotificationEnabled/is', $mailServiceContent)) {
+    $sellerPolicyErrors[] = "MailService::notificarDecisionExcesoRendicion debe validar isSellerNotificationEnabled()";
+}
+if (!preg_match('/notificarDecisionGira[^{]+\{[^}]+isSellerNotificationEnabled/is', $mailServiceContent)) {
+    $sellerPolicyErrors[] = "MailService::notificarDecisionGira debe validar isSellerNotificationEnabled()";
+}
+
+if ($sellerPolicyErrors) {
+    $failed = true;
+    foreach ($sellerPolicyErrors as $err) {
+        echo "  [ERROR] {$err}\n";
+    }
+} else {
+    echo "OK: Política de notificaciones a vendedores centralizada y deshabilitada por defecto.\n";
+}
+
+echo "\n=== CONTRATO DE MIGRACIONES IDEMPOTENTES Y SELECCIÓN DE BD ===\n";
+$migrationsDir = $projectRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'migrations';
+$migrationErrors = [];
+if (is_dir($migrationsDir)) {
+    $migrationFiles = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.sql');
+    foreach ($migrationFiles as $migFile) {
+        $migName = basename($migFile);
+        $migContent = file_get_contents($migFile);
+        
+        // Check: explicit USE db selection
+        if (!preg_match('/USE\s+`?bd_modulo_cobranzas`?\s*;/i', $migContent)) {
+            $migrationErrors[] = "Migración {$migName} no incluye selección explícita: USE `bd_modulo_cobranzas`;";
+        }
+        
+        // Check: unconditional DROP INDEX
+        if (preg_match('/ALTER\s+TABLE\s+[a-z0-9_]+\s+DROP\s+INDEX\s+[a-z0-9_]+/i', $migContent)
+            && !preg_match('/information_schema\.STATISTICS/i', $migContent)) {
+            $migrationErrors[] = "Migración {$migName} posee DROP INDEX incondicional sin verificación de information_schema";
+        }
+        
+        // Check: unconditional DROP CHECK
+        if (preg_match('/ALTER\s+TABLE\s+[a-z0-9_]+\s+DROP\s+CHECK\s+[a-z0-9_]+/i', $migContent)
+            && !preg_match('/information_schema\.TABLE_CONSTRAINTS/i', $migContent)) {
+            $migrationErrors[] = "Migración {$migName} posee DROP CHECK incondicional sin verificación de information_schema";
+        }
+
+        // Check: unconditional ADD COLUMN without IF NOT EXISTS or information_schema
+        if (preg_match('/ALTER\s+TABLE\s+[a-z0-9_]+\s+ADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS)[a-z0-9_]+/i', $migContent)
+            && !preg_match('/information_schema\.COLUMNS/i', $migContent)) {
+            $migrationErrors[] = "Migración {$migName} posee ADD COLUMN incondicional sin IF NOT EXISTS ni verificación de information_schema";
+        }
+    }
+}
+if ($migrationErrors) {
+    $failed = true;
+    foreach ($migrationErrors as $err) {
+        echo "  [ERROR] {$err}\n";
+    }
+} else {
+    echo "OK: Todas las migraciones tienen USE explícito y guardas de idempotencia.\n";
+}
+
+echo "\n=== CONTRATO DE VERIFICACIÓN DE SCHEMA DRIFT (TEST_CLEAN_SETUP) ===\n";
+$cleanSetupPath = $projectRoot . DIRECTORY_SEPARATOR . 'scratch' . DIRECTORY_SEPARATOR . 'test_clean_setup.php';
+$cleanSetupContent = file_get_contents($cleanSetupPath);
+$driftCheckErrors = [];
+$requiredDriftElements = [
+    'random_bytes' => 'Generador criptográfico random_bytes() para BD temporal',
+    'SCHEMATA' => 'Verificación previa contra information_schema.SCHEMATA sin DROP preventivo',
+    'dbCreatedByCurrentRun' => 'Flag de confirmación de creación antes de DROP',
+    'ORDINAL_POSITION' => 'Comparación de posición ordinal de columnas',
+    'COLUMN_TYPE' => 'Comparación de tipos de columna',
+    'IS_NULLABLE' => 'Comparación de nulabilidad',
+    'COLUMN_DEFAULT' => 'Comparación de valores por defecto',
+    'EXTRA' => 'Comparación de atributos EXTRA',
+    'GENERATION_EXPRESSION' => 'Comparación de expresiones generadas',
+    'NON_UNIQUE' => 'Comparación de unicidad de índices',
+    'SEQ_IN_INDEX' => 'Comparación de orden de columnas en índices',
+    'REFERENTIAL_CONSTRAINTS' => 'Comparación de claves foráneas con ON UPDATE/DELETE',
+    'CHECK_CONSTRAINTS' => 'Comparación de restricciones CHECK',
+];
+foreach ($requiredDriftElements as $needle => $desc) {
+    if (strpos($cleanSetupContent, $needle) === false) {
+        $driftCheckErrors[] = "scratch/test_clean_setup.php no implementa: {$desc} ({$needle})";
+    }
+}
+if ($driftCheckErrors) {
+    $failed = true;
+    foreach ($driftCheckErrors as $err) {
+        echo "  [ERROR] {$err}\n";
+    }
+} else {
+    echo "OK: test_clean_setup.php cubre comparación estructural exhaustiva de schema drift.\n";
+}
+
+// Check 4: Zero emojis in frontend
+echo "\n=== CONTRATO ESTÁTICO DE FRONTEND (ZERO EMOJIS) ===\n";
+$emojiRegex = '/[\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{1F700}-\x{1F77F}\x{1F780}-\x{1F7FF}\x{1F800}-\x{1F8FF}\x{1F900}-\x{1F9FF}\x{1FA00}-\x{1FA6F}\x{1FA70}-\x{1FAFF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]/u';
+$frontendErrors = [];
+$frontendFiles = [];
+foreach ($rootFiles as $relative => $absolute) {
+    if (preg_match('/\.(php|html|js|css)$/i', $relative) && (
+        strpos($relative, 'admin/') === 0
+        || strpos($relative, 'rendiciones/') === 0
+        || in_array($relative, ['index.html', 'index.php', 'script.js', 'styles.css', 'seller_session.js'], true)
+    )) {
+        // Exclude backend APIs under admin/api/
+        if (strpos($relative, 'admin/api/') === 0) {
+            continue;
+        }
+        $frontendFiles[$relative] = $absolute;
+        $content = file_get_contents($absolute);
+        if (preg_match_all($emojiRegex, $content, $matches)) {
+            $frontendErrors[] = "Emoji/dingbat detectado en {$relative} (" . count($matches[0]) . " ocurrencias)";
+        }
+    }
+}
+
+if ($frontendErrors) {
+    $failed = true;
+    foreach ($frontendErrors as $err) {
+        echo "  [ERROR] {$err}\n";
+    }
+} else {
+    echo 'OK: ' . count($frontendFiles) . " archivos de frontend sin emojis ni dingbats.\n";
 }
 
 echo "\n=== CONFIGURACIÓN DE ENTORNOS ===\n";

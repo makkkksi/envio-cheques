@@ -132,7 +132,7 @@ $justif        = nl2br(htmlspecialchars((string)($solicitud['justificacion_gira'
 
 <?php elseif ($resolvedDecision !== '' && !$canResolve): ?>
     <div class="resolved-badge <?= $resolvedDecision === 'APROBADA' ? 'resolved-approved' : 'resolved-rejected' ?>">
-      <span><?= $resolvedDecision === 'APROBADA' ? '✓' : '✕' ?></span>
+      <span><?= $resolvedDecision === 'APROBADA' ? '&#10003;' : '&#10005;' ?></span>
       <span>Esta gira ya fue <strong><?= $resolvedDecision === 'APROBADA' ? 'aprobada' : 'rechazada' ?></strong>.</span>
     </div>
 
@@ -162,11 +162,11 @@ $justif        = nl2br(htmlspecialchars((string)($solicitud['justificacion_gira'
 
     <div class="btn-row">
       <button class="btn btn-approve" id="btn-approve" onclick="resolver('APROBADA')">
-        ✓ Aprobar gira
+        Aprobar gira
         <span class="spinner" id="sp-approve"></span>
       </button>
       <button class="btn btn-reject" id="btn-reject" onclick="mostrarRazon()">
-        ✕ Rechazar
+        Rechazar
       </button>
     </div>
     <div id="confirm-reject-row" style="display:none;margin-top:.75rem">
@@ -225,8 +225,8 @@ $justif        = nl2br(htmlspecialchars((string)($solicitud['justificacion_gira'
             ? ' Tesorería fue notificada por correo.'
             : ' La decisión ya está disponible en el panel de Tesorería.';
           msg.textContent = decision === 'APROBADA'
-            ? '✓ Gira aprobada correctamente.' + treasuryMessage
-            : '✕ Gira rechazada.' + treasuryMessage;
+            ? 'Gira aprobada correctamente.' + treasuryMessage
+            : 'Gira rechazada.' + treasuryMessage;
         } else {
           msg.style.color = '#dc2626';
           msg.textContent = data.message ?? 'Ocurrió un error. Por favor intente nuevamente.';

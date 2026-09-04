@@ -422,7 +422,7 @@
             const active = !rejected && index === current;
             const isRejected = rejected && index === 3;
             const className = complete ? 'is-complete' : active ? 'is-active' : isRejected ? 'is-rejected' : '';
-            const node = complete ? '✓' : isRejected ? '×' : active ? '•' : String(index + 1);
+            const node = complete ? '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>' : isRejected ? '×' : active ? '•' : String(index + 1);
             return `<div class="rd-step ${className}"><span class="rd-step__node">${node}</span><span class="rd-step__label">${isRejected ? 'Rechazada' : label}</span>${index < steps.length - 1 ? '<span class="rd-step__line"></span>' : ''}</div>`;
         }).join('')}</div>`;
     }
@@ -439,15 +439,15 @@
         if (status === 'PENDIENTE_APROBACION_RESPONSABLE') {
             const approverName = rendition.aprobador_nombre_snapshot || 'Responsable';
             buttons.push(`<div class="rd-approval-waiting-note">
-                <strong>⏳ En espera de aprobación gerencial</strong><br>
+                <strong>En espera de aprobación gerencial</strong><br>
                 Solicitud enviada a <strong>${escapeHtml(approverName)}</strong>. Una vez autorizada con su Magic Link, se emitirá automáticamente la Planilla Oficial en PDF y pasará a Tesorería para pago.
             </div>`);
             buttons.push(actionButton('REENVIAR_RESPONSABLE', 'Reenviar a Responsable', 'rd-btn--warning'));
             buttons.push(actionButton('CANCELAR_SOLICITUD_RESPONSABLE', 'Cancelar solicitud y reabrir revisión', 'rd-btn--danger'));
         }
         if (['EN_REVISION_TESORERIA', 'DOCUMENTOS_FISICOS_RECIBIDOS'].includes(status)) {
-            buttons.push(actionButton('VERIFICAR_Y_ENVIAR', '✓ Verificar y Enviar a Responsable', 'rd-btn--success'));
-            buttons.push('<button class="rd-btn rd-btn--warning" type="button" data-open-partial>Aprobación parcial de boletas</button>');
+            buttons.push(actionButton('VERIFICAR_Y_ENVIAR', 'Verificar y Enviar a Responsable', 'rd-btn--success'));
+            buttons.push('<button class="rd-btn rd-btn--secondary" type="button" data-open-partial>Validar comprobantes</button>');
             buttons.push(actionButton('RECHAZAR', 'Rechazar rendición', 'rd-btn--danger'));
         }
         if (['APROBADA', 'APROBADA_PARCIAL'].includes(status)) {
@@ -455,7 +455,7 @@
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
                 Descargar Planilla PDF (Excel)
             </a>`);
-            buttons.push(actionButton('MARCAR_PAGADA', '💰 Marcar como pagada', 'rd-btn--success'));
+            buttons.push(actionButton('MARCAR_PAGADA', 'Marcar como pagada', 'rd-btn--success'));
         }
         if (status === 'PAGADA') {
             buttons.push(`<a class="rd-btn rd-btn--secondary" href="api/rendiciones/descargar_planilla.php?id=${rendition.id}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
@@ -911,7 +911,7 @@
         }
         container.innerHTML = state.sellerOptions.map((seller, index) => `<button class="rd-seller-option ${index === state.sellerOptionIndex ? 'is-active' : ''}" type="button" role="option" aria-selected="${index === state.sellerOptionIndex ? 'true' : 'false'}" data-seller-option="${index}">
             <span class="rd-seller-option__avatar" aria-hidden="true">${escapeHtml(sellerInitials(seller.vendedor_nombre))}</span>
-            <span><strong>${escapeHtml(seller.vendedor_nombre)}</strong><small>${escapeHtml(seller.vendedor_email || 'Sin correo válido en ERP')}</small></span>
+            <span><strong>${escapeHtml(seller.vendedor_nombre)}</strong><small>${escapeHtml(seller.vendedor_email || 'Sin correo corporativo')}</small></span>
             <span class="rd-seller-option__code">#${escapeHtml(seller.vendedor_id)}</span>
         </button>`).join('');
         container.hidden = false;
@@ -945,7 +945,7 @@
         $('#budgetSellerEmail').value = seller.vendedor_email || '';
         $('#budgetSellerSearch').value = seller.vendedor_nombre || '';
         setText('budgetSellerSelectedName', seller.vendedor_nombre || 'Vendedor ERP');
-        setText('budgetSellerSelectedMeta', `${seller.empresa_nombre || selectedCompanyName()} · Código #${seller.vendedor_id}${seller.vendedor_email ? ` · ${seller.vendedor_email}` : ' · Sin correo válido'}`);
+        setText('budgetSellerSelectedMeta', `${seller.empresa_nombre || selectedCompanyName()} · Código #${seller.vendedor_id}${seller.vendedor_email ? ` · ${seller.vendedor_email}` : ' · Sin correo corporativo'}`);
         $('#budgetSellerSelected').hidden = false;
         $('#budgetSellerSelected .rd-seller-selected__avatar').textContent = sellerInitials(seller.vendedor_nombre);
         setText('budgetSellerHelp', 'Identidad seleccionada. Nombre, código y correo se validarán nuevamente al guardar.');
@@ -1283,8 +1283,6 @@
             return;
         }
         const actionDetails = {
-            RECIBIR_FISICOS: ['Registrar recepción física', 'Se dejará constancia de que Tesorería recibió los documentos originales.', false, 'Registrar recepción'],
-            APROBAR_TOTAL: ['Aprobar rendición completa', 'Todos los comprobantes quedarán aprobados por su monto rendido.', false, 'Aprobar rendición'],
             RECHAZAR: ['Rechazar rendición', 'La rendición y sus documentos quedarán rechazados. Esta acción requiere un motivo.', true, 'Rechazar'],
             RECHAZAR_EXCESO_TESORERIA: ['Cancelar rendición con exceso', 'Tesorería rechazará la rendición y liberará todo el monto comprometido. No se enviará una nueva solicitud a Jefatura; si ya existía un enlace, quedará invalidado.', true, 'Rechazar y liberar fondos'],
             CANCELAR_SOLICITUD_RESPONSABLE: ['Cancelar solicitud al Responsable', 'La solicitud actual quedará cancelada y la rendición volverá al estado de revisión de Tesorería para corregir lo necesario.', false, 'Cancelar y reabrir'],
@@ -1300,24 +1298,13 @@
         let modalDescription = info[1];
         let confirmLabel = info[3];
 
-        if (action === 'APROBAR_TOTAL' && state.detail?.rendicion) {
-            const r = state.detail.rendicion;
-            const excess = Number(r.monto_exceso_no_reembolsable || 0);
-            const hasActiveExcess = excess > 0 && r.decision_exceso !== 'APROBADO';
-            if (hasActiveExcess) {
-                modalTitle = 'Aprobar hasta el tope del presupuesto';
-                modalDescription = `Se aprobará la rendición pagando únicamente hasta el saldo disponible de ${money.format(r.monto_maximo_aprobable)}. El exceso de ${money.format(excess)} no será reembolsado al vendedor.`;
-                confirmLabel = `Aprobar por ${money.format(r.monto_maximo_aprobable)}`;
-            }
-        }
-
         $('#actionModalTitle').textContent = modalTitle;
         $('#actionModalDescription').textContent = modalDescription;
         $('#actionCommentLabel').textContent = info[2] ? 'Motivo obligatorio' : 'Comentario opcional';
         $('#actionComment').required = info[2];
         $('#actionComment').value = '';
         $('#confirmActionButton').textContent = confirmLabel;
-        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO', 'CANCELAR_SOLICITUD_GIRA'].includes(action) ? 'rd-btn--danger' : (action === 'APROBAR_TOTAL' ? 'rd-btn--success' : 'rd-btn--primary')}`;
+        $('#confirmActionButton').className = `rd-btn ${['RECHAZAR', 'RECHAZAR_EXCESO_TESORERIA', 'DESACTIVAR_PRESUPUESTO', 'CANCELAR_SOLICITUD_GIRA'].includes(action) ? 'rd-btn--danger' : 'rd-btn--primary'}`;
         openModal('actionModal');
     }
 
@@ -1504,20 +1491,17 @@
 
     async function savePartialReview() {
         const decisions = [];
-        let rejected = 0;
         for (const row of $$('[data-partial-id]')) {
             const decision = row.querySelector('[data-partial-decision]').value;
             const reason = row.querySelector('[data-partial-reason]').value.trim();
             const amount = Number(row.querySelector('[data-partial-amount]').value || 0);
             if (decision === 'RECHAZAR' && !reason) { notify('Cada comprobante rechazado necesita un motivo.', 'error'); row.querySelector('[data-partial-reason]').focus(); return; }
-            if (decision === 'RECHAZAR') rejected++;
             decisions.push({ documento_id: Number(row.dataset.partialId), decision, monto_validado: amount, motivo: reason });
         }
-        if (!rejected) { notify('Use “Aprobar rendición” cuando ningún comprobante sea rechazado.', 'error'); return; }
         const button = $('#savePartialButton');
         setBusy(button, true, 'Guardando…');
         try {
-            const payload = await apiRequest(`${API_BASE}/cambiar_estado.php`, { method: 'POST', body: JSON.stringify({ rendicion_id: state.selectedId, accion: 'APROBAR_PARCIAL', decisiones }) });
+            const payload = await apiRequest(`${API_BASE}/cambiar_estado.php`, { method: 'POST', body: JSON.stringify({ rendicion_id: state.selectedId, accion: 'VALIDAR_DOCUMENTOS', decisiones }) });
             closeModal('partialModal');
             notify(payload.message, 'success');
             state.detailCache.delete(Number(state.selectedId));
@@ -1526,7 +1510,7 @@
         } catch (error) {
             notify(error.message, 'error');
         } finally {
-            setBusy(button, false, 'Guardar revisión parcial');
+            setBusy(button, false, 'Guardar validación');
         }
     }
 

@@ -66,7 +66,7 @@ try {
         }
 
         if (!empty($db_origen) && in_array($db_origen, ALLOWED_DATABASES, true)) {
-            $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM {$db_origen}.tbl_clientes WHERE cli_vendedor = :vid AND (cli_rut = :rut_exacto OR cli_rut LIKE :rut_pattern)");
+            $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM `{$db_origen}`.tbl_clientes WHERE cli_vendedor = :vid AND (cli_rut = :rut_exacto OR cli_rut LIKE :rut_pattern)");
             $stmtCheck->execute([
                 ':vid' => $vendedor_id,
                 ':rut_exacto' => $rut_param,
@@ -173,6 +173,5 @@ try {
 } catch (Exception $e) {
     error_log('[get_facturas_cliente.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    $msg = (defined('APP_ENV') && APP_ENV === 'local') ? $e->getMessage() : 'Error al consultar las facturas.';
-    echo json_encode(['success' => false, 'message' => $msg]);
+    echo json_encode(['success' => false, 'message' => 'No fue posible completar la operación.']);
 }

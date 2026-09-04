@@ -219,7 +219,7 @@ try {
     // ══════════════════════════════════════════════════════════════════════
 
     // 5. Obtener lista de cheques para la notificación de correo
-    $stmtChq = $pdo->prepare('SELECT banco, numero_cheque, monto, fecha_vencimiento, foto_cheque_url, comentario FROM cheques WHERE cobranza_id = :id');
+    $stmtChq = $pdo->prepare('SELECT banco, numero_cheque, monto, fecha_vencimiento, foto_cheque_url, comentario FROM cheques WHERE cobranza_id = :id AND (activo = 1 OR activo IS NULL)');
     $stmtChq->execute([':id' => $cobranza_id]);
     $cheques = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
 
@@ -281,5 +281,5 @@ try {
     }
     error_log('[completar_envio.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Error al registrar el envío: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'No fue posible completar la operación.']);
 }

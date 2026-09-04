@@ -852,7 +852,7 @@
             if (cardsContainer) {
                 cardsContainer.innerHTML = `
                     <div class="rg-budget-empty-card">
-                        <div class="rg-budget-empty-icon">⚠️</div>
+                        <div class="rg-budget-empty-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
                         <div class="rg-budget-empty-text">No tienes presupuestos asignados ni giras aprobadas disponibles.</div>
                     </div>
                 `;
@@ -905,13 +905,12 @@
 
                 const typeLabel = isTour ? 'Gira Comercial' : 'Presupuesto Mensual';
                 const typeClass = isTour ? 'rg-budget-type-badge--gira' : 'rg-budget-type-badge--mensual';
-                const typeIcon = isTour ? '✈️' : '📅';
 
                 const title = isTour ? (b.nombre_gira || 'Gira Comercial') : `Presupuesto ${formatPeriodMonth(b.periodo_mes)}`;
 
                 let dateOrPeriodMeta = '';
                 if (isTour && (b.fecha_inicio || b.fecha_fin)) {
-                    dateOrPeriodMeta = `<span>📅 ${formatDateShort(b.fecha_inicio)} al ${formatDateShort(b.fecha_fin)}</span> · `;
+                    dateOrPeriodMeta = `<span>${formatDateShort(b.fecha_inicio)} al ${formatDateShort(b.fecha_fin)}</span> · `;
                 }
 
                 let balanceBadgeClass = 'is-healthy';
@@ -938,7 +937,7 @@
                         <div class="rg-budget-choice-content">
                             <div class="rg-budget-choice-top">
                                 <span class="rg-budget-type-badge ${typeClass}">
-                                    ${typeIcon} ${typeLabel}
+                                    ${typeLabel}
                                 </span>
                                 <span class="rg-budget-balance-badge ${balanceBadgeClass}">
                                     ${balanceBadgeText}
@@ -999,7 +998,7 @@
                         role="checkbox" 
                         aria-checked="${isChecked ? 'true' : 'false'}"
                         data-item-id="${doc.id}">
-                    <div class="rg-check-circle" aria-hidden="true">${isChecked ? '✓' : ''}</div>
+                    <div class="rg-check-circle" aria-hidden="true">${isChecked ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</div>
                     <div class="rg-check-info">
                         <div class="rg-check-merchant">${escapeHtml(doc.razon_social_proveedor || 'Sin Comercio')}</div>
                         <div class="rg-check-date">${formatDateShort(doc.fecha_emision)} · ${escapeHtml(humanize(doc.categoria_gasto))}</div>
@@ -1104,7 +1103,7 @@
         // Actualizar desglose visual en modal
         const fundDestEl = $('#lblModalFundDest');
         if (fundDestEl) {
-            const badgeHtml = `<span class="rg-budget-type-badge ${isTour ? 'rg-budget-type-badge--gira' : 'rg-budget-type-badge--mensual'}">${isTour ? '✈️ Gira' : '📅 Mensual'}</span>`;
+            const badgeHtml = `<span class="rg-budget-type-badge ${isTour ? 'rg-budget-type-badge--gira' : 'rg-budget-type-badge--mensual'}">${isTour ? 'Gira Comercial' : 'Presupuesto Mensual'}</span>`;
             fundDestEl.innerHTML = `${badgeHtml} <span>${escapeHtml(fundTitle)}</span>`;
         }
         const docsCountEl = $('#lblModalDocsCount');

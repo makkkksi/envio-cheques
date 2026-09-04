@@ -86,7 +86,7 @@ try {
             emitido_a = :emitido_a,
             fecha_vencimiento = :fecha_vencimiento,
             comentario = :comentario
-        WHERE id = :id AND cobranza_id = :cobranza_id
+        WHERE id = :id AND cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)
     ");
 
     $cambiosAplicados = 0;

@@ -142,28 +142,50 @@ try {
 
     $empresa_id = (int)$cobranza['empresa_id'];
 
-    // 2. Procesar Eliminación de Cheques
+    // Resolver identidad del actor para claves foráneas y auditoría
+    $actor_usuario_id = 1; // Fallback predeterminado a Usuario Sistema
+    $actor_es_erp = false;
+    if ($usuario_id !== null && $usuario_id !== '') {
+        $stmtCheckActor = $pdo->prepare('SELECT id FROM usuarios WHERE id = :id');
+        $stmtCheckActor->execute([':id' => $usuario_id]);
+        if ($stmtCheckActor->fetchColumn()) {
+            $actor_usuario_id = (int)$usuario_id;
+        } else {
+            $actor_es_erp = true;
+        }
+    }
+    $erpActorInfo = $actor_es_erp ? " (Actor ERP: {$usuario_id})" : "";
+
+    // 2. Procesar Baja Lógica de Cheques (Zero Delete)
     if (is_array($eliminados_ids) && !empty($eliminados_ids)) {
         // Filtrar IDs para evitar inyecciones
         $eliminadosValidos = array_filter($eliminados_ids, 'is_numeric');
         if (!empty($eliminadosValidos)) {
-            // Obtener rutas de fotos de cheques a eliminar
-            $inClause = implode(',', array_fill(0, count($eliminadosValidos), '?'));
-            $stmtGetPhotos = $pdo->prepare("SELECT id, foto_cheque_url FROM cheques WHERE id IN ($inClause) AND cobranza_id = ?");
-            
-            $params = array_merge($eliminadosValidos, [$cobranza_id]);
-            $stmtGetPhotos->execute($params);
-            $chequesEliminar = $stmtGetPhotos->fetchAll();
-
-            foreach ($chequesEliminar as $chequeElim) {
-                if ($chequeElim['foto_cheque_url']) {
-                    $archivosFisicosPorEliminar[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $chequeElim['foto_cheque_url']);
-                }
+            // Construir placeholders nombrados para la cláusula IN
+            $delParams = [':del_cobranza_id' => $cobranza_id];
+            $delPlaceholders = [];
+            foreach (array_values($eliminadosValidos) as $dIdx => $dId) {
+                $ph = ':del_id_' . $dIdx;
+                $delPlaceholders[] = $ph;
+                $delParams[$ph] = (int)$dId;
             }
+            $delInClause = implode(',', $delPlaceholders);
 
-            // Eliminar de base de datos
-            $stmtDel = $pdo->prepare("DELETE FROM cheques WHERE id IN ($inClause) AND cobranza_id = ?");
-            $stmtDel->execute($params);
+            // Baja lógica: marcar como inactivos sin borrar datos ni fotos
+            $stmtSoftDel = $pdo->prepare("UPDATE cheques SET activo = 0, descartado_at = NOW(), descartado_por = :descartado_por, motivo_descarte = :motivo_descarte WHERE id IN ($delInClause) AND cobranza_id = :del_cobranza_id AND activo = 1");
+            $delParams[':descartado_por'] = $actor_usuario_id;
+            $delParams[':motivo_descarte'] = 'Eliminado por vendedor durante edición de cobranza' . $erpActorInfo;
+            $stmtSoftDel->execute($delParams);
+
+            // Registrar en historial por cada cheque descartado
+            $stmtHistDel = $pdo->prepare('INSERT INTO historial_estados (cobranza_id, usuario_id, estado_anterior, estado_nuevo, comentario) VALUES (:cobranza_id, :usuario_id, :estado_anterior, :estado_nuevo, :comentario)');
+            $stmtHistDel->execute([
+                ':cobranza_id' => $cobranza_id,
+                ':usuario_id' => $actor_usuario_id,
+                ':estado_anterior' => 'PENDIENTE_ENVIO',
+                ':estado_nuevo' => 'PENDIENTE_ENVIO',
+                ':comentario' => 'Cheque(s) descartado(s) por baja lógica durante edición (IDs: ' . implode(', ', $eliminadosValidos) . ')' . $erpActorInfo
+            ]);
         }
     }
 
@@ -229,28 +251,24 @@ try {
             // --- ACTUALIZACIÓN DE CHEQUE EXISTENTE ---
             $chqIdInt = (int)$chqId;
 
-            // Obtener foto vieja por si se reemplaza
-            $stmtOld = $pdo->prepare('SELECT foto_cheque_url FROM cheques WHERE id = :id AND cobranza_id = :cobranza_id');
+            // Obtener foto vieja por si se reemplaza (exigir activo = 1)
+            $stmtOld = $pdo->prepare('SELECT foto_cheque_url FROM cheques WHERE id = :id AND cobranza_id = :cobranza_id AND activo = 1');
             $stmtOld->execute([':id' => $chqIdInt, ':cobranza_id' => $cobranza_id]);
             $oldCheque = $stmtOld->fetch();
             
             if (!$oldCheque) {
-                throw new InvalidArgumentException("El cheque especificado no pertenece a esta cobranza");
+                throw new InvalidArgumentException("El cheque especificado no pertenece a esta cobranza o se encuentra dado de baja");
             }
 
             if ($fotoSubida) {
-                // Si sube foto nueva, procesar y encolar la anterior para borrado
+                // Si sube foto nueva, procesar (la foto anterior se preserva, no se borra)
                 $fotoChequeUrl = procesarSubidaArchivo($fileDataIndiv, $empresa_id, 'cheques');
                 $archivosFisicosSubidos[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $fotoChequeUrl);
-
-                if ($oldCheque['foto_cheque_url']) {
-                    $archivosFisicosPorEliminar[] = UPLOADS_BASE_PATH . '/' . preg_replace('/^uploads\//', '', $oldCheque['foto_cheque_url']);
-                }
 
                 $stmtUpd = $pdo->prepare('UPDATE cheques SET
                     monto = :monto,
                     fecha_vencimiento = :fecha_vencimiento, foto_cheque_url = :foto_cheque_url, comentario = :comentario
-                    WHERE id = :id AND cobranza_id = :cobranza_id');
+                    WHERE id = :id AND cobranza_id = :cobranza_id AND activo = 1');
 
                 $stmtUpd->execute([
                     ':monto' => $monto,
@@ -261,11 +279,11 @@ try {
                     ':cobranza_id' => $cobranza_id
                 ]);
             } else {
-                // Actualizar datos sin cambiar la foto
+                // Actualizar datos sin cambiar la foto (exigir activo = 1)
                 $stmtUpd = $pdo->prepare('UPDATE cheques SET
                     monto = :monto,
                     fecha_vencimiento = :fecha_vencimiento, comentario = :comentario
-                    WHERE id = :id AND cobranza_id = :cobranza_id');
+                    WHERE id = :id AND cobranza_id = :cobranza_id AND activo = 1');
 
                 $stmtUpd->execute([
                     ':monto' => $monto,
@@ -288,17 +306,6 @@ try {
     }
 
     // 4. Registrar evento en historial
-    $hist_usuario_id = $usuario_id;
-    if ($hist_usuario_id !== null && $hist_usuario_id !== '') {
-        $stmtCheckHistUser = $pdo->prepare('SELECT id FROM usuarios WHERE id = :id');
-        $stmtCheckHistUser->execute([':id' => $hist_usuario_id]);
-        if (!$stmtCheckHistUser->fetchColumn()) {
-            $hist_usuario_id = 1; // Fallback a Usuario Sistema
-        }
-    } else {
-        $hist_usuario_id = 1;
-    }
-
     $stmtHist = $pdo->prepare('INSERT INTO historial_estados (
         cobranza_id, usuario_id, estado_anterior, estado_nuevo, comentario
     ) VALUES (
@@ -307,20 +314,13 @@ try {
 
     $stmtHist->execute([
         ':cobranza_id' => $cobranza_id,
-        ':usuario_id' => $hist_usuario_id,
+        ':usuario_id' => $actor_usuario_id,
         ':estado_anterior' => 'PENDIENTE_ENVIO',
         ':estado_nuevo' => 'PENDIENTE_ENVIO',
-        ':comentario' => 'Cheques modificados/actualizados por el vendedor'
+        ':comentario' => 'Cheques modificados/actualizados por el vendedor' . $erpActorInfo
     ]);
 
     $pdo->commit();
-
-    // Eliminar fotos obsoletas del almacenamiento físico
-    foreach ($archivosFisicosPorEliminar as $fileToDelete) {
-        if (file_exists($fileToDelete)) {
-            @unlink($fileToDelete);
-        }
-    }
 
     echo json_encode(['success' => true, 'message' => 'Cobranza modificada con éxito']);
 
@@ -329,6 +329,7 @@ try {
     foreach ($archivosFisicosSubidos as $pathFile) {
         if (file_exists($pathFile)) @unlink($pathFile);
     }
+    error_log('[editar_cheques.php] Validación: ' . $e->getMessage());
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 } catch (Exception $e) {
@@ -338,5 +339,6 @@ try {
     }
     error_log('[editar_cheques.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Error de servidor interno al guardar modificaciones']);
+    echo json_encode(['success' => false, 'message' => 'No fue posible completar la operación.']);
 }
+

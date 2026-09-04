@@ -241,7 +241,7 @@ $csrfToken = (string)($_SESSION['csrf_token'] ?? '');
                         </div>
                         <div class="rg-photo-preview" id="photoPreviewState" hidden>
                             <img id="imgPhotoPreview" alt="Previsualización de la boleta">
-                            <button type="button" class="rg-btn-remove-photo" id="btnRemovePhoto" aria-label="Cambiar foto">✕</button>
+                            <button type="button" class="rg-btn-remove-photo" id="btnRemovePhoto" aria-label="Cambiar foto">&times;</button>
                         </div>
                     </div>
 

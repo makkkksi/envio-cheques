@@ -81,7 +81,7 @@ function confirmarDespachoModal() {
     for (const [emp, det] of Object.entries(resumenMap)) {
         htmlMatriz += `
             <div style="display:flex; justify-content:space-between; border-bottom:1px solid #cbd5e1; padding-bottom:6px; margin-bottom:4px;">
-                <span><strong>${emp}</strong> (${det.cobsSet.size} cobranza(s) / ${det.countChq} cheque(s)) ➔ ${det.email}</span>
+                <span><strong>${emp}</strong> (${det.cobsSet.size} cobranza(s) / ${det.countChq} cheque(s)) &rarr; ${det.email}</span>
             </div>
         `;
     }
@@ -138,7 +138,7 @@ function abrirLogDetalle(logId) {
                             <div style="width: 80px; height: 50px; flex-shrink: 0; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; cursor: pointer; position: relative; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" onclick="abrirImagenLightbox('${fotoUrl}')" title="Clic para ampliar cheque digitalizado">
                                 <img src="${fotoUrl}" style="width: 100%; height: 100%; object-fit: cover;" alt="Cheque N° ${ch.numero_cheque || ''}">
                                 <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'">
-                                    <span style="background: rgba(15,23,42,0.85); color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: bold;">🔍 Ver</span>
+                                    <span style="background: rgba(15,23,42,0.85); color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: bold;">Ver</span>
                                 </div>
                             </div>
                         ` : `
@@ -147,7 +147,7 @@ function abrirLogDetalle(logId) {
                             </div>
                         `;
 
-                        const emitidoTexto = ch.emitido_a ? `<span style="display:inline-block; padding: 1px 6px; background: #e0f2fe; color: #0369a1; border-radius: 3px; font-size: 0.72rem; font-weight: 700; border: 1px solid #bae6fd;">🏢 ${ch.emitido_a}</span>` : '';
+                        const emitidoTexto = ch.emitido_a ? `<span style="display:inline-block; padding: 1px 6px; background: #e0f2fe; color: #0369a1; border-radius: 3px; font-size: 0.72rem; font-weight: 700; border: 1px solid #bae6fd;">${ch.emitido_a}</span>` : '';
 
                         chequesHtml += `
                             <div style="display: flex; gap: 12px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 10px; border-radius: 6px;">
@@ -246,7 +246,7 @@ function abrirDetalleCobranza(cobranzaId) {
                 <div style="width: 80px; height: 50px; flex-shrink: 0; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; cursor: pointer; position: relative; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" onclick="abrirImagenLightbox('${fotoUrl}')" title="Clic para ampliar cheque digitalizado">
                     <img src="${fotoUrl}" style="width: 100%; height: 100%; object-fit: cover;" alt="Cheque N° ${ch.numero_cheque || ''}">
                     <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); opacity: 0; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'">
-                        <span style="background: rgba(15,23,42,0.85); color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: bold;">🔍 Ver</span>
+                        <span style="background: rgba(15,23,42,0.85); color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 3px; font-weight: bold;">Ver</span>
                     </div>
                 </div>
             ` : `
@@ -255,7 +255,7 @@ function abrirDetalleCobranza(cobranzaId) {
                 </div>
             `;
 
-            const emitidoTexto = ch.emitido_a ? `<span style="display:inline-block; padding: 1px 6px; background: #e0f2fe; color: #0369a1; border-radius: 3px; font-size: 0.72rem; font-weight: 700; border: 1px solid #bae6fd;">🏢 ${ch.emitido_a}</span>` : '';
+            const emitidoTexto = ch.emitido_a ? `<span style="display:inline-block; padding: 1px 6px; background: #e0f2fe; color: #0369a1; border-radius: 3px; font-size: 0.72rem; font-weight: 700; border: 1px solid #bae6fd;">${ch.emitido_a}</span>` : '';
 
             chequesHtml += `
                 <div style="display: flex; gap: 12px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 10px; border-radius: 6px;">

@@ -110,7 +110,14 @@ try {
 
     // Obtener los IDs de cobranzas para traer sus cheques anidados
     $cobranzasIds = array_column($cobranzas, 'id');
-    $placeholders = implode(',', array_fill(0, count($cobranzasIds), '?'));
+    $chequeParams = [];
+    $chequePlaceholders = [];
+    foreach ($cobranzasIds as $idx => $cId) {
+        $ph = ':cid_' . $idx;
+        $chequePlaceholders[] = $ph;
+        $chequeParams[$ph] = $cId;
+    }
+    $placeholders = implode(',', $chequePlaceholders);
 
     $stmtCheques = $pdo->prepare("SELECT 
                                     id,
@@ -123,8 +130,9 @@ try {
                                     comentario
                                  FROM cheques
                                  WHERE cobranza_id IN ({$placeholders})
+                                   AND (activo = 1 OR activo IS NULL)
                                  ORDER BY id ASC");
-    $stmtCheques->execute($cobranzasIds);
+    $stmtCheques->execute($chequeParams);
     $todosCheques = $stmtCheques->fetchAll();
 
     // Agrupar cheques por cobranza_id
@@ -165,9 +173,8 @@ try {
 } catch (Exception $e) {
     error_log('[get_mis_cobranzas.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    $msg = (defined('APP_ENV') && APP_ENV === 'local') ? $e->getMessage() : 'Error interno del servidor';
     echo json_encode([
         'success' => false,
-        'message' => $msg
+        'message' => 'No fue posible completar la operación.'
     ]);
 }

@@ -266,7 +266,7 @@ function renderMasterTable(cobranzas) {
                 </td>
                 <td>
                     <div style="font-weight: 700; color: #0F172A; white-space: nowrap;">$${montoChequesFmt} <span style="color: #64748B; font-size: 0.8rem; font-weight: normal; margin-left: 4px;">${item.cantidad_cheques} cheque(s)</span></div>
-                    ${tieneDiscrepancia ? `<span class="badge-mismatch">⚠️ Dif: ${difText}</span>` : ''}
+                    ${tieneDiscrepancia ? `<span class="badge-mismatch">Dif: ${difText}</span>` : ''}
                 </td>
                 <td><span class="badge ${estConfig.class}">${estConfig.label}</span></td>
                 <td style="color: var(--color-text-secondary); white-space: nowrap; font-weight: 500;">${formatRelativeTime(item.created_at)}</td>
@@ -461,7 +461,7 @@ function renderSidePanelDetail(data) {
 
         boxDiscrepancia.innerHTML = `
             <div class="discrepancy-callout-header">
-                <span>⚠️ ALERTA DE DISCREPANCIA (${tipoDelta}: ${deltaVal > 0 ? '+' : '-'}${deltaFmt})</span>
+                <span>ALERTA DE DISCREPANCIA (${tipoDelta}: ${deltaVal > 0 ? '+' : '-'}${deltaFmt})</span>
             </div>
             <div class="discrepancy-callout-body">
                 <div>El total registrado en cheques (<strong>$${montoChequesVal.toLocaleString('es-CL')}</strong>) no coincide con el monto de la factura ERP (<strong>$${montoFacturaVal.toLocaleString('es-CL')}</strong>).</div>
@@ -483,8 +483,8 @@ function renderSidePanelDetail(data) {
         boxComprobante.innerHTML = `
             <div class="cheque-card-img-wrapper" onclick="abrirImagenLightbox('../${cob.comprobante_url}')">
                 <div class="cheque-controls-overlay">
-                    <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}')">🔍 Lightbox</button>
-                    <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}'); setTimeout(() => rotarImagenLightbox(), 100)">🔄 Rotar</button>
+                    <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}')">Lightbox</button>
+                    <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${cob.comprobante_url}'); setTimeout(() => rotarImagenLightbox(), 100)">Rotar</button>
                 </div>
                 <img class="cheque-card-img" src="../${cob.comprobante_url}" alt="Comprobante">
             </div>
@@ -510,14 +510,13 @@ function renderSidePanelDetail(data) {
             const fotoHtml = chq.foto_cheque_url ? `
                 <div class="cheque-card-img-wrapper" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
                     <div class="cheque-controls-overlay">
-                        <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">🔍 Lightbox</button>
-                        <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}'); setTimeout(() => rotarImagenLightbox(), 100)">🔄 Rotar</button>
+                        <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}')">Lightbox</button>
+                        <button type="button" class="btn-cheque-control" onclick="event.stopPropagation(); abrirImagenLightbox('../${chq.foto_cheque_url}'); setTimeout(() => rotarImagenLightbox(), 100)">Rotar</button>
                     </div>
                     <img class="cheque-card-img" src="../${chq.foto_cheque_url}" alt="Foto Cheque ${chq.numero_cheque || 'Pendiente'}">
                 </div>
             ` : `
                 <div style="width: 130px; min-height: 85px; background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 6px; color: #64748b; font-size: 0.72rem; gap: 2px; flex-shrink: 0;">
-                    <span style="font-size: 1.1rem;">📦</span>
                     <span style="font-weight: 700; color: #475569;">Foto Purgada</span>
                     <span style="font-size: 0.65rem; color: #94a3b8;">(Vencimiento > 3m)</span>
                 </div>
@@ -535,7 +534,7 @@ function renderSidePanelDetail(data) {
                     </div>
                     <div style="margin-top: 4px;">
                         <span style="display:inline-block; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 0.75rem; font-weight: 700; border: 1px solid #bae6fd;">
-                            🏢 Emitido a: ${emitidoTexto}
+                            Emitido a: ${emitidoTexto}
                         </span>
                     </div>
                     ${chq.comentario ? `
@@ -588,15 +587,15 @@ function renderStickyActionButtons(cob) {
     else if (cob.estado === 'RECIBIDO_TESORERIA') {
         ctaHtml = `
             <span style="font-size: 0.85rem; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 8px 12px; border-radius: 6px; border: 1px solid #bfdbfe; flex: 1; text-align: center;">
-                ✓ Validado físicamente. En cola de despacho por C. Corrientes.
+                Validado físicamente. En cola de despacho por C. Corrientes.
             </span>
         `;
     }
     // Si ya fue DEPOSITADO o RECHAZADO: Deshabilitar acciones (Estado Final Inmutable)
     else if (cob.estado === 'DEPOSITADO') {
-        ctaHtml = `<span style="font-size: 0.85rem; color: #166534; font-weight: 700;">✓ Cobranza Despachada a Cuentas Corrientes</span>`;
+        ctaHtml = `<span style="font-size: 0.85rem; color: #166534; font-weight: 700;">Cobranza Despachada a Cuentas Corrientes</span>`;
     } else if (cob.estado === 'RECHAZADO') {
-        ctaHtml = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">✕ Documento Rechazado / Protestado</span>`;
+        ctaHtml = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">Documento Rechazado / Protestado</span>`;
     } else {
         ctaHtml = `<span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 600;">Esperando despacho del vendedor (${cob.estado})</span>`;
     }
@@ -635,7 +634,7 @@ function renderHorizontalStepper(cob) {
         }
         if (isRejected) stepClass = 'rejected';
 
-        let symbol = isCompleted ? '✓' : (isRejected ? '✖' : (isActive ? '●' : (idx + 1)));
+        let symbol = isCompleted ? '&#10003;' : (isRejected ? '&#10005;' : (isActive ? '&bull;' : (idx + 1)));
         let label = isRejected ? 'Rechazado' : paso.label;
 
         html += `
@@ -676,7 +675,7 @@ function pedirConfirmacionRecepcion(id, numFactura) {
             <img src="../${chq.foto_cheque_url}" style="width: 100%; border-radius: 4px; border: 1px solid #cbd5e1; cursor: pointer;" onclick="abrirImagenLightbox('../${chq.foto_cheque_url}')">
         ` : `
             <div style="width: 100%; height: 75px; background: #e2e8f0; border: 1px dashed #94a3b8; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.68rem; color: #64748b; text-align: center; padding: 4px;">
-                <span>📦 Foto Purgada</span>
+                <span>Foto Purgada</span>
                 <span style="font-size: 0.6rem; color: #94a3b8;">(>3 meses)</span>
             </div>
         `;
@@ -1046,7 +1045,7 @@ function cargarDatosGestionCC() {
                                 <td style="padding: 12px; text-align: center; font-weight: 700;">${log.cantidad_cobranzas}</td>
                                 <td style="padding: 12px;"><span style="${badgeStyle}" ${titleError}>${log.estado_envio}</span></td>
                                 <td style="padding: 12px; text-align: right;">
-                                    <button type="button" class="btn-b2b btn-b2b-secondary" onclick="reenviarBitacoraCC(${log.id})" style="padding: 4px 8px; font-size: 0.8rem;">🔄 Re-enviar</button>
+                                    <button type="button" class="btn-b2b btn-b2b-secondary" onclick="reenviarBitacoraCC(${log.id})" style="padding: 4px 8px; font-size: 0.8rem;">Re-enviar</button>
                                 </td>
                             </tr>
                         `;
@@ -1103,7 +1102,7 @@ let despachandoResumenManual = false;
 function despacharResumenManualCC(btnEl) {
     if (despachandoResumenManual) return;
     despachandoResumenManual = true;
-    let oldText = '⚡ Despachar Resumen Ahora';
+    let oldText = 'Despachar Resumen Ahora';
     if (btnEl) {
         btnEl.disabled = true;
         oldText = btnEl.textContent;

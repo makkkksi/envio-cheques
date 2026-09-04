@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/RendicionesService.php';
 
 final class ApprovalWorkflowService
 {
@@ -250,6 +251,40 @@ final class ApprovalWorkflowService
         if ($decision === self::DECISION_REJECTED && $comment === null) {
             throw new InvalidArgumentException('Indique el motivo del rechazo.');
         }
+
+        // P0-3: Validar antes de tocar la solicitud para no consumir el token si la rendición no admite aprobación con tope
+        if ($request['tipo_solicitud'] === self::TYPE_RENDITION_APPROVAL) {
+            $stmtRendCheck = $pdo->prepare('SELECT id, estado, monto_maximo_aprobable, monto_total_rendido, presupuesto_id FROM rendiciones_gastos WHERE id = :id AND activo = 1 LIMIT 1 FOR UPDATE');
+            $stmtRendCheck->execute([':id' => (int)$request['rendicion_id']]);
+            $rendCheck = $stmtRendCheck->fetch(PDO::FETCH_ASSOC);
+            if (!$rendCheck) {
+                throw new DomainException('Rendición vinculada no encontrada.');
+            }
+            if ($decision === self::DECISION_APPROVED_CAPPED) {
+                $maxAprCheck = (float)($rendCheck['monto_maximo_aprobable'] ?? 0);
+                if ($maxAprCheck <= 0.0) {
+                    throw new DomainException('No se puede aprobar hasta el tope una rendición cuyo monto máximo aprobable es menor o igual a cero.');
+                }
+
+                $stmtDocSum = $pdo->prepare(
+                    'SELECT COALESCE(SUM(COALESCE(monto_validado, monto)), 0)
+                     FROM rendicion_documentos
+                     WHERE rendicion_id = :id AND activo = 1 AND estado_item = "APROBADO"'
+                );
+                $stmtDocSum->execute([':id' => (int)$request['rendicion_id']]);
+                $totalDocsAprobados = (float)$stmtDocSum->fetchColumn();
+                if ($totalDocsAprobados <= 0.0) {
+                    throw new DomainException('No se puede aprobar hasta el tope una rendición sin comprobantes aprobados.');
+                }
+
+                $totalRendido = (float)($rendCheck['monto_total_rendido'] ?? 0);
+                $cappedAmount = min($maxAprCheck, $totalDocsAprobados, $totalRendido);
+                if ($cappedAmount <= 0.0) {
+                    throw new DomainException('El monto aprobable con tope debe ser mayor a cero.');
+                }
+            }
+        }
+
         // APROBADA_TOPE se persiste en la solicitud como APROBADA (resolución positiva); el matiz queda en la rendición.
         $newState = ($decision === self::DECISION_REJECTED) ? self::STATE_REJECTED : self::STATE_APPROVED;
         $now = date('Y-m-d H:i:s');
@@ -290,14 +325,14 @@ final class ApprovalWorkflowService
             'actor_tipo' => 'RESPONSABLE', 'actor_id' => null,
             'actor_nombre' => $request['aprobador_nombre_snapshot'],
             'actor_email' => $request['aprobador_email_snapshot'],
-            'accion' => $decision === self::DECISION_APPROVED ? 'APROBAR_SOLICITUD' : 'RECHAZAR_SOLICITUD',
+            'accion' => $decision === self::DECISION_APPROVED ? 'APROBAR_SOLICITUD' : ($decision === self::DECISION_APPROVED_CAPPED ? 'APROBAR_SOLICITUD_HASTA_TOPE' : 'RECHAZAR_SOLICITUD'),
             'estado_anterior' => $request['estado'], 'estado_nuevo' => $newState,
             'comentario' => $comment,
         ]);
         return ['expired' => false, 'solicitud' => self::loadById($pdo, (int)$request['id'])];
     }
 
-    public static function cancelRequest(PDO $pdo, int $requestId, array $actor, string $reason): array
+    public static function cancelRequest(PDO $pdo, int $requestId, array $actor, string $reason, bool $reopenRendition = true): array
     {
         self::assertTransaction($pdo);
         $request = self::loadByIdForUpdate($pdo, $requestId);
@@ -328,7 +363,7 @@ final class ApprovalWorkflowService
                 ':estado' => 'RECHAZADA', ':presupuesto_id' => (int)$request['presupuesto_id'],
                 ':solicitud_id' => $requestId,
             ]);
-        } elseif ($request['tipo_solicitud'] === self::TYPE_RENDITION_APPROVAL) {
+        } elseif ($request['tipo_solicitud'] === self::TYPE_RENDITION_APPROVAL && $reopenRendition) {
             $update = $pdo->prepare(
                 'UPDATE rendiciones_gastos
                  SET estado = "EN_REVISION_TESORERIA",
@@ -466,13 +501,35 @@ final class ApprovalWorkflowService
                 'metadata' => ['monto_aprobado' => $approvedAmount, 'solicitud_id' => (int)$request['id']],
             ]);
         } elseif ($decision === self::DECISION_APPROVED_CAPPED) {
-            // Aprueba solo hasta el tope presupuestario; el exceso queda no reembolsable.
-            $cappedAmount = (float)$rendition['monto_maximo_aprobable'];
-            if ($cappedAmount <= 0) {
-                // Si por algún motivo el tope es 0, usar el total rendido (misma lógica que APROBADO)
-                $cappedAmount = (float)$rendition['monto_total_rendido'];
+            // P0-3: Aprueba solo hasta el tope presupuestario; el exceso queda no reembolsable.
+            $maxAprobable = (float)($rendition['monto_maximo_aprobable'] ?? 0);
+            if ($maxAprobable <= 0.0) {
+                throw new DomainException('No se puede aprobar hasta el tope una rendición cuyo monto máximo aprobable es menor o igual a cero.');
             }
-            $excessNonReimb = max(0.0, (float)$rendition['monto_total_rendido'] - $cappedAmount);
+
+            // Total vigente de documentos aprobados
+            $stmtDocSum = $pdo->prepare(
+                'SELECT COALESCE(SUM(COALESCE(monto_validado, monto)), 0)
+                 FROM rendicion_documentos
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "APROBADO"'
+            );
+            $stmtDocSum->execute([':id' => $renditionId]);
+            $totalDocsAprobados = (float)$stmtDocSum->fetchColumn();
+            if ($totalDocsAprobados <= 0.0) {
+                throw new DomainException('No se puede aprobar hasta el tope una rendición sin comprobantes aprobados.');
+            }
+
+            $totalRendido = (float)$rendition['monto_total_rendido'];
+
+            // El monto aprobado se calcula exclusivamente como el menor valor entre:
+            // 1. monto_maximo_aprobable
+            // 2. Total vigente de documentos aprobados
+            // 3. monto_total_rendido
+            $cappedAmount = min($maxAprobable, $totalDocsAprobados, $totalRendido);
+            if ($cappedAmount <= 0.0) {
+                throw new DomainException('El monto aprobable con tope debe ser mayor a cero.');
+            }
+            $excessNonReimb = max(0.0, $totalRendido - $cappedAmount);
 
             $stmtApproveDocs = $pdo->prepare(
                 'UPDATE rendicion_documentos
@@ -541,7 +598,8 @@ final class ApprovalWorkflowService
                 ':id' => $renditionId,
             ]);
 
-            $reservedAmount = (float)$rendition['monto_total_rendido'];
+            // Liberar siempre exactamente monto_maximo_aprobable (el saldo reservado de esta rendición)
+            $reservedAmount = (float)($rendition['monto_maximo_aprobable'] ?? $rendition['monto_total_rendido']);
             if ($reservedAmount > 0) {
                 $stmtBudget = $pdo->prepare(
                     'UPDATE presupuestos_vendedores
@@ -568,7 +626,13 @@ final class ApprovalWorkflowService
                 'estado_anterior' => $rendition['estado'],
                 'estado_nuevo' => 'RECHAZADA',
                 'comentario' => $comment,
-                'metadata' => ['solicitud_id' => (int)$request['id']],
+                'metadata' => [
+                    'solicitud_id'      => (int)$request['id'],
+                    'reserva_liberada'  => $reservedAmount,
+                    'total_rendido'     => (float)$rendition['monto_total_rendido'],
+                    'monto_exceso'      => (float)$rendition['monto_exceso'],
+                    'decision'          => $decision,
+                ],
             ]);
         }
     }

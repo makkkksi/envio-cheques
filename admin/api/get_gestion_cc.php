@@ -52,6 +52,7 @@ try {
                 FROM cheques ch
                 JOIN cobranzas c ON ch.cobranza_id = c.id
                 WHERE c.estado = 'RECIBIDO_TESORERIA'
+                  AND (ch.activo = 1 OR ch.activo IS NULL)
                   AND (
                       ch.emitido_a = e.nombre
                       OR (
@@ -125,7 +126,7 @@ try {
     foreach ($cobranzas_en_cola as &$cob) {
         $cobId = $cob['cobranza_id'];
         
-        $stmtChq = $pdo->prepare("SELECT id, numero_cheque, banco, monto as monto_cheque, fecha_vencimiento, foto_cheque_url, emitido_a, cuenta_corriente FROM cheques WHERE cobranza_id = :cobranza_id");
+        $stmtChq = $pdo->prepare("SELECT id, numero_cheque, banco, monto as monto_cheque, fecha_vencimiento, foto_cheque_url, emitido_a, cuenta_corriente FROM cheques WHERE cobranza_id = :cobranza_id AND (activo = 1 OR activo IS NULL)");
         $stmtChq->execute([':cobranza_id' => $cobId]);
         $cob['cheques'] = $stmtChq->fetchAll(PDO::FETCH_ASSOC);
 

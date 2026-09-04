@@ -44,6 +44,26 @@ try {
     RendicionesService::validateDinnerFields($document);
     $documentHash = RendicionesService::createDocumentHash($document, $seller['vendedor_id'], $seller['empresa_id']);
 
+    // Verificar si existe otro documento activo con el mismo hash en estado bloqueante (BORRADOR, PENDIENTE, APROBADO)
+    $stmtCheckBlocking = $pdo->prepare(
+        'SELECT id, estado_item FROM rendicion_documentos
+         WHERE document_hash = :hash
+           AND activo = 1
+           AND estado_item IN ("BORRADOR", "PENDIENTE", "APROBADO")
+           ' . ($documentId > 0 ? 'AND id != :current_id' : '') . '
+         LIMIT 1'
+    );
+    $paramsCheck = [':hash' => $documentHash];
+    if ($documentId > 0) {
+        $paramsCheck[':current_id'] = $documentId;
+    }
+    $stmtCheckBlocking->execute($paramsCheck);
+    if ($stmtCheckBlocking->fetch()) {
+        RendicionesService::jsonResponse(false, [
+            'message' => 'Este comprobante ya fue registrado en una rendición activa, aprobada o pendiente.'
+        ], 409);
+    }
+
     $existingDoc = null;
     if ($documentId > 0) {
         $stmtExisting = $pdo->prepare(
@@ -188,7 +208,7 @@ try {
 } catch (Throwable $exception) {
     RendicionesDocumentService::rollback($storedFile['absolute_path'] ?? null);
     if (RendicionesService::isDuplicateKey($exception)) {
-        RendicionesService::jsonResponse(false, ['message' => 'Este documento ya fue registrado previamente. No se permite registrar comprobantes duplicados.'], 409);
+        RendicionesService::jsonResponse(false, ['message' => 'Este comprobante ya fue registrado en una rendición activa, aprobada o pendiente.'], 409);
     }
     error_log('[rendiciones.guardar_documento_bolsa] ' . $exception->getMessage());
     RendicionesService::jsonResponse(false, ['message' => 'No fue posible guardar el documento.'], 500);

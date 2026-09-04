@@ -52,6 +52,12 @@ final class RendicionPlanillaPdf extends FPDF
     }
 
     /**
+     * Directorio base alternativo para pruebas automatizadas exclusivamente en entorno PHP CLI.
+     * Bajo ningún concepto puede configurarse ni alterarse vía peticiones HTTP.
+     */
+    public static ?string $testUploadDir = null;
+
+    /**
      * Construye y guarda la planilla en disco en la carpeta uploads.
      * Retorna la ruta relativa del archivo.
      */
@@ -96,7 +102,14 @@ final class RendicionPlanillaPdf extends FPDF
         $code = preg_replace('/[^A-Za-z0-9_-]/', '', (string)$rendition['codigo_rendicion']);
 
         $relativeDir = "uploads/{$empresaId}/{$period}/rendiciones/{$sellerId}";
-        $absoluteDir = __DIR__ . '/../' . $relativeDir;
+        $isCli = (php_sapi_name() === 'cli');
+        if ($isCli && self::$testUploadDir !== null && is_string(self::$testUploadDir) && self::$testUploadDir !== '') {
+            $baseDir = rtrim(self::$testUploadDir, '/\\');
+            $absoluteDir = "{$baseDir}/{$relativeDir}";
+        } else {
+            $absoluteDir = __DIR__ . '/../' . $relativeDir;
+        }
+
         if (!is_dir($absoluteDir)) {
             mkdir($absoluteDir, 0755, true);
         }

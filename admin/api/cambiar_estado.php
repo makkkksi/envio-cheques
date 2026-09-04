@@ -116,7 +116,7 @@ try {
 
     // 1.5. Si el estado es RECIBIDO_TESORERIA, actualizar banco, número de cheques, cuenta corriente y emitido_a
     if ($nuevo_estado === 'RECIBIDO_TESORERIA') {
-        $stmtUpdChq = $pdo->prepare("UPDATE cheques SET banco = :banco, numero_cheque = :numero_cheque, cuenta_corriente = :cuenta_corriente, monto = :monto, emitido_a = :emitido_a WHERE id = :id AND cobranza_id = :cob_id");
+        $stmtUpdChq = $pdo->prepare("UPDATE cheques SET banco = :banco, numero_cheque = :numero_cheque, cuenta_corriente = :cuenta_corriente, monto = :monto, emitido_a = :emitido_a WHERE id = :id AND cobranza_id = :cob_id AND (activo = 1 OR activo IS NULL)");
         foreach ($chequesCompletados as $chq) {
             if (isset($chq['id'], $chq['banco'], $chq['numero_cheque'], $chq['monto'])) {
                 $emitido_a_val = !empty(trim($chq['emitido_a'] ?? '')) ? trim($chq['emitido_a']) : $empresaFallback;
@@ -133,13 +133,13 @@ try {
         }
     }
 
-    // 2. Si el estado es DEPOSITADO, actualizar datos de depósito en la tabla cheques
+    // 2. Si el estado es DEPOSITADO, actualizar datos de depósito en la tabla cheques (solo activos)
     if ($nuevo_estado === 'DEPOSITADO') {
         $fechaDepVal = (!empty($fecha_deposito)) ? $fecha_deposito . ' 00:00:00' : date('Y-m-d H:i:s');
         $stmtChq = $pdo->prepare("UPDATE cheques SET 
                                     numero_papeleta_deposito = :papeleta,
                                     fecha_deposito_real = :fecha
-                                  WHERE cobranza_id = :id");
+                                  WHERE cobranza_id = :id AND (activo = 1 OR activo IS NULL)");
         $stmtChq->execute([
             ':papeleta' => $numero_papeleta,
             ':fecha'    => $fechaDepVal,
@@ -190,7 +190,7 @@ try {
                 $stmtCobData->execute([':id' => $cobranza_id]);
                 $cobData = $stmtCobData->fetch(PDO::FETCH_ASSOC);
 
-                $stmtChequesData = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :id");
+                $stmtChequesData = $pdo->prepare("SELECT * FROM cheques WHERE cobranza_id = :id AND (activo = 1 OR activo IS NULL)");
                 $stmtChequesData->execute([':id' => $cobranza_id]);
                 $chequesCompletos = $stmtChequesData->fetchAll(PDO::FETCH_ASSOC);
 

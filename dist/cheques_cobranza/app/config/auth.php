@@ -388,11 +388,13 @@ function requireSellerContext(PDO $pdo): array
         jsonAuthError(401, 'La sesión no contiene un vendedor y empresa válidos.');
     }
 
+    $sellerEmail = !empty($sessionSeller['email']) ? strtolower(trim((string)$sessionSeller['email'])) : null;
+
     return [
         'vendedor_id' => $sellerId,
         'empresa_id' => $empresaId,
         'nombre' => trim((string)($sessionSeller['nombre'] ?? 'Vendedor')),
-        'email' => trim((string)($sessionSeller['email'] ?? '')),
+        'email' => $sellerEmail,
         'rol' => 'VENDEDOR',
     ];
 }

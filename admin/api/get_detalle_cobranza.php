@@ -101,6 +101,7 @@ try {
                                     fecha_deposito_real
                                 FROM cheques 
                                 WHERE cobranza_id = :id
+                                  AND (activo = 1 OR activo IS NULL)
                                 ORDER BY id ASC");
     $stmtCheques->execute([':id' => $id]);
     $cheques = $stmtCheques->fetchAll(PDO::FETCH_ASSOC);

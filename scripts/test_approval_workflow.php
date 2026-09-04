@@ -6,6 +6,10 @@
 
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../services/ApprovalWorkflowService.php';
+require_once __DIR__ . '/../services/RendicionPlanillaPdf.php';
+
+$testPdfDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qa_pdf_wf_' . uniqid();
+RendicionPlanillaPdf::$testUploadDir = $testPdfDir;
 
 $pdo = Database::getCobranzasConnection();
 $passes = 0;
@@ -88,6 +92,34 @@ function insertRendition(PDO $pdo, int $companyId, int $budgetId, string $code, 
         ':aplico_tope' => $totalValue > $maximumValue ? 1 : 0,
         ':estado' => 'EN_REVISION_TESORERIA', ':activo' => 1,
         ':enviada_at' => date('Y-m-d H:i:s'),
+    ]);
+    return (int)$pdo->lastInsertId();
+}
+
+function insertDocument(PDO $pdo, int $companyId, int $userId, int $renditionId, string $amount, string $estado = 'APROBADO'): int
+{
+    $hash = hash('sha256', '761234567|BOLETA_ELECTRONICA|DOC-' . bin2hex(random_bytes(8)));
+    $stmt = $pdo->prepare(
+        'INSERT INTO rendicion_documentos (
+            empresa_id, vendedor_id, vendedor_nombre, vendedor_email,
+            rendicion_id, tipo_documento, categoria_gasto, fecha_emision,
+            monto, monto_validado, foto_documento_url, document_hash,
+            estado_item, activo
+         ) VALUES (
+            :empresa_id, :vendedor_id, "QA Workflow", "qa@example.invalid",
+            :rendicion_id, "BOLETA_ELECTRONICA", "COLACION", "2099-01-12",
+            :monto, :monto_val, "test.jpg", :hash,
+            :estado, 1
+         )'
+    );
+    $stmt->execute([
+        ':empresa_id' => $companyId,
+        ':vendedor_id' => 987654321,
+        ':rendicion_id' => $renditionId,
+        ':monto' => $amount,
+        ':monto_val' => $estado === 'APROBADO' ? $amount : '0.00',
+        ':hash' => $hash,
+        ':estado' => $estado,
     ]);
     return (int)$pdo->lastInsertId();
 }
@@ -306,6 +338,76 @@ try {
     check($rejected['estado'] === 'EN_REVISION_TESORERIA', 'rechazar excepción no rechaza la rendición base');
     check((float)$rejected['monto_maximo_aprobable'] === 200000.0, 'rechazo conserva el tope ordinario');
 
+    // Prueba P0: Rendición aprobada hasta el tope audita APROBAR_SOLICITUD_HASTA_TOPE
+    $cappedRendId = insertRendition($pdo, $companyId, $monthlyBudgetId, 'RND-QAC-' . strtoupper($suffix), '180000.00', '150000.00');
+    insertDocument($pdo, $companyId, $userId, $cappedRendId, '180000.00', 'APROBADO');
+    $cappedRequest = ApprovalWorkflowService::createRequest($pdo, [
+        'tipo_solicitud' => ApprovalWorkflowService::TYPE_RENDITION_APPROVAL,
+        'rendicion_id' => $cappedRendId, 'aprobador_id' => $approverId,
+        'solicitado_por' => $userId, 'monto_solicitado' => '180000.00',
+        'justificacion' => 'Aprobación con tope.', 'actor_nombre' => 'Usuario QA',
+    ]);
+    ApprovalWorkflowService::markEmailResult($pdo, (int)$cappedRequest['solicitud']['id'], true);
+    ApprovalWorkflowService::resolveByToken($pdo, $cappedRequest['raw_token'], ApprovalWorkflowService::DECISION_APPROVED_CAPPED, 'Aprobado hasta el tope disponible');
+    $stmtHistCapped = $pdo->prepare('SELECT accion FROM solicitud_aprobacion_historial WHERE solicitud_id = :id ORDER BY id DESC LIMIT 1');
+    $stmtHistCapped->execute([':id' => (int)$cappedRequest['solicitud']['id']]);
+    check($stmtHistCapped->fetchColumn() === 'APROBAR_SOLICITUD_HASTA_TOPE', 'aprobación hasta el tope se audita como APROBAR_SOLICITUD_HASTA_TOPE');
+
+    $stmtCheckCappedRend = $pdo->prepare('SELECT monto_total_aprobado, monto_maximo_aprobable, monto_exceso_no_reembolsable FROM rendiciones_gastos WHERE id = :id');
+    $stmtCheckCappedRend->execute([':id' => $cappedRendId]);
+    $rowCappedRend = $stmtCheckCappedRend->fetch(PDO::FETCH_ASSOC);
+    check((float)$rowCappedRend['monto_total_aprobado'] <= (float)$rowCappedRend['monto_maximo_aprobable'], 'APROBADA_TOPE nunca supera monto_maximo_aprobable');
+
+    // 18 y 19: APROBADA_TOPE no usa monto_total_rendido si no hay documentos aprobados y no consume el token
+    $noDocsCappedRendId = insertRendition($pdo, $companyId, $monthlyBudgetId, 'RND-QAND-' . strtoupper($suffix), '120000.00', '100000.00');
+    // Todos los comprobantes rechazados
+    insertDocument($pdo, $companyId, $userId, $noDocsCappedRendId, '120000.00', 'RECHAZADO');
+    $noDocsCappedReq = ApprovalWorkflowService::createRequest($pdo, [
+        'tipo_solicitud' => ApprovalWorkflowService::TYPE_RENDITION_APPROVAL,
+        'rendicion_id' => $noDocsCappedRendId, 'aprobador_id' => $approverId,
+        'solicitado_por' => $userId, 'monto_solicitado' => '120000.00',
+        'justificacion' => 'Prueba sin comprobantes aprobados.', 'actor_nombre' => 'Usuario QA',
+    ]);
+    ApprovalWorkflowService::markEmailResult($pdo, (int)$noDocsCappedReq['solicitud']['id'], true);
+    expectException(
+        fn() => ApprovalWorkflowService::resolveByToken(
+            $pdo,
+            $noDocsCappedReq['raw_token'],
+            ApprovalWorkflowService::DECISION_APPROVED_CAPPED,
+            'Intento de aprobar sin comprobantes aprobados'
+        ),
+        DomainException::class,
+        '18. APROBADA_TOPE no usa monto_total_rendido si no hay documentos aprobados'
+    );
+    $stmtCheckNoDocsReq = $pdo->prepare('SELECT estado, token_usado_at, activo FROM solicitudes_aprobacion WHERE id = :id');
+    $stmtCheckNoDocsReq->execute([':id' => (int)$noDocsCappedReq['solicitud']['id']]);
+    $rowNoDocsReq = $stmtCheckNoDocsReq->fetch(PDO::FETCH_ASSOC);
+    check($rowNoDocsReq['estado'] === ApprovalWorkflowService::STATE_PENDING_DECISION && $rowNoDocsReq['token_usado_at'] === null && (int)$rowNoDocsReq['activo'] === 1, '19. APROBADA_TOPE con cero documentos aprobados no consume el token');
+
+    // P0-3: Rendición con monto_maximo_aprobable cero no admite APROBADA_TOPE y no consume token
+    $zeroCappedRendId = insertRendition($pdo, $companyId, $monthlyBudgetId, 'RND-QAZ-' . strtoupper($suffix), '100000.00', '0.00');
+    $zeroCappedReq = ApprovalWorkflowService::createRequest($pdo, [
+        'tipo_solicitud' => ApprovalWorkflowService::TYPE_RENDITION_APPROVAL,
+        'rendicion_id' => $zeroCappedRendId, 'aprobador_id' => $approverId,
+        'solicitado_por' => $userId, 'monto_solicitado' => '100000.00',
+        'justificacion' => 'Prueba tope cero.', 'actor_nombre' => 'Usuario QA',
+    ]);
+    ApprovalWorkflowService::markEmailResult($pdo, (int)$zeroCappedReq['solicitud']['id'], true);
+    expectException(
+        fn() => ApprovalWorkflowService::resolveByToken(
+            $pdo,
+            $zeroCappedReq['raw_token'],
+            ApprovalWorkflowService::DECISION_APPROVED_CAPPED,
+            'Intento de aprobar con tope cero'
+        ),
+        DomainException::class,
+        'APROBADA_TOPE con máximo aprobable cero es rechazada'
+    );
+    $stmtCheckZeroReq = $pdo->prepare('SELECT estado, token_usado_at, activo FROM solicitudes_aprobacion WHERE id = :id');
+    $stmtCheckZeroReq->execute([':id' => (int)$zeroCappedReq['solicitud']['id']]);
+    $rowZeroReq = $stmtCheckZeroReq->fetch(PDO::FETCH_ASSOC);
+    check($rowZeroReq['estado'] === ApprovalWorkflowService::STATE_PENDING_DECISION && $rowZeroReq['token_usado_at'] === null && (int)$rowZeroReq['activo'] === 1, 'el rechazo de tope cero no consume el token');
+
     $tourResendId = insertBudget($pdo, $companyId, $userId, 'GIRA', 'QA-GIRA-REENVIO-' . $suffix, '150000.00');
     $resend = ApprovalWorkflowService::createRequest($pdo, [
         'tipo_solicitud' => ApprovalWorkflowService::TYPE_TOUR,
@@ -429,11 +531,25 @@ try {
 
     $pdo->rollBack();
     echo "\nRESULTADO: {$passes} comprobaciones PASS; ROLLBACK completado.\n";
-    exit(0);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
     fwrite(STDERR, $exception->getMessage() . "\n");
     exit(1);
+} finally {
+    if (isset($testPdfDir) && is_dir($testPdfDir)) {
+        $it = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($testPdfDir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($it as $file) {
+            if ($file->isDir()) {
+                @rmdir($file->getPathname());
+            } else {
+                @unlink($file->getPathname());
+            }
+        }
+        @rmdir($testPdfDir);
+    }
 }

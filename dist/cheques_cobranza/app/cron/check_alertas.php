@@ -95,10 +95,10 @@ try {
             $stmtCheck = $pdo->prepare("
                 SELECT COUNT(*) FROM log_envios_informes 
                 WHERE tipo_informe = 'ALERTA_DEMORA' 
-                AND asunto = ? 
+                AND asunto = :asunto 
                 AND DATE(fecha_envio) = CURDATE()
             ");
-            $stmtCheck->execute([$asuntoAlerta]);
+            $stmtCheck->execute([':asunto' => $asuntoAlerta]);
             
             if ($stmtCheck->fetchColumn() > 0) {
                 continue; // Ya se alertó hoy sobre esta cobranza
@@ -122,10 +122,13 @@ try {
                 $stmtLog = $pdo->prepare("
                     INSERT INTO log_envios_informes 
                     (empresa_id, tipo_informe, destinatario, copia_cc, asunto, estado_envio)
-                    VALUES (?, 'ALERTA_DEMORA', ?, ?, ?, 'ENVIADO')
+                    VALUES (:empresa_id, 'ALERTA_DEMORA', :destinatario, :copia_cc, :asunto, 'ENVIADO')
                 ");
                 $stmtLog->execute([
-                    $cob['empresa_id'], $emailDestinoVendedor, $emailCC, $asuntoAlerta
+                    ':empresa_id' => $cob['empresa_id'],
+                    ':destinatario' => $emailDestinoVendedor,
+                    ':copia_cc' => $emailCC,
+                    ':asunto' => $asuntoAlerta,
                 ]);
                 $alertasEnviadas++;
                 

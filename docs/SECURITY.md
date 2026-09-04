@@ -344,3 +344,110 @@ Durante la auditoría general de seguridad y rendimiento de Julio de 2026, se ap
 - El rechazo de un exceso por Tesorería requiere `rendiciones.manage`, CSRF y motivo obligatorio. Se ejecuta con bloqueo transaccional, libera el compromiso y marca como consumido cualquier token ya emitido antes de pasar a `RECHAZADA`.
 - El comprobante PDF administrativo exige `rendiciones.view`, valida el `id`, usa exclusivamente consultas preparadas y sólo existe para decisiones `APROBADO`. No incluye el Magic Token ni correos; su firma se deriva de snapshots inmutables de nombre/cargo y añade un código SHA-256 abreviado de verificación.
 - Todas las transiciones críticas insertan historial y las acciones administrativas también se registran en `audit_logs`.
+
+---
+
+## 13. Hardening Preproducción: Zero Delete, Named Parameters y Error Sanitization (Septiembre 2026)
+
+- **Zero Delete en Cheques:** Eliminación física estrictamente prohibida en tablas de negocio. La tabla `cheques` opera mediante baja lógica (`activo = 0`, `descartado_at = NOW()`, `descartado_por = :user_id`, `motivo_descarte = :motivo`). Las fotos de cheques descartados no se eliminan físicamente en el flujo de edición, garantizando trazabilidad y permitiendo que el cron de purga (`cron/purgar_fotos_cheques_vencidos.php`) las procese según su ciclo de vida (>3 meses post-vencimiento).
+- **Parámetros Nombrados en PDO:** Todas las consultas preparadas en `api/`, `admin/api/`, `services/` y `cron/` utilizan exclusivamente placeholders con nombre (`:param`), eliminando por completo los placeholders posicionales (`?`) para prevenir descalces de parámetros y aumentar la mantenibilidad.
+- **Sanitización Integral de Respuestas API:** Ningún endpoint expone `$e->getMessage()`, rutas del servidor ni trazas de excepción en respuestas HTTP 500. Todos los errores inesperados o de BD se registran en `error_log()` en el servidor y responden al cliente con mensajes neutros y seguros: `{ "success": false, "message": "..." }`.
+- **Zero Emojis en Frontend:** Todas las interfaces web (`admin/`, `rendiciones/`, portal público) eliminan el uso de emojis unicode en favor de SVGs vectoriales accesibles, entidades HTML o texto profesional neutro, evitando problemas de renderizado heterogéneo entre plataformas móviles y de escritorio.
+- **Verificación Continua de Despliegue (`scripts/verify_release.php`):** Script automatizado de release que audita sintaxis PHP (109 archivos), contrato de esquema (17 tablas), contrato de seguridad global (Zero Delete, Named Parameters, Error Sanitization en 56 archivos backend), validación de frontend sin emojis (37 archivos) y paridad SHA-256 estricta entre la raíz y la réplica `dist/cheques_cobranza/app/`.
+
+## 14. Política Centralizada de Notificaciones por Correo a Vendedores e Inmutabilidad (Septiembre 2026)
+
+- **Notificaciones a Vendedores Deshabilitadas en Todos los Entornos:** Por decisión estricta de negocio, actualmente el sistema no debe enviar correos a vendedores bajo ninguna circunstancia, ni en entorno local ni en producción. Esto se controla mediante la política centralizada `MAIL_SELLER_NOTIFICATIONS_ENABLED = false` definida por defecto en `config/app.php` y replicada en `dist/cheques_cobranza/app/config/app.php`.
+- **Correos Internos y Administrativos Habilitados:** Los correos dirigidos a aprobadores, responsables de Gerencia/Jefatura, Tesorería, Cuentas Corrientes, Digitadoras y destinatarios administrativos configurados continúan habilitados y operativos en producción.
+- **Guard Local Inquebrantable:** En `APP_ENV=local`, ningún correo SMTP real es despachado hacia el exterior. `MailService::sendSmtp()` simula éxito de forma controlada y registra el evento en logs, garantizando cero tráfico externo involuntario y permitiendo pruebas locales fluidas sin timeouts ni caídas.
+- **Omisión Segura y Auditoría sin Fuga de Información:** Cuando se invoca un método de notificación a vendedor estando la política deshabilitada (`isSellerNotificationEnabled() === false`), el sistema omite el despacho SMTP, registra en `error_log` un aviso neutro (`Notificación a vendedor omitida por política`) sin exponer nombre, dirección de correo, token de acceso, enlace mágico ni cuerpo HTML, y retorna `true` para no romper la transacción ni marcar el flujo financiero como fallido.
+- **Inmutabilidad de Cheques Dados de Baja:** Los cheques con `activo = 0` son estrictamente inmutables para operaciones ordinarias. Todas las consultas de edición, cambio de estado y cálculo exigen `AND activo = 1` o `AND (activo = 1 OR activo IS NULL)`. Un cheque inactivo no puede cambiar monto, fotografía ni fecha, no recibe número de depósito, no suma en totales y no puede reactivarse accidentalmente.
+
+## 15. Handoff Seguro por POST y Bloqueo de Parámetros Legacy en Producción (Septiembre 2026)
+
+- **Eliminación de Parámetros de Identidad en URL:** La identidad del vendedor (`vendedor_id`, `empresa`, `vendedor_nombre`) ya no se transmite vía query string en las URLs de Cheques ni de Rendiciones.
+- **Endpoint Dedicado `api/seller_handoff.php`:**
+  - Acepta exclusivamente peticiones `POST` (peticiones `GET` o cualquier otro método son rechazadas con HTTP 405).
+  - Recibe `session_token`, `empresa` y `destino`.
+  - Valida el destino contra una lista cerrada estricta: `cheques` (`/index.html`) o `rendiciones` (`/rendiciones/vendedor.php`). Cualquier otro valor es rechazado con HTTP 400.
+- **Verificación de Sesión Comercial de Solo Lectura:**
+  - Consulta `web_sesiones JOIN web_usuarios` en la BD ERP correspondiente según la empresa.
+  - Verifica que el usuario tenga `rol = 'vendedor'`, `activo = 1` y un `vend_cod` numérico positivo válido.
+  - Si no existe sesión activa o está vencida, responde HTTP 401 sin exponer stack traces ni detalles internos.
+- **Establecimiento de Sesión y Redirección Limpia:**
+  - Ejecuta `startSellerSession()` y `session_regenerate_id(true)` para mitigar fijación de sesión.
+  - Genera o renueva el token CSRF (`$_SESSION['csrf_token']`).
+  - Redirige al navegador mediante código **HTTP 303 (See Other)** hacia la ruta fija destino, garantizando que no viajen tokens, identificadores ni nombres en la cabecera `Location` ni en la barra de direcciones.
+  - Emite encabezados anti-caché: `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache` y `Referrer-Policy: no-referrer`.
+- **Reutilización Idempotente:** El mismo token de sesión comercial activo del portal de vendedores puede utilizarse repetidamente para navegar a los módulos sin bloqueo artificial ni consumo de un solo uso.
+- **Auditoría Segura en `audit_logs`:**
+  - El evento `SELLER_HANDOFF` registra en `detalles` únicamente `empresa_id`, `vendedor_id`, `destino` y `resultado: SUCCESS`.
+  - **Prohibición Absoluta:** Nunca se guarda el `session_token` crudo, hashes del token, contraseñas ni datos sensibles en la base de datos ni en archivos de registro.
+- **Bloqueo de Acceso Legacy en Producción:**
+  - En `APP_ENV=production`, `api/auth_seller.php` bloquea inmediatamente (HTTP 401) cualquier intento de autenticación que contenga `vendedor_id`, `vendedor`, `vendedor_nombre` o `empresa` en `$_GET`.
+  - En `APP_ENV=local`, este acceso se permite exclusivamente para facilitar pruebas de desarrollo, emitiendo una advertencia segura en `error_log`.
+- **Alcance y Desacople de Android:** La aplicación `android/Autotec_Grande` no forma parte de esta implementación; su autenticación queda fuera de alcance y no constituye bloqueo para el despliegue a producción.
+- **Garantía Read-Only sobre Bases ERP:** Ningún componente del handoff ni del directorio de vendedores ejecuta escrituras (`INSERT`, `UPDATE`, `DELETE`, `ALTER`) en las cuatro bases ERP (`automarc_automarco`, `autohd_automarcohd`, `autotec_ecom`, `gabteccl_sitbdd1978`).
+
+---
+
+## 16. Validación Estricta de vend_cod y Pruebas HTTP Reales de Handoff (Septiembre 2026)
+
+### 16.1 Validación Canónica Estricta de `vend_cod`
+Para prevenir descalces de identidad, coerción implícita de tipos en MySQL y comportamientos no deterministas en `CAST(vend_cod AS UNSIGNED)`:
+- **Validación en SQL antes de cualquier CAST:**
+  ```sql
+  TRIM(vend_cod) REGEXP '^[1-9][0-9]*$'
+  ```
+  Asegura que el campo contenga exclusivamente dígitos decimales sin signo, comenzando por un dígito del 1 al 9.
+- **Rechazo Expreso de Ceros a la Izquierda (`0012`):**
+  Para garantizar una **representación canónica única** por vendedor y evitar que un mismo código se ingrese como `0012` y `12`, los valores con ceros a la izquierda son estrictamente rechazados tanto en SQL como en PHP.
+- **Resolución Exacta sin Coerción Implícita de MySQL:**
+  En búsquedas y resoluciones por `vendedor_id`, la comparación en SQL utiliza:
+  ```sql
+  AND TRIM(vend_cod) = :vend_cod
+  ```
+  donde `:vend_cod` es una cadena canónica normalizada, evitando que MySQL convierta `12abc` o `12.0` en coincidencias automáticas.
+- **Validación Defensiva en PHP (`validateVendCod`):**
+  A nivel de aplicación se ejecuta:
+  ```php
+  $raw = trim((string)$value);
+  if (!preg_match('/^[1-9][0-9]*$/D', $raw)) {
+      return null;
+  }
+  // Rango 32-bit con signed INT (1 a 2147483647)
+  if (strlen($raw) > 10 || (int)$raw > 2147483647) {
+      return null;
+  }
+  ```
+- **Matriz de Valores No Admitidos:**
+  - `0` (cero): Rechazado.
+  - Negativos (`-12`): Rechazados.
+  - Signo más (`+12`): Rechazado.
+  - Decimales (`12.5`): Rechazados.
+  - Notación científica (`1e2`): Rechazada.
+  - Ceros a la izquierda (`0012`): Rechazado (mantiene canonicidad única).
+  - Alfanuméricos (`12abc`, `abc12`): Rechazados.
+  - Cadenas vacías o espacios (`""`, `"   "`): Rechazadas.
+  - Enteros desbordados (`99999999999999999999`, `2147483648`): Rechazados.
+
+### 16.2 Prueba HTTP Real de Integración y Transaccionalidad
+- **Aislamiento de Entorno de Prueba:** El test de integración (`scratch/test_http_handoff.php`) arranca un servidor PHP CLI dedicado en un puerto efímero libre.
+- **Protección Inquebrantable de Mocks:** El router de prueba solo opera si `TEST_HTTP_SERVER=1` y `APP_ENV=local`. Si `APP_ENV=production`, `SellerHandoffService::setSessionVerifier()` y `verifySessionToken()` lanzan una excepción fatal inmediata, imposibilitando cualquier bypass en producción.
+- **Ciclo Completo Certificado por HTTP Real:**
+  - Petición POST real con cURL/Streams (sin auto-redirect).
+  - Respuesta HTTP 303 (See Other).
+  - `Location` fija y limpia, sin tokens, nombres ni query string de identidad.
+  - Emisión de cookie segura `AUTOMARCO_SELLER_SID`.
+  - Regeneración obligatoria de Session ID (defensa contra fijación de sesión).
+  - Segunda petición GET a `api/auth/session_vendedor.php` con la cookie emitida para validar el contexto autenticado del vendedor.
+  - Reutilización exitosa de la sesión comercial sin bloqueo artificial.
+  - Códigos de control: GET -> 405; token inválido -> 401; destino no autorizado -> 400; Origin no permitido -> 403.
+- **Garantía de Cero Datos Residuales (ROLLBACK):**
+  - Toda escritura originada durante los tests (como `AuditService::log` del handoff) se ejecuta dentro de una transacción activa en `bd_modulo_cobranzas`.
+  - Se registra un shutdown handler que ejecuta `rollBack()` indefectiblemente al concluir la petición.
+  - No se ejecutan `DELETE` físicos para limpiar; el conteo de filas de `audit_logs` antes y después de los tests es estrictamente idéntico.
+
+
+
+

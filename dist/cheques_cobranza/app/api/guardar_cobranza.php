@@ -458,5 +458,5 @@ try {
     }
     error_log('[guardar_cobranza.php] Error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Error al guardar la cobranza: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'No fue posible completar la operación.']);
 }

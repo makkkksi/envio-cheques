@@ -130,7 +130,7 @@ $csrfToken = getCsrfToken();
             <aside class="detail-panel" id="detailPanel">
                 <!-- EMPTY STATE -->
                 <div class="empty-detail-state" id="emptyDetailState">
-                    <div class="empty-detail-icon">📁</div>
+                    <div class="empty-detail-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
                     <h3 class="empty-detail-state-h3">Selecciona una cobranza de la lista para auditar</h3>
                     <p class="empty-detail-state-p">Haz clic en cualquier fila de la izquierda para inspeccionar sus cheques, comprobante y trazabilidad.</p>
                 </div>

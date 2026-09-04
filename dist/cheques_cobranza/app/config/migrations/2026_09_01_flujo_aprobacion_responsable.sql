@@ -63,8 +63,17 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 ALTER TABLE solicitudes_aprobacion
 MODIFY COLUMN tipo_solicitud ENUM('GIRA', 'EXCEPCION_MENSUAL', 'APROBACION_RENDICION') NOT NULL;
 
--- 5. Actualizar el constraint de comprobación chk_solicitud_objetivo
-ALTER TABLE solicitudes_aprobacion DROP CHECK chk_solicitud_objetivo;
+-- 5. Actualizar el constraint de comprobación chk_solicitud_objetivo de forma idempotente
+SET @chk_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.TABLE_CONSTRAINTS
+    WHERE CONSTRAINT_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'solicitudes_aprobacion'
+      AND CONSTRAINT_NAME = 'chk_solicitud_objetivo'
+);
+SET @sql_chk_drop = IF(@chk_exists > 0, 'ALTER TABLE solicitudes_aprobacion DROP CHECK chk_solicitud_objetivo', 'SELECT 1');
+PREPARE stmt_chk_drop FROM @sql_chk_drop; EXECUTE stmt_chk_drop; DEALLOCATE PREPARE stmt_chk_drop;
+
 ALTER TABLE solicitudes_aprobacion ADD CONSTRAINT chk_solicitud_objetivo CHECK (
   (tipo_solicitud = 'GIRA' AND presupuesto_id IS NOT NULL AND rendicion_id IS NULL)
   OR (tipo_solicitud IN ('EXCEPCION_MENSUAL', 'APROBACION_RENDICION') AND presupuesto_id IS NULL AND rendicion_id IS NOT NULL)

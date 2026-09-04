@@ -570,7 +570,7 @@ Heartbeat del Shell ERP. Revalida usuario, estado y rol contra `usuarios`, actua
 
 `multipart/form-data` con `tipo_documento`, `categoria_gasto`, `fecha_emision`, `monto` y `foto_documento`. Documentos normales exigen `rut_proveedor` y `numero_documento`; `CENA_CLIENTE` exige los cinco campos tributarios; `PEAJE` sólo exige fecha, monto y fotografía.
 
-Responde `409` si `document_hash` ya existe en el holding.
+Responde `409` con mensaje controlado (`"Este comprobante ya fue registrado en una rendición activa, aprobada o pendiente."`) si existe otro comprobante activo con el mismo hash en estado `BORRADOR`, `PENDIENTE` o `APROBADO` en cualquier vendedor o empresa del holding. Si las coincidencias previas están únicamente en `RECHAZADO` o `DESCARTADO`, permite el registro creando una nueva fila independiente sin mutar el historial anterior (Zero Delete). El índice único `uq_rendicion_document_hash_bloqueante` sobre la columna generada garantiza la protección ante condiciones de carrera concurrentes.
 
 ### GET `/api/rendiciones/get_bolsa_gastos.php`
 
@@ -630,7 +630,7 @@ Requiere `rendiciones.view`. Recibe `mes=YYYY-MM` y `ventana=6|12`. Consolida po
 
 ### GET `/admin/api/rendiciones/get_detalle_rendicion.php?id={id}`
 
-Requiere `rendiciones.view`. Devuelve cabecera, documentos con datos SII e historial inmutable.
+Requiere `rendiciones.view`. Devuelve cabecera, documentos con datos SII, folios vigente y original (`numero_documento_original`), e historial inmutable.
 
 ### GET `/admin/api/rendiciones/buscar_vendedores.php`
 
@@ -655,9 +655,26 @@ Requiere `rendiciones.manage`. Consulta en modo de sólo lectura el catálogo `t
 }
 ```
 
+### POST `/admin/api/rendiciones/corregir_documento.php`
+
+Requiere `rendiciones.manage` y CSRF. Permite a Tesorería corregir discrepancias entre la foto de un comprobante y lo digitado (monto y/o número de documento) mientras la rendición está en revisión (`EN_REVISION_TESORERIA`).
+- Aplica bloqueo en cascada con `SELECT ... FOR UPDATE` (documento → rendición → presupuesto).
+- **Preservación Inmutable de Folio Original:** Al corregir el número de documento por primera vez, el backend persiste `numero_documento_original = COALESCE(numero_documento_original, numero_documento)`. Correcciones sucesivas del folio no sobrescriben este valor original. Correcciones exclusivas de monto tampoco alteran ni destruyen el folio original existente.
+- **Control de Duplicados:** Si se corrige el número de documento, verifica colisión de hash exclusivamente contra comprobantes en estados bloqueantes (`BORRADOR`, `PENDIENTE`, `APROBADO`). Si colisiona, responde `409` (`"El número de documento corregido ya está registrado en una rendición activa, aprobada o pendiente."`). Permite la corrección si el folio coincide únicamente con ítems en `RECHAZADO` o `DESCARTADO`. Captura colisiones de índice único concurrentes respondiendo `409` controlado.
+- **Integridad Financiera P0:** El recálculo del presupuesto se realiza estrictamente como la diferencia entre la reserva nueva y la reserva anterior (`reserva_nueva - reserva_anterior`), donde `reserva = min(total_rendido, saldo_disponible_al_enviar)`. Nunca aplica la diferencia bruta del comprobante.
+- Si el nuevo total queda por debajo del saldo inicial, `monto_exceso` se ajusta a `0.00` y `aplico_tope_presupuestario` a `0`.
+- Registra auditoría inmutable en `rendicion_historial_estados` y `audit_logs` con `monto_anterior`, `monto_nuevo`, `numero_documento_original`, usuario y motivo.
+- Retorna `{ success: true, message: "...", data: { rendicion_id, documento_id, nuevo_numero, numero_documento_original, nuevo_monto, monto_original, nuevo_total_rendido, nuevo_maximo_aprobable, nuevo_exceso, aplico_tope } }`.
+
 ### POST `/admin/api/rendiciones/cambiar_estado.php`
 
-Requiere `rendiciones.manage` y CSRF. Acciones aceptadas: `RECIBIR_FISICOS`, `APROBAR_TOTAL`, `APROBAR_PARCIAL`, `RECHAZAR`, `RECHAZAR_EXCESO_TESORERIA`, `MARCAR_PAGADA`, `SOLICITAR_EXCEPCION` y `REENVIAR_EXCESO`. `SOLICITAR_EXCEPCION` opera sobre una rendición mensual en revisión con exceso no reembolsable; exige `aprobador_id` y justificación, y solicita únicamente la diferencia. `REENVIAR_EXCESO` rota el token abierto. Se conserva compatibilidad con rendiciones históricas en `PENDIENTE_APROBACION_EXCESO`.
+Requiere `rendiciones.manage` y CSRF. Gestiona las transiciones administrativas de las rendiciones:
+- **`VALIDAR_DOCUMENTOS`:** Recibe array de `decisiones: [{ documento_id, decision, monto_validado, motivo }]`. Acepta estrictamente `decision = "APROBAR"` o `"RECHAZAR"` (cualquier otro valor, vacío o ausente responde HTTP 422). Rechaza sin `continue` silencioso: `documento_id` ausente, inválido, inexistente, de otra rendición, duplicado en el payload, monto validado menor o igual a cero para aprobaciones, monto superior al rendido original y rechazo sin motivo obligatorio. Recalcula en una única transacción atómica bajo bloqueos `FOR UPDATE` en orden FIFO el total validado, máximo aprobable, exceso y ajuste a `presupuestos_vendedores.monto_utilizado`. Registra un evento append-only individual en `rendicion_historial_estados` con acción `VALIDAR_DOCUMENTO` por cada comprobante con sus montos (anterior/nuevo), estados (anterior/nuevo), decisión, motivo y folios (actual y original), además del evento global de resumen. La cabecera permanece invariablemente en `EN_REVISION_TESORERIA` (no aprueba la rendición).
+- **`VERIFICAR_Y_ENVIAR`:** Valida que la rendición esté revisada documentalmente. Si recibe el campo `decisiones`, rechaza la solicitud con HTTP 422 (las decisiones documentales deben procesarse exclusivamente por `VALIDAR_DOCUMENTOS`). Comprueba obligatoriamente que cada comprobante activo se encuentre estrictamente en estado `APROBADO` o `RECHAZADO` (bloquea con `DomainException` ante `BORRADOR`, `DESCARTADO`, `PENDIENTE` o desconocido), que exista al menos un comprobante aprobado y que el total validado sea mayor a cero (sin fallback a `monto_total_rendido`). Crea la solicitud gerencial en `solicitudes_aprobacion` con `monto_solicitado = total_validado` y Magic Token seguro de 48h para el aprobador seleccionado, despacha notificación y transiciona a `PENDIENTE_APROBACION_RESPONSABLE`.
+- **`APROBAR_TOTAL` / `APROBAR_PARCIAL` / `RECIBIR_FISICOS`:** **BLOQUEADAS (HTTP 409).** Tesorería no puede aprobar rendiciones directamente ni generar estados `APROBADA` o `APROBADA_PARCIAL`. La aprobación solo puede ser resuelta por Gerencia mediante Magic Link.
+- **`RECHAZAR` / `RECHAZAR_EXCESO_TESORERIA`:** Requieren motivo obligatorio. Liberan siempre exactamente `monto_maximo_aprobable` de la reserva presupuestaria (`GREATEST(0, monto_utilizado - :monto)`), transicionan la cabecera a `RECHAZADA` y cancelan auditadamente mediante `ApprovalWorkflowService::cancelRequest()` únicamente la solicitud vigente vinculada mediante `solicitud_excepcion_id` perteneciente a esa rendición, registrando el evento en `solicitud_aprobacion_historial` y dejando intactas solicitudes históricas resueltas.
+- **`MARCAR_PAGADA`:** Permite a Tesorería cerrar financieramente una rendición en estado `APROBADA`.
+- **`REENVIAR_RESPONSABLE` / `CANCELAR_SOLICITUD_RESPONSABLE`:** Reenvían o cancelan la solicitud activa reabriendo la rendición a `EN_REVISION_TESORERIA`.
 
 ### GET|POST `/admin/api/rendiciones/gestion_aprobadores.php`
 

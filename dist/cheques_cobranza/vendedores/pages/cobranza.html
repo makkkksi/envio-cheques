@@ -38,7 +38,9 @@ input{font-family:inherit}
 .btn-buscar:hover{background:#155a8f}
 .btn-rendiciones{min-height:42px;background:#0b3a5b;color:var(--white);padding:.52rem 1.2rem;border-radius:6px;font-size:.88rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
 .btn-rendiciones:hover{background:#165b82}
-@media(max-width:620px){.search-fields{align-items:stretch}.search-field,.search-field input,.search-field select,.btn-buscar,.btn-rendiciones{width:100%!important}}
+.btn-recaudacion{min-height:42px;background:#27ae60;color:var(--white);padding:.52rem 1.2rem;border-radius:6px;font-size:.88rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:.4rem;transition:.15s}
+.btn-recaudacion:hover{background:#219150}
+@media(max-width:620px){.search-fields{align-items:stretch}.search-field,.search-field input,.search-field select,.btn-buscar,.btn-rendiciones,.btn-recaudacion{width:100%!important}}
 
 /* TABLA */
 .results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem}
@@ -110,8 +112,9 @@ tr:hover td{background:var(--blue-light)}
           <option value="EMP24">Top Repuestos</option>
         </select>
       </div>
-      <button class="btn-buscar" onclick="buscar()">🔍 Buscar</button>
+      <button class="btn-buscar" onclick="buscar()">Buscar</button>
       <button type="button" class="btn-rendiciones" onclick="irARendicionGastos()">Rendir Gastos / Viáticos</button>
+      <button type="button" class="btn-recaudacion" onclick="irARecaudacionCheques()" title="Registrar cheques y comprobantes de cobranza">Subir Cheques / Recaudación</button>
     </div>
   </div>
 
@@ -287,20 +290,54 @@ function showToast(msg,type='') {
   setTimeout(()=>t.classList.remove('show'),3000);
 }
 
-function irARendicionGastos() {
-  const filtroEmp = document.getElementById('filtEmpresa').value;
-  const empresaFinal = filtroEmp || currentEmpresaCod || detectarEmpresaPorHost();
-  if (!currentVendCod) {
-    showToast('No se detectó un código de vendedor válido en su sesión', 'error');
+function enviarHandoffSeguro(destino) {
+  const token = authToken || localStorage.getItem('at_token') || '';
+  if (!token) {
+    showToast('No se detectó un token de sesión comercial válido', 'error');
     return;
   }
+  const filtroEmp = document.getElementById('filtEmpresa') ? document.getElementById('filtEmpresa').value : '';
+  const empresaFinal = filtroEmp || currentEmpresaCod || (typeof detectarEmpresaPorHost === 'function' ? detectarEmpresaPorHost() : 'EMP03');
+
   const host = window.location.hostname;
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.') || host.endsWith('.test') || host.endsWith('.local');
-  const baseUrl = isLocal
-    ? `${window.location.origin}/form/rendiciones/vendedor.php`
-    : `https://www.autotec.cl/cobranza_cheques/app/rendiciones/vendedor.php`;
-  const urlDestino = `${baseUrl}?vendedor_id=${encodeURIComponent(currentVendCod)}&empresa=${encodeURIComponent(empresaFinal)}&vendedor_nombre=${encodeURIComponent(currentVendNombre)}`;
-  window.location.href = urlDestino;
+  const handoffUrl = isLocal
+    ? `${window.location.origin}/form/api/seller_handoff.php`
+    : `https://www.autotec.cl/cobranza_cheques/app/api/seller_handoff.php`;
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = handoffUrl;
+  form.style.display = 'none';
+
+  const inputToken = document.createElement('input');
+  inputToken.type = 'hidden';
+  inputToken.name = 'session_token';
+  inputToken.value = token;
+  form.appendChild(inputToken);
+
+  const inputEmpresa = document.createElement('input');
+  inputEmpresa.type = 'hidden';
+  inputEmpresa.name = 'empresa';
+  inputEmpresa.value = empresaFinal;
+  form.appendChild(inputEmpresa);
+
+  const inputDestino = document.createElement('input');
+  inputDestino.type = 'hidden';
+  inputDestino.name = 'destino';
+  inputDestino.value = destino;
+  form.appendChild(inputDestino);
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function irARecaudacionCheques() {
+  enviarHandoffSeguro('cheques');
+}
+
+function irARendicionGastos() {
+  enviarHandoffSeguro('rendiciones');
 }
 </script>
 </body>
