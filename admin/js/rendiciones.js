@@ -1465,12 +1465,19 @@
 
     function openPartialModal() {
         if (!state.detail?.documentos?.length) return;
-        $('#partialDecisionList').innerHTML = state.detail.documentos.map((documentData) => `<div class="rd-partial-item" data-partial-id="${Number(documentData.id)}">
+        $('#partialDecisionList').innerHTML = state.detail.documentos.map((documentData) => {
+            const isRejected = documentData.estado_item === 'RECHAZADO';
+            const validAmount = documentData.monto_validado !== null && documentData.monto_validado !== undefined && !isRejected
+                ? Number(documentData.monto_validado)
+                : Number(documentData.monto);
+            const reason = escapeHtml(documentData.motivo_rechazo || '');
+            return `<div class="rd-partial-item" data-partial-id="${Number(documentData.id)}">
             <div><strong>${escapeHtml(documentData.razon_social_proveedor || humanize(documentData.categoria_gasto))}</strong><small>Rendido: ${money.format(documentData.monto)}</small></div>
-            <label>Decisión<select data-partial-decision><option value="APROBAR">Aprobar</option><option value="RECHAZAR">Rechazar</option></select></label>
-            <label>Monto validado<input data-partial-amount type="number" min="0" max="${Number(documentData.monto)}" step="1" value="${Number(documentData.monto)}"></label>
-            <label>Motivo de rechazo<input data-partial-reason type="text" maxlength="500" disabled></label>
-        </div>`).join('');
+            <label>Decisión<select data-partial-decision><option value="APROBAR"${!isRejected ? ' selected' : ''}>Aprobar</option><option value="RECHAZAR"${isRejected ? ' selected' : ''}>Rechazar</option></select></label>
+            <label>Monto validado<input data-partial-amount type="number" min="0" max="${Number(documentData.monto)}" step="1" value="${validAmount}"${isRejected ? ' disabled' : ''}></label>
+            <label>Motivo de rechazo<input data-partial-reason type="text" maxlength="500" value="${reason}"${!isRejected ? ' disabled' : ''}></label>
+        </div>`;
+        }).join('');
         updatePartialTotal();
         openModal('partialModal');
     }
@@ -1490,13 +1497,13 @@
     }
 
     async function savePartialReview() {
-        const decisions = [];
+        const decisiones = [];
         for (const row of $$('[data-partial-id]')) {
             const decision = row.querySelector('[data-partial-decision]').value;
             const reason = row.querySelector('[data-partial-reason]').value.trim();
             const amount = Number(row.querySelector('[data-partial-amount]').value || 0);
             if (decision === 'RECHAZAR' && !reason) { notify('Cada comprobante rechazado necesita un motivo.', 'error'); row.querySelector('[data-partial-reason]').focus(); return; }
-            decisions.push({ documento_id: Number(row.dataset.partialId), decision, monto_validado: amount, motivo: reason });
+            decisiones.push({ documento_id: Number(row.dataset.partialId), decision, monto_validado: amount, motivo: reason });
         }
         const button = $('#savePartialButton');
         setBusy(button, true, 'Guardando…');
