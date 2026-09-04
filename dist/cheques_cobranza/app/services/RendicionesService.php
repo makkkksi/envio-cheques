@@ -633,7 +633,7 @@ class RendicionesService
             throw new DomainException('Sólo se pueden verificar y enviar a aprobación rendiciones en revisión de Tesorería.');
         }
 
-        // 2. Comprobar documentos activos: deben estar todos resueltos (APROBADO o RECHAZADO)
+        // 2. Comprobar documentos activos: deben ser evaluables (PENDIENTE o APROBADO)
         $stmtDocs = $pdo->prepare(
             'SELECT id, estado_item, monto, monto_validado
              FROM rendicion_documentos
@@ -647,26 +647,26 @@ class RendicionesService
             throw new DomainException('La rendición no contiene comprobantes activos.');
         }
 
-        $approvedCount = 0;
+        $eligibleCount = 0;
         $validatedSum = 0.0;
         foreach ($docs as $d) {
             $itemState = $d['estado_item'];
-            if (!in_array($itemState, ['APROBADO', 'RECHAZADO'], true)) {
-                throw new DomainException("No se puede enviar a aprobación una rendición con comprobantes en estado {$itemState}. Todos los comprobantes activos deben estar en estado APROBADO o RECHAZADO.");
+            if (in_array($itemState, ['BORRADOR', 'DESCARTADO'], true)) {
+                throw new DomainException("No se puede enviar a aprobación una rendición con comprobantes en estado {$itemState}.");
             }
-            if ($itemState === 'APROBADO') {
-                $approvedCount++;
+            if ($itemState === 'APROBADO' || $itemState === 'PENDIENTE') {
+                $eligibleCount++;
                 $val = $d['monto_validado'] !== null ? (float)$d['monto_validado'] : (float)$d['monto'];
                 $validatedSum += $val;
             }
         }
 
-        // 4. Debe existir al menos un documento aprobado
-        if ($approvedCount === 0) {
+        // 4. Debe existir al menos un documento evaluable
+        if ($eligibleCount === 0) {
             throw new DomainException('No se puede enviar a aprobación una rendición donde todos los comprobantes fueron rechazados.');
         }
 
-        // 5. El total validado debe ser mayor que cero (sin fallback a monto_total_rendido)
+        // 5. El total a enviar debe ser mayor que cero
         if ($validatedSum <= 0.0) {
             throw new DomainException('El monto total validado debe ser mayor que cero para enviar la rendición a aprobación.');
         }
@@ -686,7 +686,7 @@ class RendicionesService
             if ($currentRequest && (bool)$currentRequest['activo'] && in_array($currentRequest['estado'], ['PENDIENTE_ENVIO', 'PENDIENTE_DECISION', 'ENVIO_FALLIDO', 'VENCIDA'], true)) {
                 $workflow = ApprovalWorkflowService::rotateToken($pdo, $requestId, $approverId, [
                     'id' => (int)($actor['id'] ?? 0), 'nombre' => (string)($actor['nombre'] ?? 'Tesorería'), 'email' => $actor['email'] ?? null,
-                ]);
+                ], $validatedSum);
             }
         }
 
@@ -705,10 +705,10 @@ class RendicionesService
 
         $request = $workflow['solicitud'];
 
-        // Documentos aprobados para el correo
+        // Documentos para el correo del responsable
         $stmtMailDocs = $pdo->prepare(
             'SELECT * FROM rendicion_documentos
-             WHERE rendicion_id = :rendicion_id AND activo = 1 AND estado_item = "APROBADO"
+             WHERE rendicion_id = :rendicion_id AND activo = 1 AND estado_item != "DESCARTADO"
              ORDER BY fecha_emision ASC, id ASC'
         );
         $stmtMailDocs->execute([':rendicion_id' => $renditionId]);

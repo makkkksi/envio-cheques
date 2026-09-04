@@ -447,7 +447,6 @@
         }
         if (['EN_REVISION_TESORERIA', 'DOCUMENTOS_FISICOS_RECIBIDOS'].includes(status)) {
             buttons.push(actionButton('VERIFICAR_Y_ENVIAR', 'Verificar y Enviar a Responsable', 'rd-btn--success'));
-            buttons.push('<button class="rd-btn rd-btn--secondary" type="button" data-open-partial>Validar comprobantes</button>');
             buttons.push(actionButton('RECHAZAR', 'Rechazar rendición', 'rd-btn--danger'));
         }
         if (['APROBADA', 'APROBADA_PARCIAL'].includes(status)) {
@@ -1465,18 +1464,86 @@
 
     function openPartialModal() {
         if (!state.detail?.documentos?.length) return;
-        $('#partialDecisionList').innerHTML = state.detail.documentos.map((documentData) => {
+        const detail = state.detail;
+        const summaryCard = $('#partialSummaryCard');
+        if (summaryCard) {
+            summaryCard.innerHTML = `<div class="rd-partial-summary-card__left">
+                <svg class="rd-partial-summary-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="4" y="3" width="16" height="18" rx="2"/>
+                    <path d="M8 7h8M8 11h8M8 15h5"/>
+                </svg>
+                <div>
+                    <div class="rd-partial-summary-card__title">Rendición en auditoría</div>
+                    <div class="rd-partial-summary-card__vendor">${escapeHtml(detail.vendedor_nombre || 'Vendedor')}</div>
+                </div>
+            </div>
+            <div class="rd-partial-summary-card__right">
+                <span class="rd-partial-summary-card__code">${escapeHtml(detail.codigo_rendicion || '')}</span>
+                <div class="rd-partial-summary-card__meta">${detail.documentos.length} comprobante(s) • Total rendido: <strong>${money.format(detail.monto_total_rendido || 0)}</strong></div>
+            </div>`;
+        }
+        $('#partialDecisionList').innerHTML = detail.documentos.map((documentData) => {
             const isRejected = documentData.estado_item === 'RECHAZADO';
             const validAmount = documentData.monto_validado !== null && documentData.monto_validado !== undefined && !isRejected
                 ? Number(documentData.monto_validado)
                 : Number(documentData.monto);
             const reason = escapeHtml(documentData.motivo_rechazo || '');
-            return `<div class="rd-partial-item" data-partial-id="${Number(documentData.id)}">
-            <div><strong>${escapeHtml(documentData.razon_social_proveedor || humanize(documentData.categoria_gasto))}</strong><small>Rendido: ${money.format(documentData.monto)}</small></div>
-            <label>Decisión<select data-partial-decision><option value="APROBAR"${!isRejected ? ' selected' : ''}>Aprobar</option><option value="RECHAZAR"${isRejected ? ' selected' : ''}>Rechazar</option></select></label>
-            <label>Monto validado<input data-partial-amount type="number" min="0" max="${Number(documentData.monto)}" step="1" value="${validAmount}"${isRejected ? ' disabled' : ''}></label>
-            <label>Motivo de rechazo<input data-partial-reason type="text" maxlength="500" value="${reason}"${!isRejected ? ' disabled' : ''}></label>
-        </div>`;
+            const categoryLabel = escapeHtml(humanize(documentData.categoria_gasto || 'OTROS'));
+            const providerName = escapeHtml(documentData.razon_social_proveedor || categoryLabel);
+            const typeDoc = escapeHtml(humanize(documentData.tipo_documento || 'Comprobante'));
+            const docNum = documentData.numero_documento ? `Folio: ${escapeHtml(documentData.numero_documento)}` : '';
+            const docDate = documentData.fecha_emision ? escapeHtml(documentData.fecha_emision) : '';
+            const metaParts = [typeDoc, docNum, docDate].filter(Boolean);
+
+            return `<div class="rd-partial-item ${isRejected ? 'is-rejected' : 'is-approved'}" data-partial-id="${Number(documentData.id)}">
+                <div class="rd-partial-item__header">
+                    <div class="rd-partial-item__icon-wrap">
+                        <svg class="rd-partial-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="4" y="3" width="16" height="18" rx="2"/>
+                            <path d="M8 7h8M8 11h8M8 15h5"/>
+                        </svg>
+                    </div>
+                    <div class="rd-partial-item__info">
+                        <div class="rd-partial-item__title-row">
+                            <strong class="rd-partial-item__provider">${providerName}</strong>
+                            <span class="rd-partial-item__category-badge">${categoryLabel}</span>
+                        </div>
+                        <div class="rd-partial-item__meta">
+                            ${metaParts.map(p => `<span>${p}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div class="rd-partial-item__claimed">
+                        <span class="rd-partial-item__claimed-label">Monto rendido</span>
+                        <strong class="rd-partial-item__claimed-amount">${money.format(documentData.monto)}</strong>
+                    </div>
+                </div>
+                <div class="rd-partial-item__controls">
+                    <div class="rd-partial-field rd-partial-field--decision">
+                        <label class="rd-partial-label">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            Decisión
+                        </label>
+                        <select class="rd-partial-select" data-partial-decision>
+                            <option value="APROBAR" ${!isRejected ? 'selected' : ''}>Aprobar</option>
+                            <option value="RECHAZAR" ${isRejected ? 'selected' : ''}>Rechazar</option>
+                        </select>
+                    </div>
+                    <div class="rd-partial-field rd-partial-field--amount">
+                        <label class="rd-partial-label">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                            Monto validado ($)
+                        </label>
+                        <input class="rd-partial-input rd-partial-input--amount" data-partial-amount type="number" min="0" max="${Number(documentData.monto)}" step="1" value="${validAmount}" ${isRejected ? 'disabled' : ''}>
+                    </div>
+                    <div class="rd-partial-field rd-partial-field--reason">
+                        <label class="rd-partial-label">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Motivo de rechazo
+                        </label>
+                        <input class="rd-partial-input rd-partial-input--reason" data-partial-reason type="text" maxlength="500" placeholder="Obligatorio si se rechaza..." value="${reason}" ${!isRejected ? 'disabled' : ''}>
+                    </div>
+                </div>
+            </div>`;
         }).join('');
         updatePartialTotal();
         openModal('partialModal');
@@ -1486,14 +1553,30 @@
         if (event?.target?.matches('[data-partial-decision]')) {
             const row = event.target.closest('[data-partial-id]');
             const rejected = event.target.value === 'RECHAZAR';
-            row.querySelector('[data-partial-amount]').disabled = rejected;
-            row.querySelector('[data-partial-reason]').disabled = !rejected;
+            const amountInput = row.querySelector('[data-partial-amount]');
+            const reasonInput = row.querySelector('[data-partial-reason]');
+            amountInput.disabled = rejected;
+            reasonInput.disabled = !rejected;
+            if (rejected) {
+                row.classList.remove('is-approved');
+                row.classList.add('is-rejected');
+                reasonInput.focus();
+            } else {
+                row.classList.remove('is-rejected');
+                row.classList.add('is-approved');
+            }
         }
         let total = 0;
         $$('[data-partial-id]').forEach((row) => {
-            if (row.querySelector('[data-partial-decision]').value === 'APROBAR') total += Number(row.querySelector('[data-partial-amount]').value || 0);
+            const decisionSelect = row.querySelector('[data-partial-decision]');
+            if (decisionSelect && decisionSelect.value === 'APROBAR') {
+                total += Number(row.querySelector('[data-partial-amount]').value || 0);
+            }
         });
-        $('#partialApprovedTotal').textContent = `Aprobado: ${money.format(total)}`;
+        const totalElem = $('#partialApprovedTotal');
+        if (totalElem) {
+            totalElem.textContent = money.format(total);
+        }
     }
 
     async function savePartialReview() {

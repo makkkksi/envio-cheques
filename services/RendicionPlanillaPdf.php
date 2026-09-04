@@ -267,6 +267,8 @@ final class RendicionPlanillaPdf extends FPDF
             }
             if (!empty($doc['motivo_rechazo']) && ($doc['estado_item'] ?? '') === 'RECHAZADO') {
                 $detalle .= " [RECHAZADO: {$doc['motivo_rechazo']}]";
+            } elseif (($doc['estado_item'] ?? '') !== 'RECHAZADO' && abs($montoValidado - $montoRendido) > 0.01) {
+                $detalle .= " [AJUSTE: Validado " . self::money($montoValidado) . " de " . self::money($montoRendido) . "]";
             }
 
             // Alternar fondo tenue
@@ -298,43 +300,58 @@ final class RendicionPlanillaPdf extends FPDF
             $index++;
         }
 
-        // Fila de Totales de la Tabla (Ancho 219mm + 20mm + 20mm = 259mm)
+        // Fila 1: Total General Declarado (Rendido vs Validado en Comprobantes)
         $this->SetFillColor(226, 232, 240);
         $this->SetTextColor(30, 41, 59);
         $this->SetFont('Arial', 'B', 7.5);
-        $this->Cell(219, 5.5, $this->encode('TOTAL GENERAL DE GASTOS: '), 1, 0, 'R', true);
+        $this->Cell(219, 5.5, $this->encode('TOTAL GENERAL DECLARADO (BOLETAS RENDIDAS): '), 1, 0, 'R', true);
         $this->Cell(20, 5.5, self::money($totalRendidoSum), 1, 0, 'R', true);
         $this->Cell(20, 5.5, self::money($totalValidadoSum), 1, 0, 'R', true);
         $this->Ln();
 
-        // Si existe exceso (autorizado o no reembolsable), transparentar el cálculo en la grilla
         $r = $this->rendition;
         $excess = (float)($r['monto_exceso'] ?? 0);
         $excessNoReimb = (float)($r['monto_exceso_no_reembolsable'] ?? 0);
         $decisionExceso = strtoupper(trim((string)($r['decision_exceso'] ?? '')));
         $totalAprobadoPago = (float)($r['monto_total_aprobado'] ?? $totalValidadoSum);
 
-        if ($excessNoReimb > 0 || ($excess > 0 && $decisionExceso === 'RECHAZADO')) {
-            $montoDescuento = $excessNoReimb > 0 ? $excessNoReimb : $excess;
-            // Fila de deducción por exceso no cubierto
+        // Deducción 1: Rechazos o rebajas en comprobantes individuales
+        $deduccionDocumental = max(0.0, $totalRendidoSum - $totalValidadoSum);
+        if ($deduccionDocumental > 0.01) {
             $this->SetFillColor(254, 242, 242); // Red-50
             $this->SetTextColor(185, 28, 28);   // Red-700
             $this->SetFont('Arial', 'B', 7);
-            $this->Cell(219, 5.2, $this->encode('(-) EXCESO NO REEMBOLSABLE (TOPE DE PRESUPUESTO): '), 1, 0, 'R', true);
+            $this->Cell(219, 5.2, $this->encode('(-) DEDUCCIÓN POR COMPROBANTES RECHAZADOS / REBAJADOS: '), 1, 0, 'R', true);
             $this->Cell(20, 5.2, '', 1, 0, 'C', true);
-            $this->Cell(20, 5.2, '-' . self::money($montoDescuento), 1, 0, 'R', true);
+            $this->Cell(20, 5.2, '-' . self::money($deduccionDocumental), 1, 0, 'R', true);
             $this->Ln();
 
-            // Fila de total líquido aprobado a pago
-            $this->SetFillColor(238, 242, 255); // Indigo-50
-            $this->SetTextColor(30, 58, 138);   // Blue-900
-            $this->SetFont('Arial', 'B', 7.5);
-            $this->Cell(219, 5.5, $this->encode('(=) TOTAL APROBADO A PAGO (LÍQUIDO A REEMBOLSAR): '), 1, 0, 'R', true);
-            $this->Cell(20, 5.5, '', 1, 0, 'C', true);
-            $this->Cell(20, 5.5, self::money($totalAprobadoPago), 1, 0, 'R', true);
+            // Subtotal de comprobantes validados si hubo deducción documental
+            $this->SetFillColor(241, 245, 249);
+            $this->SetTextColor(51, 65, 85);
+            $this->SetFont('Arial', 'B', 7);
+            $this->Cell(219, 5.0, $this->encode('SUBTOTAL COMPROBANTES VALIDADOS Y EMITIDOS: '), 1, 0, 'R', true);
+            $this->Cell(20, 5.0, '', 1, 0, 'C', true);
+            $this->Cell(20, 5.0, self::money($totalValidadoSum), 1, 0, 'R', true);
+            $this->Ln();
+        }
+
+        // Deducción 2: Exceso sobre presupuesto asignado (Tope de Presupuesto)
+        $deduccionTope = max(0.0, $totalValidadoSum - $totalAprobadoPago);
+        if ($excessNoReimb > 0 && $deduccionTope < $excessNoReimb) {
+            $deduccionTope = $excessNoReimb;
+        }
+
+        if ($deduccionTope > 0.01 || ($excess > 0 && $decisionExceso === 'RECHAZADO')) {
+            $montoDescuentoTope = $deduccionTope > 0 ? $deduccionTope : $excess;
+            $this->SetFillColor(254, 242, 242); // Red-50
+            $this->SetTextColor(185, 28, 28);   // Red-700
+            $this->SetFont('Arial', 'B', 7);
+            $this->Cell(219, 5.2, $this->encode('(-) EXCESO NO REEMBOLSABLE (TOPE DE PRESUPUESTO ASIGNADO): '), 1, 0, 'R', true);
+            $this->Cell(20, 5.2, '', 1, 0, 'C', true);
+            $this->Cell(20, 5.2, '-' . self::money($montoDescuentoTope), 1, 0, 'R', true);
             $this->Ln();
         } elseif ($excess > 0 && $decisionExceso === 'APROBADO') {
-            // Fila de exceso autorizado por jefatura
             $this->SetFillColor(240, 253, 244); // Green-50
             $this->SetTextColor(22, 101, 52);   // Green-800
             $this->SetFont('Arial', 'B', 7);
@@ -342,14 +359,26 @@ final class RendicionPlanillaPdf extends FPDF
             $this->Cell(20, 5.2, '', 1, 0, 'C', true);
             $this->Cell(20, 5.2, '+' . self::money($excess), 1, 0, 'R', true);
             $this->Ln();
+        }
 
-            // Fila de total aprobado a pago
-            $this->SetFillColor(240, 253, 244);
-            $this->SetTextColor(22, 101, 52);
+        // Fila Principal: TOTAL NETO APROBADO A REEMBOLSAR
+        $this->SetFillColor(238, 242, 255); // Indigo-50
+        $this->SetTextColor(30, 58, 138);   // Blue-900
+        $this->SetFont('Arial', 'B', 7.5);
+        $this->Cell(219, 5.5, $this->encode('(=) TOTAL NETO APROBADO A REEMBOLSAR (LÍQUIDO A PAGO): '), 1, 0, 'R', true);
+        $this->Cell(20, 5.5, '', 1, 0, 'C', true);
+        $this->Cell(20, 5.5, self::money($totalAprobadoPago), 1, 0, 'R', true);
+        $this->Ln();
+
+        // Fila Total No Aprobado / No Reembolsable (si hubo diferencia con el monto total declarado)
+        $totalNoAprobado = max(0.0, $totalRendidoSum - $totalAprobadoPago);
+        if ($totalNoAprobado > 0.01) {
+            $this->SetFillColor(254, 226, 226); // Red-100
+            $this->SetTextColor(153, 27, 27);   // Red-800
             $this->SetFont('Arial', 'B', 7.5);
-            $this->Cell(219, 5.5, $this->encode('(=) TOTAL APROBADO A PAGO (LÍQUIDO A REEMBOLSAR): '), 1, 0, 'R', true);
-            $this->Cell(20, 5.5, '', 1, 0, 'C', true);
-            $this->Cell(20, 5.5, self::money($totalAprobadoPago), 1, 0, 'R', true);
+            $this->Cell(219, 5.2, $this->encode('TOTAL NO APROBADO / NO REEMBOLSABLE: '), 1, 0, 'R', true);
+            $this->Cell(20, 5.2, '', 1, 0, 'C', true);
+            $this->Cell(20, 5.2, self::money($totalNoAprobado), 1, 0, 'R', true);
             $this->Ln();
         }
 

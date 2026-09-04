@@ -4,6 +4,30 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Validación Exclusiva en Magic Link de Responsables y Liquidación Dual-Logic en Planilla PDF (2026-09-04)
+- **Delegación Exclusiva de Validación de Comprobantes a Jefatura (`rendiciones/aprobar_rendicion.php`, `rendiciones/aprobar_rendicion.js`, `rendiciones/aprobar_exceso.css`):**
+  - La verificación ítem por ítem (aprobar, rechazar con motivo obligatorio o ajustar/rebajar el monto validado) se trasladó al Magic Link del Responsable.
+  - Tarjetas interactivas con recálculo dinámico en vivo en el cliente: actualiza instantáneamente el monto aprobado, el exceso sobre presupuesto y muestra dinámicamente el botón de aprobación con tope cuando aplica.
+  - Tesorería únicamente coteja la información de los comprobantes contra la imagen (usando el modal de corrección tipográfica con el lápiz) y despacha la solicitud con "Verificar y Enviar a Responsable". Se retiró el botón "Validar comprobantes" del panel de Tesorería (`admin/js/rendiciones.js`).
+  - `RendicionesService::verificarYEnviar()` admite comprobantes en estado `PENDIENTE`, calculando la suma elegible y habilitando el envío directo a Jefatura sin pasos intermedios bloqueantes.
+- **Corrección de Lógica Financiera y Recálculo en Base de Datos (`services/ApprovalWorkflowService.php`, `api/rendiciones/aprobar_rendicion.php`):**
+  - `rotateToken()` actualiza `monto_solicitado = :monto_solicitado` al reenviar, evitando arrastrar sumas no actualizadas.
+  - `applyRenditionApproval()` procesa las decisiones por comprobante actualizando `rendicion_documentos` (`estado_item`, `monto_validado`, `motivo_rechazo`) y auditando cada comprobante con actor `JEFATURA`.
+  - El monto aprobado formal de la rendición (`monto_total_aprobado`) se fija como la suma estricta de comprobantes aprobados, ajustando la reserva presupuestaria en `presupuestos_vendedores` y liberando cualquier remanente no aprobado.
+- **Convivencia de Deducciones (Dual-Logic) en Planilla PDF Oficial (`services/RendicionPlanillaPdf.php`):**
+  - La grilla de comprobantes transparenta de manera inequívoca el monto total de la boleta (`RENDIDO`) vs lo verificado y emitido (`VALIDADO`), resaltando en rojo los montos modificados y detallando en la columna de glosa las razones de rechazo o rebajas parciales (`[AJUSTE: Validado $X de $Y]` o `[RECHAZADO: motivo]`).
+  - El bloque de liquidación final al pie de la grilla hace convivir armoniosamente la lógica documental y la presupuestaria:
+    1. `TOTAL GENERAL DECLARADO (BOLETAS RENDIDAS)`
+    2. `(-) DEDUCCIÓN POR COMPROBANTES RECHAZADOS / REBAJADOS` (si hubo diferencias documentales)
+    3. `SUBTOTAL COMPROBANTES VALIDADOS Y EMITIDOS`
+    4. `(-) EXCESO NO REEMBOLSABLE (TOPE DE PRESUPUESTO ASIGNADO)` (si se aprobó hasta el tope presupuestario) o `(+) EXCESO PRESUPUESTARIO (AUTORIZADO POR JEFATURA)`
+    5. `(=) TOTAL NETO APROBADO A REEMBOLSAR (LÍQUIDO A PAGO)`
+    6. `TOTAL NO APROBADO / NO REEMBOLSABLE` (suma total no cubierta por boletas y por tope)
+- **Suite de Pruebas y Certificación:**
+  - 148 pruebas PASS en `scripts/test_rendiciones.php`.
+  - 40 pruebas PASS en `scripts/test_approval_workflow.php`.
+  - Paridad 100% SHA-256 en los 235 archivos de `dist/cheques_cobranza/app/`.
+
 ### Resolución de P0s — Validación Canónica de vend_cod y Suite HTTP Real de Integración (2026-09-04)
 - **P0-1 — Validación Estricta de `vend_cod` sin Coerción Implícita (`services/ErpSellerDirectoryService.php`, `services/SellerHandoffService.php`):**
   - Implementada condición SQL previa a cualquier `CAST`: `TRIM(vend_cod) REGEXP '^[1-9][0-9]*$'` en `WebUsuariosSellerRepository` (`search` y `findById`) y en `SellerHandoffService::verifySessionToken`.

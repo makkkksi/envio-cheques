@@ -224,7 +224,32 @@ $canConfigureApprovers = userHasPermission($rolUsuario, 'users.manage');
     <?php if ($canConfigureApprovers): ?>
     <div class="rd-modal" id="approverConfigModal" hidden role="dialog" aria-modal="true" aria-labelledby="approverConfigTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="approverConfigTitle">Responsables de aprobación</h2><p>Configura las dos personas que pueden resolver excesos. Los cambios futuros no alteran la auditoría histórica.</p></div><button class="rd-modal__close" type="button" data-close-modal="approverConfigModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><form id="approverConfigForm" novalidate><div class="rd-approver-config"><fieldset><legend>Responsable 1</legend><label><span>Nombre completo</span><input id="approver1Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver1Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver1Email" type="email" maxlength="190" required></label></fieldset><fieldset><legend>Responsable 2</legend><label><span>Nombre completo</span><input id="approver2Name" type="text" maxlength="150" required></label><label><span>Cargo</span><input id="approver2Title" type="text" maxlength="120" required></label><label><span>Correo</span><input id="approver2Email" type="email" maxlength="190" required></label></fieldset></div><p id="approverConfigStatus" class="rd-form-status" role="status"></p><div class="rd-modal__actions"><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="approverConfigModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="saveApproverConfig" type="submit">Guardar responsables</button></div></form></div></div>
     <?php endif; ?>
-    <div class="rd-modal" id="partialModal" hidden role="dialog" aria-modal="true" aria-labelledby="partialModalTitle"><div class="rd-modal__card rd-modal__card--wide"><header class="rd-modal__header"><div><h2 id="partialModalTitle">Validación de comprobantes</h2></div><button class="rd-modal__close" type="button" data-close-modal="partialModal" aria-label="Cerrar"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header><p class="rd-modal__description">Valida cada comprobante individualmente. Cada rechazo debe incluir un motivo.</p><div class="rd-partial-list" id="partialDecisionList"></div><div class="rd-modal__actions"><strong id="partialApprovedTotal">Validado: $0</strong><button class="rd-btn rd-btn--secondary" type="button" data-close-modal="partialModal">Cancelar</button><button class="rd-btn rd-btn--primary" id="savePartialButton" type="button">Guardar validación</button></div></div></div>
+    <div class="rd-modal" id="partialModal" hidden role="dialog" aria-modal="true" aria-labelledby="partialModalTitle">
+        <div class="rd-modal__card rd-modal__card--partial">
+            <header class="rd-modal__header">
+                <div>
+                    <h2 id="partialModalTitle">Validación de comprobantes</h2>
+                    <p class="rd-modal__description">Audita cada gasto individualmente. Ajusta los montos aprobados o rechaza comprobantes que no correspondan.</p>
+                </div>
+                <button class="rd-modal__close" type="button" data-close-modal="partialModal" aria-label="Cerrar">
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+            </header>
+            <div id="partialSummaryCard" class="rd-partial-summary-card"></div>
+            <div class="rd-partial-list" id="partialDecisionList"></div>
+            <div class="rd-modal__actions rd-modal__actions--partial">
+                <div class="rd-partial-total-badge">
+                    <span class="rd-partial-total-badge__label">Total a reembolsar</span>
+                    <strong class="rd-partial-total-badge__value" id="partialApprovedTotal">$0</strong>
+                </div>
+                <button class="rd-btn rd-btn--secondary" type="button" data-close-modal="partialModal">Cancelar</button>
+                <button class="rd-btn rd-btn--primary" id="savePartialButton" type="button">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+                    Guardar validación
+                </button>
+            </div>
+        </div>
+    </div>
     <div class="rd-modal" id="editDocumentModal" hidden role="dialog" aria-modal="true" aria-labelledby="editDocTitle">
         <div class="rd-modal__card rd-modal__card--edit-doc">
             <header class="rd-modal__header">

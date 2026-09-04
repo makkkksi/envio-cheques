@@ -28,10 +28,11 @@ try {
         throw new InvalidArgumentException('Token o decisión no válidos.');
     }
     $comment = RendicionesService::truncateText(trim((string)($input['comentario'] ?? '')), 500);
+    $decisiones = is_array($input['decisiones'] ?? null) ? $input['decisiones'] : [];
 
     $pdo = Database::getCobranzasConnection();
     $pdo->beginTransaction();
-    $result = ApprovalWorkflowService::resolveByToken($pdo, $rawToken, $decisionMap[$legacyDecision], $comment);
+    $result = ApprovalWorkflowService::resolveByToken($pdo, $rawToken, $decisionMap[$legacyDecision], $comment, $decisiones);
     $request = $result['solicitud'];
     if (($request['tipo_solicitud'] ?? '') !== ApprovalWorkflowService::TYPE_RENDITION_APPROVAL) {
         throw new DomainException('El enlace no corresponde a una solicitud de aprobación de rendición.');
@@ -42,26 +43,33 @@ try {
     }
     $pdo->commit();
 
+    $stmtRend = $pdo->prepare('SELECT estado, monto_total_aprobado FROM rendiciones_gastos WHERE id = :id');
+    $stmtRend->execute([':id' => (int)$request['rendicion_id']]);
+    $rendData = $stmtRend->fetch(PDO::FETCH_ASSOC) ?: [];
+    $actualFinalDecision = ($rendData['estado'] ?? '') === 'RECHAZADA' ? 'RECHAZADO' : $legacyDecision;
+
     $pdfUrl = null;
-    if ($legacyDecision === 'APROBADO' || $legacyDecision === 'APROBADO_TOPE') {
+    if ($actualFinalDecision === 'APROBADO' || $actualFinalDecision === 'APROBADO_TOPE') {
         $pdfUrl = PORTAL_BASE_URL . '/admin/api/rendiciones/descargar_planilla.php?token=' . rawurlencode($rawToken);
     }
 
     $messages = [
-        'APROBADO'      => 'Rendición de gastos aprobada en su totalidad.',
+        'APROBADO'      => 'Rendición de gastos aprobada exitosamente.',
         'APROBADO_TOPE' => 'Rendición aprobada hasta el tope presupuestario. El exceso no será reembolsado.',
         'RECHAZADO'     => 'Rendición de gastos rechazada.',
     ];
 
     RendicionesService::jsonResponse(true, [
-        'message' => $messages[$legacyDecision],
+        'message' => $messages[$actualFinalDecision] ?? 'Resolución registrada exitosamente.',
         'data' => [
             'rendicion_id'    => (int)$request['rendicion_id'],
-            'decision'        => $legacyDecision,
+            'decision'        => $actualFinalDecision,
+            'estado_rendicion'=> $rendData['estado'] ?? '',
+            'monto_aprobado'  => (float)($rendData['monto_total_aprobado'] ?? 0),
             'aprobador_nombre'=> $request['aprobador_nombre_snapshot'],
             'aprobador_cargo' => $request['aprobador_cargo_snapshot'],
             'pdf_url'         => $pdfUrl,
-        ],
+        ]
     ]);
 } catch (InvalidArgumentException $exception) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();

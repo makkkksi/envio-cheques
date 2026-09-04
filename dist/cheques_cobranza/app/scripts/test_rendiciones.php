@@ -962,21 +962,25 @@ try {
     }
     assertRendiciones($test1Blocked, '1. VERIFICAR_Y_ENVIAR con decisiones es rechazado.');
 
-    // 2. No permite enviar si existen documentos PENDIENTES
-    $test2Blocked = false;
+    // 2. Permite enviar si existen documentos PENDIENTES (la validación por ítem es del Responsable)
+    $sendWithPendientesOk = false;
     try {
-        RendicionesService::verificarYEnviar($pdo, $rQAId, $testApproverId, $actorAdmin, 'Prueba con pendientes');
+        $sendRes = RendicionesService::verificarYEnviar($pdo, $rQAId, $testApproverId, $actorAdmin, 'Prueba con pendientes', null, false);
+        $sendWithPendientesOk = is_array($sendRes);
     } catch (DomainException $e) {
-        $test2Blocked = true;
+        $sendWithPendientesOk = false;
     }
-    assertRendiciones($test2Blocked, '2. No permite enviar si existen documentos PENDIENTES.');
+    assertRendiciones($sendWithPendientesOk, '2. Permite enviar si existen documentos PENDIENTES para validación de Jefatura.');
+
+    // Reabrir a EN_REVISION_TESORERIA para continuar con pruebas de validación
+    $pdo->prepare('UPDATE rendiciones_gastos SET estado = "EN_REVISION_TESORERIA" WHERE id = :id')->execute([':id' => $rQAId]);
 
     // 3. No permite enviar si todos los documentos fueron rechazados
     $pdo->prepare('UPDATE rendicion_documentos SET estado_item = "RECHAZADO", monto_validado = "0.00", motivo_rechazo = "No aplica" WHERE rendicion_id = :id')
         ->execute([':id' => $rQAId]);
     $test3Blocked = false;
     try {
-        RendicionesService::verificarYEnviar($pdo, $rQAId, $testApproverId, $actorAdmin, 'Prueba todos rechazados');
+        RendicionesService::verificarYEnviar($pdo, $rQAId, $testApproverId, $actorAdmin, 'Prueba todos rechazados', null, false);
     } catch (DomainException $e) {
         $test3Blocked = true;
     }
@@ -1721,19 +1725,19 @@ try {
         ':empresa_id'   => 1,
         ':vendedor_id'  => $sellerId,
         ':rendicion_id' => $rUnkId,
-        ':num'          => 'DOC-PENDIENTE-TEST',
+        ':num'          => 'DOC-INACTIVO-TEST',
         ':monto'        => '20000.00',
-        ':hash'         => hash('sha256', '761234567|BOLETA_ELECTRONICA|DOC-PENDIENTE-TEST'),
-        ':estado'       => 'PENDIENTE',
-        ':activo'       => 1,
+        ':hash'         => hash('sha256', '761234567|BOLETA_ELECTRONICA|DOC-INACTIVO-TEST'),
+        ':estado'       => 'APROBADO',
+        ':activo'       => 0,
     ]);
     $test22Blocked = false;
     try {
-        RendicionesService::verificarYEnviar($pdo, $rUnkId, $testApproverId, $actorAdmin, 'Envio con pendiente');
+        RendicionesService::verificarYEnviar($pdo, $rUnkId, $testApproverId, $actorAdmin, 'Envio sin activos', null, false);
     } catch (DomainException $e) {
         $test22Blocked = true;
     }
-    assertRendiciones($test22Blocked, 'P1-22: VERIFICAR_Y_ENVIAR rechaza cualquier estado distinto de APROBADO o RECHAZADO.');
+    assertRendiciones($test22Blocked, 'P1-22: VERIFICAR_Y_ENVIAR rechaza rendición sin comprobantes activos.');
 
     // 23. La aprobación funcional completa exige responsable y Magic Token (Sección 7)
     $codeQAFunc = 'RND-P1-FUNC-' . bin2hex(random_bytes(3));

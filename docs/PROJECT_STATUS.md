@@ -18,6 +18,18 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 
 ## Componentes Entregados (Fase 1 y 2)
 
+- [x] **Validación Exclusiva en Magic Link de Responsables y Liquidación Dual-Logic en Planilla PDF (2026-09-04)** — Verificación de comprobantes delegada a Jefatura con recálculo dinámico y desglose en PDF:
+  1. *Validación por Ítem Delegada al Responsable:* La aprobación, rebaja o rechazo de cada comprobante se ejecuta exclusivamente en el Magic Link del Responsable (`rendiciones/aprobar_rendicion.php`). Interfaz con tarjetas reactivas que recalculan en tiempo real totales, excesos y habilitan la aprobación hasta el tope presupuestario.
+  2. *Tesorería Focalizada en Cotejo Físico:* Tesorería únicamente coteja la información física vs digitada (mediante corrección de datos con el lápiz) y envía a Jefatura con `verificarYEnviar()`. Se retiró el botón "Validar comprobantes" del panel de Tesorería (`admin/js/rendiciones.js`), y `verificarYEnviar()` ahora permite enviar documentos en estado `PENDIENTE`.
+  3. *Lógica Financiera y Liberación de Presupuesto:* `rotateToken()` actualiza el monto solicitado ante reenvíos, y `applyRenditionApproval()` fija el monto formal aprobado según la suma real de comprobantes aprobados, ajustando la reserva en `presupuestos_vendedores` y liberando excesos no aprobados.
+  4. *Planilla PDF con Dual-Logic Transparente:* En `services/RendicionPlanillaPdf.php`, la tabla de comprobantes detalla `RENDIDO` (monto total declarado en la boleta) vs `VALIDADO` (monto emitido y aprobado, con glosa de rebaja o motivo de rechazo). El bloque de liquidación final transparenta las dos deducciones:
+     - `TOTAL GENERAL DECLARADO (BOLETAS RENDIDAS)`
+     - `(-) DEDUCCIÓN POR COMPROBANTES RECHAZADOS / REBAJADOS` (si aplica)
+     - `SUBTOTAL COMPROBANTES VALIDADOS Y EMITIDOS` (si aplica)
+     - `(-) EXCESO NO REEMBOLSABLE (TOPE DE PRESUPUESTO ASIGNADO)` (si se aprobó con tope)
+     - `(=) TOTAL NETO APROBADO A REEMBOLSAR (LÍQUIDO A PAGO)`
+     - `TOTAL NO APROBADO / NO REEMBOLSABLE` (suma total documental + tope)
+  5. *Certificación QA y Paridad:* 148 pruebas PASS en `scripts/test_rendiciones.php`, 40 pruebas PASS en `scripts/test_approval_workflow.php`, y paridad 100% SHA-256 en los 235 archivos de `dist/`.
 - [x] **Resolución de P0s — Validación Canónica de `vend_cod` y Suite HTTP Real de Integración (2026-09-04)** — Corrección exclusiva de puntos P0 críticos de la migración y handoff seguro:
   1. *P0-1 — Validación Estricta de `vend_cod` sin Coerción Implícita:* En SQL (`TRIM(vend_cod) REGEXP '^[1-9][0-9]*$'`) aplicado antes de cualquier CAST en `WebUsuariosSellerRepository` (`search` y `findById`) y en `SellerHandoffService::verifySessionToken`. En PHP, `validateVendCod` valida con `/^[1-9][0-9]*$/D` y rango signed INT (1 a 2147483647). Se descartan tajantemente: 0, negativos, signos, decimales, notación científica, caracteres alfanuméricos, espacios, desbordes y ceros a la izquierda (`0012` rechazado para mantener canonicidad única). Búsqueda exacta en SQL compara inequívocamente cadenas sin permitir coerción implícita de MySQL (`TRIM(vend_cod) = :vend_cod`). Certificado con 26 pruebas PASS en `scratch/test_seller_directory.php`.
   2. *P0-2 — Suite HTTP Real de Integración (`scratch/test_http_handoff.php`):* Servidor PHP CLI efímero arrancado en puerto libre con entorno protegido (`TEST_HTTP_SERVER=1`, `APP_ENV=local`). Prohibición absoluta de inyectar o ejecutar verificadores mock en `APP_ENV=production` (excepción inmediata). Certificado ciclo HTTP real completo:

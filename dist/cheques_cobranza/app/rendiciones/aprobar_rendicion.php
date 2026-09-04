@@ -70,9 +70,9 @@ if ($validTokenFormat) {
                         monto, monto_validado, descripcion, foto_documento_url,
                         cliente_invitado_nombre, cliente_invitado_rut,
                         cliente_invitado_empresa, cliente_invitado_cargo,
-                        proposito_comercial, estado_item
+                        proposito_comercial, estado_item, motivo_rechazo
                  FROM rendicion_documentos
-                 WHERE rendicion_id = :rendicion_id AND activo = 1 AND estado_item != "RECHAZADO"
+                 WHERE rendicion_id = :rendicion_id AND activo = 1 AND estado_item != "DESCARTADO"
                  ORDER BY fecha_emision ASC, id ASC'
             );
             $stmtDocuments->execute([':rendicion_id' => (int)$rendition['id']]);
@@ -123,65 +123,20 @@ $downloadPdfUrl = PORTAL_BASE_URL . '/admin/api/rendiciones/descargar_planilla.p
     <title>Aprobación de Rendición de Gastos</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="aprobar_exceso.css?v=20260901-1">
-    <style>
-        .approval-card__excess-box {
-            background: #fef2f2;
-            border: 1.5px solid #f87171;
-            border-radius: 10px;
-            padding: 14px 18px;
-            margin: 16px 0;
-            color: #991b1b;
-            font-size: 0.95rem;
-            line-height: 1.5;
-        }
-        .approval-card__pdf-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: #0284c7;
-            color: #ffffff;
-            text-decoration: none;
-            padding: 12px 22px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.95rem;
-            margin-top: 14px;
-            transition: background 0.2s;
-        }
-        .approval-card__pdf-btn:hover {
-            background: #0369a1;
-        }
-        .approval-card__button--tope {
-            background: #d97706;
-            color: #fff;
-            border: none;
-            padding: 13px 22px;
-            border-radius: 8px;
-            font-family: inherit;
-            font-size: 0.93rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 0.2s, opacity 0.15s;
-            line-height: 1.3;
-            text-align: center;
-        }
-        .approval-card__button--tope:hover:not(:disabled) { background: #b45309; }
-        .approval-card__button--tope:disabled { opacity: 0.55; cursor: not-allowed; }
-        .approval-actions--with-tope { gap: 10px; flex-wrap: wrap; }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="aprobar_exceso.css?v=20260904-1">
 </head>
 <body>
 <main class="approval-card"
     data-token="<?= $canResolve ? rEscape($token) : '' ?>"
     data-pdf-url="<?= rEscape($downloadPdfUrl) ?>"
+    data-budget="<?= $budget ?>"
     data-max-aprobable="<?= $canResolve ? number_format((float)($rendition['monto_maximo_aprobable'] ?? $totalRendido), 0, ',', '.') : '' ?>"
     data-excess="<?= $canResolve ? ($excess > 0 ? '1' : '0') : '0' ?>">
     <header class="approval-header">
         <span class="approval-card__brand"><?= rEscape($rendition['empresa_nombre'] ?? 'Grupo Automarco') ?></span>
         <h1><?= $canResolve ? 'Aprobación de Rendición de Gastos' : ($resolvedDecision === 'APROBADO' ? 'Rendición Aprobada' : ($resolvedDecision === 'RECHAZADO' ? 'Rendición Rechazada' : 'Enlace no disponible')) ?></h1>
-        <p><?= $canResolve ? 'Comprobantes y montos previamente verificados por Tesorería. Revisa el detalle antes de emitir tu resolución.' : ($resolvedDecision !== '' ? 'La solicitud fue resuelta y este enlace ya no admite nuevas decisiones.' : rEscape($pageError)) ?></p>
+        <p><?= $canResolve ? 'Fotos cotejadas por Tesorería. Audita los comprobantes y emite tu resolución.' : ($resolvedDecision !== '' ? 'La solicitud fue resuelta y este enlace ya no admite nuevas decisiones.' : rEscape($pageError)) ?></p>
     </header>
 
     <?php if (!$canResolve && $resolvedDecision !== '' && $rendition): ?>
@@ -228,21 +183,15 @@ $downloadPdfUrl = PORTAL_BASE_URL . '/admin/api/rendiciones/descargar_planilla.p
         <div><span>Empresa y Asignación</span><strong><?= rEscape($rendition['empresa_nombre']) ?></strong><small><?= rEscape($rendition['tipo_rendicion'] === 'GIRA' ? 'Gira comercial: ' . ($rendition['nombre_gira'] ?: 'Sin nombre') : 'Presupuesto mensual') ?> · <?= rEscape($rendition['periodo_mes']) ?></small></div>
     </section>
 
-    <?php if ($excess > 0): ?>
-    <div class="approval-card__excess-box">
-        <?php if ($canResolve): ?>
-            <strong>Exceso Presupuestario:</strong> Esta rendición presenta un gasto de <strong><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado. Al pulsar "Aprobar Rendición", autorizas el monto total y la cobertura de este exceso. Puedes también optar por <strong>Aprobar hasta el Tope</strong> sin cubrir el exceso.
-        <?php else: ?>
-            <strong>Exceso Presupuestario:</strong> Esta rendición presentó un gasto de <strong><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado.
-        <?php endif; ?>
+    <div class="approval-card__excess-box" id="excessAlertBox" style="display: <?= $excess > 0 ? 'block' : 'none' ?>;">
+        <strong>Exceso Presupuestario:</strong> Esta rendición presenta un gasto de <strong id="excessAmountText"><?= rMoney($excess) ?></strong> por sobre el presupuesto asignado. Al pulsar "Aprobar Rendición", autorizas la cobertura de este exceso. Puedes también optar por <strong>Aprobar hasta el Tope</strong> sin cubrir el exceso.
     </div>
-    <?php endif; ?>
 
     <section class="approval-metrics" aria-label="Resumen financiero">
         <div><span>Presupuesto</span><strong><?= rMoney($budget) ?></strong></div>
         <div><span>Total Rendido</span><strong><?= rMoney($totalRendido) ?></strong></div>
-        <div><span>Exceso</span><strong style="color:<?= $excess > 0 ? '#b91c1c' : '#64748b' ?>"><?= $excess > 0 ? '+' . rMoney($excess) : '$0' ?></strong></div>
-        <div class="approval-metrics__total"><span>Total a Autorizar</span><strong><?= rMoney($totalAprobado) ?></strong></div>
+        <div><span>Exceso</span><strong id="metricExcess" style="color:<?= $excess > 0 ? '#b91c1c' : '#64748b' ?>"><?= $excess > 0 ? '+' . rMoney($excess) : '$0' ?></strong></div>
+        <div class="approval-metrics__total"><span>Total a Autorizar</span><strong id="metricTotalApproved"><?= rMoney($totalAprobado) ?></strong></div>
     </section>
 
     <?php if (trim((string)$rendition['nota_vendedor']) !== ''): ?>
@@ -261,49 +210,99 @@ $downloadPdfUrl = PORTAL_BASE_URL . '/admin/api/rendiciones/descargar_planilla.p
 
     <section class="approval-documents">
         <div class="approval-section-title">
-            <h2>Comprobantes Verificados</h2>
-            <span><?= count($documents) ?> comprobante(s)</span>
-        </div>
-        <?php foreach ($documents as $document): ?>
-        <article class="approval-document">
             <div>
-                <span><?= rEscape(str_replace('_', ' ', $document['categoria_gasto'])) ?></span>
-                <strong><?= rEscape($document['razon_social_proveedor'] ?: 'Proveedor no informado') ?></strong>
-                <small><?= rEscape($document['tipo_documento']) ?> · <?= rEscape($document['fecha_emision']) ?> · RUT <?= rEscape($document['rut_proveedor'] ?: 's/i') ?> · Folio <?= rEscape($document['numero_documento'] ?: 's/i') ?></small>
-                <?php if (rPhotoUrl($document['foto_documento_url']) !== ''): ?>
-                <a class="approval-document__link" href="<?= rEscape(rPhotoUrl($document['foto_documento_url'])) ?>" target="_blank" rel="noopener noreferrer">Ver foto boleta</a>
-                <?php endif; ?>
+                <h2>Comprobantes para Auditoría</h2>
+                <p style="margin:2px 0 0;font-size:0.8rem;color:#64748b">Revisa cada gasto individualmente. Puedes aprobar con el monto completo, rebajar el monto a reembolsar o rechazar boletas no correspondientes.</p>
             </div>
-            <strong><?= rMoney($document['monto_validado'] !== null ? $document['monto_validado'] : $document['monto']) ?></strong>
+            <span class="approval-documents-count"><?= count($documents) ?> comprobante(s)</span>
+        </div>
+        <div class="approval-doc-list" id="approvalDocList">
+        <?php foreach ($documents as $document): 
+            $isItemRejected = ($document['estado_item'] === 'RECHAZADO');
+            $docMonto = (float)$document['monto'];
+            $docMontoVal = ($document['monto_validado'] !== null && !$isItemRejected) ? (float)$document['monto_validado'] : $docMonto;
+            $docReason = (string)($document['motivo_rechazo'] ?? '');
+        ?>
+        <article class="approval-doc-card <?= $isItemRejected ? 'is-rejected' : 'is-approved' ?>" data-doc-id="<?= (int)$document['id'] ?>" data-doc-orig-amount="<?= $docMonto ?>">
+            <div class="approval-doc-card__header">
+                <div class="approval-doc-card__icon-wrap">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="4" y="3" width="16" height="18" rx="2"/>
+                        <path d="M8 7h8M8 11h8M8 15h5"/>
+                    </svg>
+                </div>
+                <div class="approval-doc-card__info">
+                    <div class="approval-doc-card__title-row">
+                        <strong><?= rEscape($document['razon_social_proveedor'] ?: 'Proveedor no informado') ?></strong>
+                        <span class="approval-doc-card__badge"><?= rEscape(str_replace('_', ' ', $document['categoria_gasto'])) ?></span>
+                    </div>
+                    <div class="approval-doc-card__meta">
+                        <span><?= rEscape($document['tipo_documento']) ?></span>
+                        <span>Folio: <?= rEscape($document['numero_documento'] ?: 's/i') ?></span>
+                        <span><?= rEscape($document['fecha_emision']) ?></span>
+                        <span>RUT: <?= rEscape($document['rut_proveedor'] ?: 's/i') ?></span>
+                    </div>
+                    <?php if (rPhotoUrl($document['foto_documento_url']) !== ''): ?>
+                    <div style="margin-top:5px">
+                        <a class="approval-doc-card__photo-link" href="<?= rEscape(rPhotoUrl($document['foto_documento_url'])) ?>" target="_blank" rel="noopener noreferrer">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            Ver foto boleta
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="approval-doc-card__claimed">
+                    <span class="approval-doc-card__claimed-label">Monto rendido</span>
+                    <strong class="approval-doc-card__claimed-amount"><?= rMoney($docMonto) ?></strong>
+                </div>
+            </div>
+
             <?php if ($document['categoria_gasto'] === 'CENA_CLIENTE'): ?>
-            <dl class="approval-document__sii">
-                <div><dt>Invitado</dt><dd><?= rEscape($document['cliente_invitado_nombre']) ?> · <?= rEscape($document['cliente_invitado_rut']) ?></dd></div>
-                <div><dt>Empresa / Cargo</dt><dd><?= rEscape($document['cliente_invitado_empresa']) ?> · <?= rEscape($document['cliente_invitado_cargo']) ?></dd></div>
-                <div><dt>Propósito SII</dt><dd><?= rEscape($document['proposito_comercial']) ?></dd></div>
+            <dl class="approval-document__sii" style="margin:8px 0;background:#fffbeb;padding:8px 12px;border-radius:6px;border:1px solid #fef3c7;font-size:0.75rem">
+                <div><dt style="font-weight:700;color:#92400e">Invitado:</dt> <dd><?= rEscape($document['cliente_invitado_nombre']) ?> · <?= rEscape($document['cliente_invitado_rut']) ?></dd></div>
+                <div><dt style="font-weight:700;color:#92400e">Empresa / Cargo:</dt> <dd><?= rEscape($document['cliente_invitado_empresa']) ?> · <?= rEscape($document['cliente_invitado_cargo']) ?></dd></div>
+                <div><dt style="font-weight:700;color:#92400e">Propósito SII:</dt> <dd><?= rEscape($document['proposito_comercial']) ?></dd></div>
             </dl>
             <?php endif; ?>
+
+            <div class="approval-doc-card__controls">
+                <div class="approval-doc-field">
+                    <label class="approval-doc-label">Decisión</label>
+                    <select class="approval-doc-select" data-doc-decision>
+                        <option value="APROBAR" <?= !$isItemRejected ? 'selected' : '' ?>>Aprobar</option>
+                        <option value="RECHAZAR" <?= $isItemRejected ? 'selected' : '' ?>>Rechazar</option>
+                    </select>
+                </div>
+                <div class="approval-doc-field">
+                    <label class="approval-doc-label">Monto validado ($)</label>
+                    <input class="approval-doc-input approval-doc-input--amount" data-doc-amount type="number" min="0" max="<?= $docMonto ?>" step="1" value="<?= $docMontoVal ?>" <?= $isItemRejected ? 'disabled' : '' ?>>
+                </div>
+                <div class="approval-doc-field approval-doc-field--reason">
+                    <label class="approval-doc-label">Motivo de rechazo</label>
+                    <input class="approval-doc-input approval-doc-input--reason" data-doc-reason type="text" maxlength="255" placeholder="Obligatorio si se rechaza..." value="<?= rEscape($docReason) ?>" <?= !$isItemRejected ? 'disabled' : '' ?>>
+                </div>
+            </div>
         </article>
         <?php endforeach; ?>
+        </div>
     </section>
 
     <section class="approval-decision">
-        <label for="comentario">Comentario de la resolución <span>(obligatorio si rechazas)</span></label>
-        <textarea id="comentario" maxlength="500" rows="3" placeholder="Ingresa una observación o motivo para Tesorería..."></textarea>
-        <div class="approval-actions<?= $excess > 0 ? ' approval-actions--with-tope' : '' ?>">
+        <label for="comentario">Comentario de la resolución <span>(opcional, obligatorio si rechazas la rendición completa)</span></label>
+        <textarea id="comentario" maxlength="500" rows="3" placeholder="Ingresa una observación o motivo general..."></textarea>
+        <div class="approval-actions" id="approvalActions">
             <button type="button" class="approval-card__button approval-card__button--rechazado" data-decision="RECHAZADO">Rechazar Rendición</button>
-            <?php if ($excess > 0): ?>
-            <button type="button" class="approval-card__button approval-card__button--tope" data-decision="APROBADO_TOPE">
-                Aprobar hasta el Tope<br><small style="font-weight:500;font-size:0.8rem;opacity:0.9">Sin cubrir el exceso (<?= rMoney($excess) ?>)</small>
+            <button type="button" class="approval-card__button approval-card__button--tope" id="btnApproveTope" data-decision="APROBADO_TOPE" style="display: <?= $excess > 0 ? 'inline-block' : 'none' ?>;">
+                Aprobar hasta el Tope<br><small style="font-weight:500;font-size:0.8rem;opacity:0.9" id="btnTopeSubtext">Sin cubrir exceso (<?= rMoney($excess) ?>)</small>
             </button>
-            <?php endif; ?>
-            <button type="button" class="approval-card__button approval-card__button--aprobado" data-decision="APROBADO">Aprobar Rendición</button>
+            <button type="button" class="approval-card__button approval-card__button--aprobado" id="btnApproveAll" data-decision="APROBADO">Aprobar Rendición</button>
         </div>
         <p id="resultado" class="approval-card__result" aria-live="polite"></p>
     </section>
     <?php endif; ?>
 </main>
 <?php if ($canResolve): ?>
-<script src="aprobar_rendicion.js?v=20260901-2"></script>
+<script src="aprobar_rendicion.js?v=20260904-1"></script>
 <?php endif; ?>
 </body>
 </html>

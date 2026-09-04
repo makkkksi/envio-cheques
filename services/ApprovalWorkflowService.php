@@ -182,7 +182,7 @@ final class ApprovalWorkflowService
     }
 
     /** @return array{solicitud: array, raw_token: string} */
-    public static function rotateToken(PDO $pdo, int $requestId, int $approverId, array $actor): array
+    public static function rotateToken(PDO $pdo, int $requestId, int $approverId, array $actor, ?float $newRequestedAmount = null): array
     {
         self::assertTransaction($pdo);
         $request = self::loadByIdForUpdate($pdo, $requestId);
@@ -192,12 +192,14 @@ final class ApprovalWorkflowService
         $approver = self::loadApprover($pdo, $approverId);
         $rawToken = bin2hex(random_bytes(32));
         $expiresAt = date('Y-m-d H:i:s', time() + (RENDICIONES_TOKEN_TTL_HOURS * 3600));
+        $montoSolicitado = $newRequestedAmount !== null ? number_format($newRequestedAmount, 2, '.', '') : $request['monto_solicitado'];
         $stmt = $pdo->prepare(
             'UPDATE solicitudes_aprobacion
              SET aprobador_id = :aprobador_id,
                  aprobador_nombre_snapshot = :nombre,
                  aprobador_cargo_snapshot = :cargo,
                  aprobador_email_snapshot = :email,
+                 monto_solicitado = :monto_solicitado,
                  token_hash = :token_hash, token_expira_at = :token_expira_at,
                  token_usado_at = NULL, token_version = token_version + 1,
                  estado = :estado, decision = NULL, comentario_decision = NULL,
@@ -208,6 +210,7 @@ final class ApprovalWorkflowService
         $stmt->execute([
             ':aprobador_id' => (int)$approver['id'], ':nombre' => $approver['nombre'],
             ':cargo' => $approver['cargo'], ':email' => $approver['email'],
+            ':monto_solicitado' => $montoSolicitado,
             ':token_hash' => hash('sha256', $rawToken), ':token_expira_at' => $expiresAt,
             ':estado' => self::STATE_PENDING_SEND, ':id' => $requestId,
         ]);
@@ -216,7 +219,7 @@ final class ApprovalWorkflowService
             'actor_nombre' => (string)($actor['nombre'] ?? 'Tesorería'),
             'actor_email' => $actor['email'] ?? null, 'accion' => 'REENVIAR_SOLICITUD',
             'estado_anterior' => $request['estado'], 'estado_nuevo' => self::STATE_PENDING_SEND,
-            'metadata' => ['aprobador_id' => (int)$approver['id'], 'token_version' => (int)$request['token_version'] + 1],
+            'metadata' => ['aprobador_id' => (int)$approver['id'], 'token_version' => (int)$request['token_version'] + 1, 'monto_solicitado' => $montoSolicitado],
         ]);
         return ['solicitud' => self::loadById($pdo, $requestId), 'raw_token' => $rawToken];
     }
@@ -224,8 +227,9 @@ final class ApprovalWorkflowService
     /**
      * Resuelve con bloqueo de fila. Si el token venció, persiste VENCIDA y
      * devuelve expired=true para permitir al endpoint confirmar la transacción.
+     * Permite recibir array de $decisiones por comprobante para TYPE_RENDITION_APPROVAL.
      */
-    public static function resolveByToken(PDO $pdo, string $rawToken, string $decision, string $comment = ''): array
+    public static function resolveByToken(PDO $pdo, string $rawToken, string $decision, string $comment = '', array $decisiones = []): array
     {
         self::assertTransaction($pdo);
         $request = self::loadByTokenForUpdate($pdo, $rawToken);
@@ -236,11 +240,11 @@ final class ApprovalWorkflowService
             $stmt = $pdo->prepare('UPDATE solicitudes_aprobacion SET estado = :estado WHERE id = :id');
             $stmt->execute([':estado' => self::STATE_EXPIRED, ':id' => (int)$request['id']]);
             self::log($pdo, (int)$request['id'], [
-                'actor_tipo' => 'SISTEMA', 'actor_nombre' => 'Sistema',
-                'accion' => 'TOKEN_VENCIDO', 'estado_anterior' => $request['estado'],
-                'estado_nuevo' => self::STATE_EXPIRED,
+                'actor_tipo' => 'SISTEMA', 'actor_nombre' => 'Sistema', 'accion' => 'TOKEN_VENCIDO',
+                'estado_anterior' => $request['estado'], 'estado_nuevo' => self::STATE_EXPIRED,
+                'comentario' => 'Intento de resolución con token expirado.',
             ]);
-            return ['expired' => true, 'solicitud' => self::loadById($pdo, (int)$request['id'])];
+            return ['solicitud' => self::loadById($pdo, (int)$request['id']), 'expired' => true];
         }
 
         $decision = strtoupper(trim($decision));
@@ -266,13 +270,22 @@ final class ApprovalWorkflowService
                     throw new DomainException('No se puede aprobar hasta el tope una rendición cuyo monto máximo aprobable es menor o igual a cero.');
                 }
 
-                $stmtDocSum = $pdo->prepare(
-                    'SELECT COALESCE(SUM(COALESCE(monto_validado, monto)), 0)
-                     FROM rendicion_documentos
-                     WHERE rendicion_id = :id AND activo = 1 AND estado_item = "APROBADO"'
-                );
-                $stmtDocSum->execute([':id' => (int)$request['rendicion_id']]);
-                $totalDocsAprobados = (float)$stmtDocSum->fetchColumn();
+                if (!empty($decisiones) && is_array($decisiones)) {
+                    $totalDocsAprobados = 0.0;
+                    foreach ($decisiones as $d) {
+                        if (strtoupper(trim((string)($d['decision'] ?? 'APROBAR'))) === 'APROBAR') {
+                            $totalDocsAprobados += (float)($d['monto_validado'] ?? 0);
+                        }
+                    }
+                } else {
+                    $stmtDocSum = $pdo->prepare(
+                        'SELECT COALESCE(SUM(COALESCE(monto_validado, monto)), 0)
+                         FROM rendicion_documentos
+                         WHERE rendicion_id = :id AND activo = 1 AND estado_item IN ("APROBADO", "PENDIENTE")'
+                    );
+                    $stmtDocSum->execute([':id' => (int)$request['rendicion_id']]);
+                    $totalDocsAprobados = (float)$stmtDocSum->fetchColumn();
+                }
                 if ($totalDocsAprobados <= 0.0) {
                     throw new DomainException('No se puede aprobar hasta el tope una rendición sin comprobantes aprobados.');
                 }
@@ -316,7 +329,7 @@ final class ApprovalWorkflowService
                 throw new DomainException('La solicitud ya no es la versión vigente de la gira.');
             }
         } elseif ($request['tipo_solicitud'] === self::TYPE_RENDITION_APPROVAL) {
-            self::applyRenditionApproval($pdo, $request, $decision, $comment);
+            self::applyRenditionApproval($pdo, $request, $decision, $comment, $decisiones);
         } elseif ($decision === self::DECISION_APPROVED) {
             self::applyMonthlyException($pdo, $request);
         }
@@ -431,7 +444,7 @@ final class ApprovalWorkflowService
         ]);
     }
 
-    private static function applyRenditionApproval(PDO $pdo, array $request, string $decision, ?string $comment): void
+    private static function applyRenditionApproval(PDO $pdo, array $request, string $decision, ?string $comment, array $decisiones = []): void
     {
         $renditionId = (int)$request['rendicion_id'];
         $stmt = $pdo->prepare('SELECT * FROM rendiciones_gastos WHERE id = :id LIMIT 1 FOR UPDATE');
@@ -442,19 +455,83 @@ final class ApprovalWorkflowService
         }
 
         $now = date('Y-m-d H:i:s');
-        if ($decision === self::DECISION_APPROVED) {
-            $approvedAmount = (float)$rendition['monto_total_rendido'];
-            $stmtDocSum = $pdo->prepare(
-                'SELECT COALESCE(SUM(CASE WHEN estado_item = "RECHAZADO" THEN 0 ELSE COALESCE(monto_validado, monto) END), 0)
-                 FROM rendicion_documentos
-                 WHERE rendicion_id = :id AND activo = 1'
-            );
-            $stmtDocSum->execute([':id' => $renditionId]);
-            $sumValid = (float)$stmtDocSum->fetchColumn();
-            if ($sumValid > 0) {
-                $approvedAmount = $sumValid;
+
+        // 1. Si vienen decisiones por comprobante desde el Magic Link, aplicarlas
+        if (!empty($decisiones) && is_array($decisiones)) {
+            $stmtDocs = $pdo->prepare('SELECT * FROM rendicion_documentos WHERE rendicion_id = :id AND activo = 1 FOR UPDATE');
+            $stmtDocs->execute([':id' => $renditionId]);
+            $existingDocs = $stmtDocs->fetchAll(PDO::FETCH_ASSOC);
+            $docMap = [];
+            foreach ($existingDocs as $doc) {
+                $docMap[(int)$doc['id']] = $doc;
             }
 
+            $stmtUpdateDoc = $pdo->prepare(
+                'UPDATE rendicion_documentos
+                 SET estado_item = :estado_item,
+                     monto_validado = :monto_validado,
+                     motivo_rechazo = :motivo
+                 WHERE id = :id AND rendicion_id = :rendicion_id'
+            );
+
+            foreach ($decisiones as $dec) {
+                $docId = (int)($dec['documento_id'] ?? 0);
+                if (!isset($docMap[$docId])) {
+                    continue;
+                }
+                $origDoc = $docMap[$docId];
+                $origMonto = (float)$origDoc['monto'];
+                $itemDecision = strtoupper(trim((string)($dec['decision'] ?? 'APROBAR')));
+                $itemReason = trim((string)($dec['motivo'] ?? ''));
+
+                if ($itemDecision === 'RECHAZAR') {
+                    $itemState = 'RECHAZADO';
+                    $valAmount = 0.0;
+                    $reasonText = $itemReason !== '' ? $itemReason : 'Comprobante rechazado por Jefatura.';
+                } else {
+                    $itemState = 'APROBADO';
+                    $reasonText = null;
+                    if (isset($dec['monto_validado']) && $dec['monto_validado'] !== '' && $dec['monto_validado'] !== null) {
+                        $valAmount = max(0.0, min($origMonto, (float)$dec['monto_validado']));
+                        if ($valAmount <= 0.0) {
+                            $itemState = 'RECHAZADO';
+                            $reasonText = $itemReason !== '' ? $itemReason : 'Monto validado en cero.';
+                        }
+                    } else {
+                        $valAmount = $origDoc['monto_validado'] !== null ? (float)$origDoc['monto_validado'] : $origMonto;
+                    }
+                }
+
+                $stmtUpdateDoc->execute([
+                    ':estado_item'    => $itemState,
+                    ':monto_validado' => number_format($valAmount, 2, '.', ''),
+                    ':motivo'         => $reasonText,
+                    ':id'             => $docId,
+                    ':rendicion_id'   => $renditionId,
+                ]);
+
+                RendicionesService::logHistory($pdo, [
+                    'rendicion_id'    => $renditionId,
+                    'documento_id'    => $docId,
+                    'usuario_id'      => null,
+                    'actor_tipo'      => 'JEFATURA',
+                    'actor_nombre'    => (string)$request['aprobador_nombre_snapshot'],
+                    'actor_email'     => $request['aprobador_email_snapshot'] ?? null,
+                    'accion'          => 'VALIDAR_DOCUMENTO_RESPONSABLE',
+                    'estado_anterior' => $origDoc['estado_item'],
+                    'estado_nuevo'    => $itemState,
+                    'comentario'      => $itemState === 'RECHAZADO' ? ($reasonText ?: 'Rechazado por Jefatura') : 'Validado por Jefatura',
+                    'metadata'        => [
+                        'monto_rendido'  => $origMonto,
+                        'monto_validado' => $valAmount,
+                        'decision'       => $itemDecision,
+                        'motivo'         => $reasonText,
+                    ],
+                ]);
+            }
+        }
+
+        if ($decision === self::DECISION_APPROVED) {
             $stmtApproveDocs = $pdo->prepare(
                 'UPDATE rendicion_documentos
                  SET estado_item = "APROBADO",
@@ -463,11 +540,57 @@ final class ApprovalWorkflowService
             );
             $stmtApproveDocs->execute([':id' => $renditionId]);
 
+            // Suma estricta de comprobantes APROBADOS
+            $stmtDocSum = $pdo->prepare(
+                'SELECT COALESCE(SUM(COALESCE(monto_validado, monto)), 0)
+                 FROM rendicion_documentos
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "APROBADO"'
+            );
+            $stmtDocSum->execute([':id' => $renditionId]);
+            $approvedAmount = (float)$stmtDocSum->fetchColumn();
+
+            // Si todos los comprobantes fueron rechazados, la rendición pasa a RECHAZADA
+            if ($approvedAmount <= 0.0) {
+                $decision = self::DECISION_REJECTED;
+            }
+        }
+
+        if ($decision === self::DECISION_APPROVED) {
+            $totalRendido = (float)$rendition['monto_total_rendido'];
+            $saldoAlEnviar = (float)($rendition['saldo_disponible_al_enviar'] ?? 0);
+            $newExceso = max(0.0, $approvedAmount - $saldoAlEnviar);
+            $newExcesoNoReemb = 0.0;
+            $newAplicoTope = 0;
+            $decisionExceso = ($newExceso > 0) ? 'APROBADO' : null;
+
+            // Estado tras resolución exitosa de Jefatura
+            $estadoNuevo = 'APROBADA';
+
+            // Ajuste presupuestario: liberar la diferencia entre reserva anterior y nueva
+            $reservaAnterior = (float)($rendition['monto_maximo_aprobable'] ?? min($totalRendido, max(0.0, $saldoAlEnviar)));
+            $reservaNueva = min($approvedAmount, max(0.0, $saldoAlEnviar));
+            $liberarReserva = max(0.0, $reservaAnterior - $reservaNueva);
+            if ($liberarReserva > 0.001) {
+                $stmtBudget = $pdo->prepare(
+                    'UPDATE presupuestos_vendedores
+                     SET monto_utilizado = GREATEST(0, monto_utilizado - :monto)
+                     WHERE id = :id'
+                );
+                $stmtBudget->execute([
+                    ':monto' => number_format($liberarReserva, 2, '.', ''),
+                    ':id'    => (int)$rendition['presupuesto_id']
+                ]);
+            }
+
             $stmtUpdate = $pdo->prepare(
                 'UPDATE rendiciones_gastos
-                 SET estado = "APROBADA",
+                 SET estado = :estado,
                      monto_total_aprobado = :monto_aprobado,
-                     decision_exceso = CASE WHEN monto_exceso > 0 THEN "APROBADO" ELSE decision_exceso END,
+                     monto_maximo_aprobable = :max_aprobable,
+                     monto_exceso = :exceso,
+                     monto_exceso_no_reembolsable = :exceso_no_reemb,
+                     aplico_tope_presupuestario = :aplico_tope,
+                     decision_exceso = :decision_exceso,
                      aprobado_exceso_at = :aprobado_at,
                      aprobado_exceso_por = :aprobador_nombre,
                      token_exceso_usado_at = :token_usado_at,
@@ -475,11 +598,17 @@ final class ApprovalWorkflowService
                  WHERE id = :id'
             );
             $stmtUpdate->execute([
-                ':monto_aprobado' => number_format($approvedAmount, 2, '.', ''),
-                ':aprobado_at' => $now,
-                ':aprobador_nombre' => $request['aprobador_nombre_snapshot'],
-                ':token_usado_at' => $now,
-                ':id' => $renditionId,
+                ':estado'            => $estadoNuevo,
+                ':monto_aprobado'    => number_format($approvedAmount, 2, '.', ''),
+                ':max_aprobable'     => number_format($reservaNueva + $newExceso, 2, '.', ''),
+                ':exceso'            => number_format($newExceso, 2, '.', ''),
+                ':exceso_no_reemb'   => number_format($newExcesoNoReemb, 2, '.', ''),
+                ':aplico_tope'       => $newAplicoTope,
+                ':decision_exceso'   => $decisionExceso,
+                ':aprobado_at'       => $now,
+                ':aprobador_nombre'  => $request['aprobador_nombre_snapshot'],
+                ':token_usado_at'    => $now,
+                ':id'                => $renditionId,
             ]);
 
             try {
@@ -490,24 +619,30 @@ final class ApprovalWorkflowService
             }
 
             RendicionesService::logHistory($pdo, [
-                'rendicion_id' => $renditionId,
-                'actor_tipo' => 'JEFATURA',
-                'actor_nombre' => $request['aprobador_nombre_snapshot'],
-                'actor_email' => $request['aprobador_email_snapshot'],
-                'accion' => 'APROBAR_RENDICION_RESPONSABLE',
-                'estado_anterior' => $rendition['estado'],
-                'estado_nuevo' => 'APROBADA',
-                'comentario' => $comment,
-                'metadata' => ['monto_aprobado' => $approvedAmount, 'solicitud_id' => (int)$request['id']],
+                'rendicion_id'   => $renditionId,
+                'actor_tipo'     => 'JEFATURA',
+                'actor_nombre'   => $request['aprobador_nombre_snapshot'],
+                'actor_email'    => $request['aprobador_email_snapshot'],
+                'accion'         => 'APROBAR_RENDICION_RESPONSABLE',
+                'estado_anterior'=> $rendition['estado'],
+                'estado_nuevo'   => $estadoNuevo,
+                'comentario'     => $comment,
+                'metadata'       => [
+                    'monto_aprobado'     => $approvedAmount,
+                    'total_rendido'      => $totalRendido,
+                    'reserva_liberada'   => $liberarReserva,
+                    'solicitud_id'       => (int)$request['id']
+                ],
             ]);
         } elseif ($decision === self::DECISION_APPROVED_CAPPED) {
-            // P0-3: Aprueba solo hasta el tope presupuestario; el exceso queda no reembolsable.
-            $maxAprobable = (float)($rendition['monto_maximo_aprobable'] ?? 0);
-            if ($maxAprobable <= 0.0) {
-                throw new DomainException('No se puede aprobar hasta el tope una rendición cuyo monto máximo aprobable es menor o igual a cero.');
-            }
+            $stmtApproveDocs = $pdo->prepare(
+                'UPDATE rendicion_documentos
+                 SET estado_item = "APROBADO",
+                     monto_validado = COALESCE(monto_validado, monto)
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "PENDIENTE"'
+            );
+            $stmtApproveDocs->execute([':id' => $renditionId]);
 
-            // Total vigente de documentos aprobados
             $stmtDocSum = $pdo->prepare(
                 'SELECT COALESCE(SUM(COALESCE(monto_validado, monto)), 0)
                  FROM rendicion_documentos
@@ -519,33 +654,47 @@ final class ApprovalWorkflowService
                 throw new DomainException('No se puede aprobar hasta el tope una rendición sin comprobantes aprobados.');
             }
 
-            $totalRendido = (float)$rendition['monto_total_rendido'];
+            $saldoAlEnviar = max(0.0, (float)($rendition['saldo_disponible_al_enviar'] ?? 0));
+            $maxAprobable = (float)($rendition['monto_maximo_aprobable'] ?? $saldoAlEnviar);
+            if ($maxAprobable <= 0.0 && $saldoAlEnviar > 0.0) {
+                $maxAprobable = $saldoAlEnviar;
+            }
+            if ($maxAprobable <= 0.0) {
+                throw new DomainException('No se puede aprobar hasta el tope una rendición cuyo monto máximo aprobable es menor o igual a cero.');
+            }
 
-            // El monto aprobado se calcula exclusivamente como el menor valor entre:
-            // 1. monto_maximo_aprobable
-            // 2. Total vigente de documentos aprobados
-            // 3. monto_total_rendido
+            $totalRendido = (float)$rendition['monto_total_rendido'];
             $cappedAmount = min($maxAprobable, $totalDocsAprobados, $totalRendido);
             if ($cappedAmount <= 0.0) {
                 throw new DomainException('El monto aprobable con tope debe ser mayor a cero.');
             }
-            $excessNonReimb = max(0.0, $totalRendido - $cappedAmount);
+            $excessNonReimb = max(0.0, $totalDocsAprobados - $cappedAmount);
 
-            $stmtApproveDocs = $pdo->prepare(
-                'UPDATE rendicion_documentos
-                 SET estado_item = "APROBADO",
-                     monto_validado = COALESCE(monto_validado, monto)
-                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "PENDIENTE"'
-            );
-            $stmtApproveDocs->execute([':id' => $renditionId]);
+            $estadoNuevo = 'APROBADA';
+
+            $reservaAnterior = $maxAprobable;
+            $reservaNueva = $cappedAmount;
+            $liberarReserva = max(0.0, $reservaAnterior - $reservaNueva);
+            if ($liberarReserva > 0.001) {
+                $stmtBudget = $pdo->prepare(
+                    'UPDATE presupuestos_vendedores
+                     SET monto_utilizado = GREATEST(0, monto_utilizado - :monto)
+                     WHERE id = :id'
+                );
+                $stmtBudget->execute([
+                    ':monto' => number_format($liberarReserva, 2, '.', ''),
+                    ':id'    => (int)$rendition['presupuesto_id']
+                ]);
+            }
 
             $stmtUpdate = $pdo->prepare(
                 'UPDATE rendiciones_gastos
-                 SET estado = "APROBADA",
+                 SET estado = :estado,
                      monto_total_aprobado = :monto_aprobado,
+                     monto_exceso = :exceso,
                      monto_exceso_no_reembolsable = :exceso_no_reemb,
                      aplico_tope_presupuestario = 1,
-                     decision_exceso = CASE WHEN monto_exceso > 0 THEN "RECHAZADO" ELSE decision_exceso END,
+                     decision_exceso = "RECHAZADO",
                      aprobado_exceso_at = :aprobado_at,
                      aprobado_exceso_por = :aprobador_nombre,
                      token_exceso_usado_at = :token_usado_at,
@@ -553,7 +702,9 @@ final class ApprovalWorkflowService
                  WHERE id = :id'
             );
             $stmtUpdate->execute([
+                ':estado'           => $estadoNuevo,
                 ':monto_aprobado'   => number_format($cappedAmount, 2, '.', ''),
+                ':exceso'           => number_format($excessNonReimb, 2, '.', ''),
                 ':exceso_no_reemb'  => number_format($excessNonReimb, 2, '.', ''),
                 ':aprobado_at'      => $now,
                 ':aprobador_nombre' => $request['aprobador_nombre_snapshot'],
@@ -575,15 +726,17 @@ final class ApprovalWorkflowService
                 'actor_email'    => $request['aprobador_email_snapshot'],
                 'accion'         => 'APROBAR_RENDICION_HASTA_TOPE',
                 'estado_anterior'=> $rendition['estado'],
-                'estado_nuevo'   => 'APROBADA',
+                'estado_nuevo'   => $estadoNuevo,
                 'comentario'     => $comment,
                 'metadata'       => [
                     'monto_aprobado'   => $cappedAmount,
                     'exceso_no_reemb'  => $excessNonReimb,
+                    'reserva_liberada' => $liberarReserva,
                     'solicitud_id'     => (int)$request['id'],
                 ],
             ]);
         } else {
+            // DECISION_REJECTED
             $stmtUpdate = $pdo->prepare(
                 'UPDATE rendiciones_gastos
                  SET estado = "RECHAZADA",
@@ -613,7 +766,7 @@ final class ApprovalWorkflowService
                 'UPDATE rendicion_documentos
                  SET estado_item = "RECHAZADO",
                      motivo_rechazo = :motivo
-                 WHERE rendicion_id = :id AND activo = 1 AND estado_item = "PENDIENTE"'
+                 WHERE rendicion_id = :id AND activo = 1 AND estado_item IN ("PENDIENTE", "APROBADO")'
             );
             $stmtRejectDocs->execute([':motivo' => $comment, ':id' => $renditionId]);
 
