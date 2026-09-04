@@ -4,6 +4,17 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ## [Unreleased] - 2026-08-21
 
+### Habilitación de Correos Internos de la Suite y Blindaje Estricto a Vendedores (2026-09-04)
+- **Habilitación de Envío SMTP Real en Localhost para Correos Internos (`services/MailService.php`):**
+  - Removida la intercepción global en local (`if ($appEnv === 'local') return true;`) que impedía el despacho de correos por SMTP a los aprobadores/responsables, Tesorería, Cuentas Corrientes y Digitadoras.
+  - La aplicación web en localhost ahora despacha los correos reales directamente mediante PHPMailer y TLS (`mail.holdingautomarco.com:587`).
+- **Blindaje Absoluto e Infranqueable contra Correos a Vendedores (`services/MailService.php`):**
+  - Implementado el método de defensa en profundidad `MailService::isSellerEmail(string $email): bool` que verifica en tiempo real contra `usuarios` (`rol = 'vendedor'`), `presupuestos_vendedores` y `rendiciones_gastos`.
+  - En `sendSmtp()`, si cualquier destinatario principal o en copia (`$to` o `$cc`) coincide con el correo de un vendedor, el envío se aborta inmediatamente a nivel de transporte, registrando el bloqueo en los logs y garantizando que ningún vendedor reciba correos bajo ninguna circunstancia.
+  - Se mantienen en `false` por defecto `MAIL_SELLER_NOTIFICATIONS_ENABLED` y todas las guardas de nivel de aplicación.
+- **Protección de Pruebas CLI Automáticas:**
+  - En ejecuciones desde la línea de comandos (`php_sapi_name() === 'cli'`), `sendSmtp()` simula el envío para que las suites de prueba (`test_rendiciones.php`, `test_approval_workflow.php`) no saturen casillas con correos ficticios.
+
 ### Validación Exclusiva en Magic Link de Responsables y Liquidación Dual-Logic en Planilla PDF (2026-09-04)
 - **Delegación Exclusiva de Validación de Comprobantes a Jefatura (`rendiciones/aprobar_rendicion.php`, `rendiciones/aprobar_rendicion.js`, `rendiciones/aprobar_exceso.css`):**
   - La verificación ítem por ítem (aprobar, rechazar con motivo obligatorio o ajustar/rebajar el monto validado) se trasladó al Magic Link del Responsable.

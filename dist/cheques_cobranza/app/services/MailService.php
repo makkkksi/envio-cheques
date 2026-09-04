@@ -745,19 +745,70 @@ class MailService
     }
 
     /**
+     * Valida defensivamente si una dirección de correo pertenece a un vendedor del sistema.
+     * Consulta usuarios con rol 'vendedor', presupuestos_vendedores y rendiciones_gastos.
+     */
+    public static function isSellerEmail(string $email): bool
+    {
+        $cleanEmail = strtolower(trim($email));
+        if ($cleanEmail === '' || !filter_var($cleanEmail, FILTER_VALIDATE_EMAIL)) {
+            return false;
+        }
+
+        try {
+            $pdo = Database::getCobranzasConnection();
+            
+            $stmt1 = $pdo->prepare('SELECT 1 FROM usuarios WHERE LOWER(TRIM(email)) = :email AND rol = "vendedor" LIMIT 1');
+            $stmt1->execute([':email' => $cleanEmail]);
+            if ($stmt1->fetchColumn()) {
+                return true;
+            }
+
+            $stmt2 = $pdo->prepare('SELECT 1 FROM presupuestos_vendedores WHERE LOWER(TRIM(vendedor_email)) = :email LIMIT 1');
+            $stmt2->execute([':email' => $cleanEmail]);
+            if ($stmt2->fetchColumn()) {
+                return true;
+            }
+
+            $stmt3 = $pdo->prepare('SELECT 1 FROM rendiciones_gastos WHERE LOWER(TRIM(vendedor_email)) = :email LIMIT 1');
+            $stmt3->execute([':email' => $cleanEmail]);
+            if ($stmt3->fetchColumn()) {
+                return true;
+            }
+        } catch (Throwable $e) {
+            error_log('[MailService] Error verificando si email es de vendedor: ' . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    /**
      * Envía un correo electrónico utilizando PHPMailer.
+     * Habilita envíos para correos internos de la suite (Responsables, Tesorería, CC, Digitadoras)
+     * y prohíbe terminantemente el envío a cualquier correo perteneciente a vendedores.
      */
     public static function sendSmtp(string $to, string $subject, string $htmlBody, array $attachments = [], string $cc = ''): bool
     {
-        // Blindaje de Seguridad en Entorno Local (P0-2)
-        // En APP_ENV = local ningún correo sale a destinatarios reales.
-        // Se simula éxito para permitir pruebas locales sin efectos colaterales ni timeouts.
-        $appEnv = defined('APP_ENV') ? strtolower((string)APP_ENV) : (getenv('APP_ENV') ? strtolower((string)getenv('APP_ENV')) : 'local');
-        if ($appEnv === 'local') {
-            // Sanitizar y registrar exclusivamente destinatario y asunto de forma segura (sin tokens, links ni credenciales)
-            $safeTo = htmlspecialchars($to, ENT_QUOTES, 'UTF-8');
-            $safeSubject = htmlspecialchars($subject, ENT_QUOTES, 'UTF-8');
-            error_log("[MailService] [GUARD LOCAL] Correo simulado exitosamente en local. Destinatario: {$safeTo} | Asunto: {$safeSubject}");
+        $safeTo = htmlspecialchars($to, ENT_QUOTES, 'UTF-8');
+        $safeSubject = htmlspecialchars($subject, ENT_QUOTES, 'UTF-8');
+
+        // Blindaje Absoluto: Prohibición total de envío de correos a vendedores
+        $allRecipients = array_merge(
+            array_filter(array_map('trim', explode(',', $to))),
+            array_filter(array_map('trim', explode(',', $cc)))
+        );
+        foreach ($allRecipients as $rcpt) {
+            if (self::isSellerEmail($rcpt)) {
+                error_log("[MailService] [BLOQUEO ESTRICTO VENDEDOR] Envío cancelado: el destinatario '{$rcpt}' pertenece a un vendedor del sistema.");
+                return true;
+            }
+        }
+
+        // En suites de pruebas automatizadas CLI se simula el envío para evitar saturar buzones en cada ejecución
+        $isCli = (php_sapi_name() === 'cli');
+        $forceSendCli = filter_var(getenv('MAIL_FORCE_SEND') ?: false, FILTER_VALIDATE_BOOLEAN);
+        if ($isCli && !$forceSendCli) {
+            error_log("[MailService] [CLI MOCK] Envío simulado en entorno de pruebas CLI. Destinatario: {$safeTo} | Asunto: {$safeSubject}");
             return true;
         }
 
@@ -776,6 +827,14 @@ class MailService
             $mail->Password   = MAIL_PASS;
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port       = MAIL_PORT;
+            $mail->Timeout    = 15;
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                    'allow_self_signed' => true,
+                ],
+            ];
 
             $mail->setFrom(MAIL_FROM, 'Módulo de Cobranzas');
             

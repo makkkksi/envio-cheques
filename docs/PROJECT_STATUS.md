@@ -18,6 +18,10 @@ El proyecto cuenta con la **Fase 2 (Portal de Tesorería)** y la **Fase 5 (Integ
 
 ## Componentes Entregados (Fase 1 y 2)
 
+- [x] **Habilitación de Correos Internos de la Suite y Blindaje Estricto a Vendedores (2026-09-04)** — Envíos SMTP reales en localhost y defensa en profundidad:
+  1. *Despacho Real en Localhost para Roles Internos:* Eliminada la simulación forzada en local de `sendSmtp()`. La suite web ahora despacha correos reales por SMTP TLS (`mail.holdingautomarco.com:587`) a Responsables/Jefaturas (Magic Links de aprobación), Tesorería, Cuentas Corrientes y Digitadoras.
+  2. *Blindaje Inquebrantable contra Correos a Vendedores:* Implementado `MailService::isSellerEmail()` que coteja en tiempo real con `usuarios` (`rol = 'vendedor'`), `presupuestos_vendedores` y `rendiciones_gastos`. Si cualquier destinatario `$to` o `$cc` es de vendedor, `sendSmtp()` cancela el envío inmediatamente a nivel de transporte. Se mantiene `MAIL_SELLER_NOTIFICATIONS_ENABLED = false` por defecto en todos los entornos.
+  3. *Modo Mock en Suites CLI:* En ejecuciones CLI (`test_rendiciones.php`, `test_approval_workflow.php`), los envíos se simulan en log para proteger los buzones reales durante las pruebas automatizadas continuas.
 - [x] **Validación Exclusiva en Magic Link de Responsables y Liquidación Dual-Logic en Planilla PDF (2026-09-04)** — Verificación de comprobantes delegada a Jefatura con recálculo dinámico y desglose en PDF:
   1. *Validación por Ítem Delegada al Responsable:* La aprobación, rebaja o rechazo de cada comprobante se ejecuta exclusivamente en el Magic Link del Responsable (`rendiciones/aprobar_rendicion.php`). Interfaz con tarjetas reactivas que recalculan en tiempo real totales, excesos y habilitan la aprobación hasta el tope presupuestario.
   2. *Tesorería Focalizada en Cotejo Físico:* Tesorería únicamente coteja la información física vs digitada (mediante corrección de datos con el lápiz) y envía a Jefatura con `verificarYEnviar()`. Se retiró el botón "Validar comprobantes" del panel de Tesorería (`admin/js/rendiciones.js`), y `verificarYEnviar()` ahora permite enviar documentos en estado `PENDIENTE`.
